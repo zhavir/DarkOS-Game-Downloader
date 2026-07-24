@@ -25,8 +25,8 @@ so neither Python, uv, nor a package manager is required on the handheld.
 ## Controller-first
 
 The TUI reads the R36S controls directly from `/dev/input/js*`. Up/down moves through menus and
-supports press-and-hold scrolling. Left acts as B, right acts as A, and Start submits the current
-search immediately—even when it is empty.
+supports press-and-hold scrolling. On the on-screen keyboard, all four directions navigate and Y
+submits the current search—even when it is empty.
 
 ## No PortMaster dependency
 

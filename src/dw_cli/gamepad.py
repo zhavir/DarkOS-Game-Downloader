@@ -19,7 +19,7 @@ class InputAction(Enum):
     SELECT = "select"
     BACK = "back"
     BACKSPACE = "backspace"
-    SPACE = "space"
+    SUBMIT_SEARCH = "submit_search"
     PAGE_UP = "page_up"
     PAGE_DOWN = "page_down"
     START = "start"
@@ -38,7 +38,7 @@ BUTTON_ACTIONS: dict[int, InputAction] = {
     0: InputAction.BACK,
     1: InputAction.SELECT,
     2: InputAction.BACKSPACE,
-    3: InputAction.SPACE,
+    3: InputAction.SUBMIT_SEARCH,
     4: InputAction.PAGE_UP,
     5: InputAction.PAGE_DOWN,
     # The R36S exists with two common dArkOS/ArkOS controller layouts.  Keep
@@ -47,6 +47,14 @@ BUTTON_ACTIONS: dict[int, InputAction] = {
     7: InputAction.START,
     8: InputAction.BACK,
     9: InputAction.START,
+}
+STANDARD_DPAD_BUTTONS: dict[int, InputAction] = {
+    11: InputAction.UP,
+    12: InputAction.DOWN,
+    13: InputAction.LEFT,
+    14: InputAction.RIGHT,
+}
+R36S_DPAD_BUTTONS: dict[int, InputAction] = {
     14: InputAction.UP,
     15: InputAction.DOWN,
     16: InputAction.LEFT,
@@ -69,6 +77,7 @@ class LinuxJoystick:
     _pending: deque[InputAction] = field(default_factory=deque)
     _repeat_action: InputAction | None = None
     _repeat_due_at: float = 0.0
+    _highest_initialized_button: int = -1
 
     @classmethod
     def open_first(cls, input_directory: Path = Path("/dev/input")) -> LinuxJoystick | None:
@@ -105,11 +114,13 @@ class LinuxJoystick:
     def decode_event(self, value: int, event_type: int, number: int) -> InputAction | None:
         """Translate one js event; public to allow device-independent tests."""
 
-        if event_type & JS_EVENT_INIT:
-            return None
         kind = event_type & ~JS_EVENT_INIT
+        if event_type & JS_EVENT_INIT:
+            if kind == JS_EVENT_BUTTON:
+                self._highest_initialized_button = max(self._highest_initialized_button, number)
+            return None
         if kind == JS_EVENT_BUTTON:
-            action = BUTTON_ACTIONS.get(number)
+            action = self._button_action(number)
             if action not in REPEAT_ACTIONS:
                 return action if value else None
             if value:
@@ -134,6 +145,17 @@ class LinuxJoystick:
         if action in REPEAT_ACTIONS:
             self._start_repeat(action)
         return action
+
+    def _button_action(self, number: int) -> InputAction | None:
+        action = BUTTON_ACTIONS.get(number)
+        if action is not None:
+            return action
+        dpad = (
+            R36S_DPAD_BUTTONS
+            if self._highest_initialized_button < 11 or self._highest_initialized_button > 14
+            else STANDARD_DPAD_BUTTONS
+        )
+        return dpad.get(number)
 
     @staticmethod
     def _axis_action(number: int, direction: int) -> InputAction | None:
