@@ -342,8 +342,8 @@ Configure the repository once:
 4. Under **Workflow permissions**, select **Read and write permissions**. The docs workflow needs
    `contents: write` so the Coverage Badge action can update `badges/coverage.svg` on `gh-pages`;
    it also declares `pages: write` and `id-token: write` for the documentation deployment.
-5. Merge a pull request whose conventional commits produce a semantic release. The successful
-   release workflow dispatches the **Documentation** workflow automatically.
+5. Push a conventional commit to `main`, either directly or by merging a pull request. The
+   successful release workflow dispatches the **Documentation** workflow automatically.
 6. Wait for the `github-pages` deployment environment to complete, then open
    [zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/).
 
@@ -464,10 +464,11 @@ are required.
 
 ## Automated releases
 
-Merging a pull request into `main` starts `.github/workflows/release.yml`. Its pre-commit job and
-full test job run the same checks as the pull-request workflow, including the real-service E2E test.
-The official [Python Semantic Release](https://python-semantic-release.readthedocs.io/) GitHub
-actions then read the conventional commits since the previous tag and:
+Every new commit pushed to `main` starts `.github/workflows/release.yml`, whether it comes from a
+pull-request merge or a direct push. Its pre-commit job and full test job run the same checks as the
+pull-request workflow, including the real-service E2E test. The official
+[Python Semantic Release](https://python-semantic-release.readthedocs.io/) GitHub actions then read
+the conventional commits since the previous tag and:
 
 1. Determines the next semantic version.
 2. Updates `pyproject.toml` and `CHANGELOG.md`.

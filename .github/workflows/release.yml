@@ -1,8 +1,7 @@
-name: Release merged pull request
+name: Release main
 on:
-  pull_request:
+  push:
     branches: [main]
-    types: [closed]
 permissions:
   contents: read
 concurrency:
@@ -11,14 +10,11 @@ concurrency:
 jobs:
   pre-commit:
     name: Pre-commit
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out merged revision
+      - name: Check out pushed revision
         uses: actions/checkout@v7.0.1
-        with:
-          ref: main
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -32,14 +28,11 @@ jobs:
         run: uv run --frozen prek run --all-files
   tests:
     name: All tests
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Check out merged revision
+      - name: Check out pushed revision
         uses: actions/checkout@v7.0.1
-        with:
-          ref: main
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -67,7 +60,6 @@ jobs:
           if-no-files-found: error
   release:
     name: Version, build, and publish
-    if: github.event.pull_request.merged == true
     needs: [pre-commit, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 60
