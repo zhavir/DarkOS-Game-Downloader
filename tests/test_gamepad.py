@@ -5,9 +5,19 @@ import pytest
 
 import dw_cli.gamepad as gamepad_module
 from dw_cli.gamepad import (
+    BTN_DPAD_DOWN,
+    BTN_DPAD_LEFT,
+    BTN_DPAD_RIGHT,
+    BTN_DPAD_UP,
+    BTN_EAST,
+    BTN_NORTH,
+    BTN_SOUTH,
+    BTN_WEST,
     JS_EVENT_AXIS,
     JS_EVENT_BUTTON,
     JS_EVENT_INIT,
+    JSIOCGBTNMAP,
+    JSIOCGBUTTONS,
     InputAction,
     LinuxJoystick,
 )
@@ -30,6 +40,52 @@ def test_common_r36s_buttons() -> None:
         assert device.decode_event(0, JS_EVENT_BUTTON, 0) is None
     finally:
         device.close()
+
+
+def test_kernel_button_map_overrides_raw_indices_for_dpad_and_face_buttons() -> None:
+    device = joystick()
+    device._button_codes = (
+        BTN_DPAD_UP,
+        BTN_DPAD_DOWN,
+        BTN_DPAD_LEFT,
+        BTN_DPAD_RIGHT,
+        BTN_SOUTH,
+        BTN_EAST,
+        BTN_NORTH,
+        BTN_WEST,
+    )
+    try:
+        assert device.decode_event(1, JS_EVENT_BUTTON, 0) == InputAction.UP
+        assert device.decode_event(1, JS_EVENT_BUTTON, 1) == InputAction.DOWN
+        assert device.decode_event(1, JS_EVENT_BUTTON, 2) == InputAction.LEFT
+        assert device.decode_event(1, JS_EVENT_BUTTON, 3) == InputAction.RIGHT
+        assert device.decode_event(1, JS_EVENT_BUTTON, 4) == InputAction.BACK
+        assert device.decode_event(1, JS_EVENT_BUTTON, 5) == InputAction.SELECT
+        assert device.decode_event(1, JS_EVENT_BUTTON, 6) == InputAction.BACKSPACE
+        assert device.decode_event(1, JS_EVENT_BUTTON, 7) == InputAction.SUBMIT_SEARCH
+    finally:
+        device.close()
+
+
+def test_kernel_button_map_is_read_from_joydev_ioctl(monkeypatch: pytest.MonkeyPatch) -> None:
+    expected = (BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT)
+
+    def fake_ioctl(
+        _descriptor: int,
+        request: int,
+        buffer: bytearray,
+        _mutate: bool,
+    ) -> int:
+        if request == JSIOCGBUTTONS:
+            buffer[0] = len(expected)
+        elif request == JSIOCGBTNMAP:
+            for index, code in enumerate(expected):
+                buffer[index * 2 : index * 2 + 2] = code.to_bytes(2, byteorder="little")
+        return 0
+
+    monkeypatch.setattr(gamepad_module.fcntl, "ioctl", fake_ioctl)
+
+    assert LinuxJoystick._read_button_codes(42) == expected
 
 
 def test_dpad_axes_emit_once_until_released() -> None:

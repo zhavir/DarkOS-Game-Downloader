@@ -53,4 +53,7 @@ Startup and crash diagnostics are stored in:
 tools/darkos-downloader/darkos-downloader.log
 ```
 
+The log also records the kernel's detected gamepad button map and pressed button events. These
+lines identify controller-layout differences between R36S hardware and DTB variants.
+
 To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` directory from `tools`.

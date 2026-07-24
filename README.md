@@ -343,6 +343,9 @@ tools/
 The Tools launcher detects a detached launch, opens the TUI on a real Linux virtual console, and
 switches back after exit. Startup and crash details are written to
 `tools/darkos-downloader/darkos-downloader.log`.
+That log also records the kernel's detected gamepad button map and each pressed button. If an R36S
+clone uses an unknown controller layout, attach its `gamepad map` and `gamepad button` lines when
+reporting the problem.
 
 To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` directory from the card's
 `tools` directory.
