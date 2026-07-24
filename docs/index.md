@@ -1,0 +1,34 @@
+# dArkOS Downloader
+
+dArkOS Downloader is a controller-first library manager for RK3326 R36S handhelds running dArkOS
+or dArkOSRE. The release ZIP is self-contained: it includes an ARM64 executable and Python 3.14,
+so neither Python, uv, nor a package manager is required on the handheld.
+
+[Install on an R36S](install.md){ .md-button .md-button--primary }
+[Test locally](development.md){ .md-button }
+
+## What it does
+
+- Searches the remote library by a case-insensitive title prefix.
+- Prompts for a download store before searches and updates. Vimm is currently registered, while a
+  store contract keeps the TUI independent of future implementations.
+- Accepts an empty search to list the complete selected catalogue, including **All platforms**.
+- Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
+- Installs explicitly bundled BIOS files without overwriting existing firmware.
+- Updates and deletes installed games while preserving multi-file `.cue` and `.m3u` groups.
+- Requests an EmulationStation game-list refresh after every install, update, or deletion.
+- Filters console families that cannot run on the R36S, including PS2, PS3, Xbox, Xbox 360,
+  GameCube, Wii, Switch, Nintendo 3DS, and PS Vita.
+- Shows an RK3326 compatibility level before download and identifies titles matched in the live
+  [R36S Game List](https://r36sgamelist.com/) frontend catalogue.
+
+## Controller-first
+
+The TUI reads the R36S controls directly from `/dev/input/js*`. Up/down moves through menus and
+supports press-and-hold scrolling. Left acts as B, right acts as A, and Start submits the current
+search immediately—even when it is empty.
+
+## No PortMaster dependency
+
+The application and launcher are independent. Copy the release's `tools` content to the ROM card,
+put the card back in the device, and launch it from EmulationStation's Tools menu.

@@ -1,0 +1,10 @@
+.build-cache/*
+!.build-cache/cpython-3.14.6-aarch64-linux-gnu.tar.gz
+.git
+.pytest_cache
+.ruff_cache
+.ty_cache
+.venv
+dist
+__pycache__
+*.pyc

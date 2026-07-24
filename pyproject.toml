@@ -1,0 +1,75 @@
+[build-system]
+build-backend = "uv_build"
+requires = [ "uv-build>=0.11.32,<0.12" ]
+
+[project]
+name = "darkos-downloader"
+version = "1.0.0"
+description = "Controller-friendly dArkOS R36S game library manager"
+readme = "README.md"
+license = "MIT"
+authors = [
+  { name = "Andrea Aramini", email = "andrea.aramini@gmail.com" },
+]
+requires-python = ">=3.14,<3.15"
+classifiers = [
+  "Environment :: Console :: Curses",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+scripts.dw = "dw_cli.app:main"
+
+[dependency-groups]
+dev = [
+  "prek>=0.4.10",
+  "pytest>=8.3",
+  "python-semantic-release>=10.6.1,<11",
+  "ruff>=0.9",
+  "ty>=0.0.1a1",
+  "zensical>=0.0.51,<0.1",
+]
+
+[tool.uv]
+build-backend.module-name = "dw_cli"
+build-backend.source-include = [
+  ".python-version",
+  "darkos/**",
+  "packaging/**",
+  "scripts/**",
+  "tests/**",
+  "uv.lock",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+lint.select = [ "B", "E", "F", "I", "RUF", "SIM", "UP" ]
+lint.ignore = [ "UP031" ]  # Percent formatting is useful for dynamic-width terminal tables.
+
+[tool.pytest]
+ini_options.testpaths = [ "tests" ]
+ini_options.pythonpath = [ "." ]
+ini_options.addopts = "-q"
+ini_options.markers = [
+  "e2e: live search contract tests against the real configured remote service",
+  "integration: offline workflows using a localhost HTTP server and temporary ROM cards",
+  "live: test requires internet access and contacts DW_LIVE_BASE_URL or the default service",
+]
+
+[tool.semantic_release]
+tag_format = "v{version}"
+version_toml = [ "pyproject.toml:project.version" ]
+commit_message = "chore(release): {version} [skip ci]"
+commit_parser = "conventional"
+branches.main.match = "main"
+branches.main.prerelease = false
+publish.dist_glob_patterns = [
+  "dist/*.whl",
+  "dist/*.tar.gz",
+  "dist/*-r36s-arm64.zip",
+]
+publish.upload_to_vcs_release = true
+changelog.default_templates.changelog_file = "CHANGELOG.md"
+changelog.default_templates.mask_initial_release = false
