@@ -47,6 +47,7 @@ def test_demo_environment_creates_two_safe_local_cards(tmp_path: Path) -> None:
     assert environment["DW_STORES"] == "vimm"
 
 
+@pytest.mark.e2e
 @pytest.mark.integration
 def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
     local_vault: str,
@@ -88,6 +89,7 @@ def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
     assert not tuple(staging.glob("*.part"))
 
 
+@pytest.mark.e2e
 @pytest.mark.integration
 def test_dual_card_install_update_and_delete_workflow(
     local_vault: str,

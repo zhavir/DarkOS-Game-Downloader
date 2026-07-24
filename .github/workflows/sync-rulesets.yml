@@ -15,16 +15,22 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GH_REPO: ${{ github.repository }}
+      RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
       - name: Verify token
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::RULESET_TOKEN is empty or unavailable"
+            echo "::error::GH_TOKEN is empty or unavailable"
+            exit 1
+          fi
+
+          if [[ ! "${RELEASE_APP_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::RELEASE_APP_ID must be the numeric ID of the installed release GitHub App"
             exit 1
           fi
 
@@ -34,7 +40,7 @@ jobs:
           )"
 
           if [[ "${is_admin}" != "true" ]]; then
-            echo "::error::The account associated with RULESET_TOKEN is not a repository administrator"
+            echo "::error::The account associated with GH_TOKEN is not a repository administrator"
             exit 1
           fi
       - name: Create or update rulesets
@@ -47,14 +53,24 @@ jobs:
 
             payload="$(mktemp)"
 
-            jq '{
-              name,
-              target,
-              enforcement,
-              bypass_actors,
-              conditions,
-              rules
-            }' "${file}" > "${payload}"
+            jq --argjson release_app_id "${RELEASE_APP_ID}" '
+              walk(
+                if type == "object"
+                  and .actor_type? == "Integration"
+                  and .actor_id? == 0
+                then .actor_id = $release_app_id
+                else .
+                end
+              )
+              | {
+                  name,
+                  target,
+                  enforcement,
+                  bypass_actors,
+                  conditions,
+                  rules
+                }
+            ' "${file}" > "${payload}"
 
             name="$(jq -r '.name' "${payload}")"
 

@@ -6,7 +6,7 @@
 - The latest `darkos-downloader-<version>-r36s-arm64.zip` from the project's GitHub release.
 - Network connectivity on the handheld when searching or downloading.
 
-Python, uv, Docker, and PortMaster are not required on the device.
+Python, uv, Docker, and external installers are not required on the device.
 
 ## Copy the package
 
@@ -31,9 +31,10 @@ tools/
 
 !!! tip "Updating the tool"
 
-    Repeat the copy steps with a newer release. The release is designed to replace the existing
-    files directly. The default-store preference lives in the tool's `.downloads` directory and is
-    retained when the application files are replaced.
+    Open **Settings → Check for application update** in the TUI. Confirm a newer version and wait for
+    it to finish. The application closes so its Tools launcher can transactionally replace the
+    executable while preserving `.downloads`, including the selected store and caches. Reopen the
+    tool after the success message. No Python, uv, or external update utility is used.
 
 ## ROM cards and folders
 

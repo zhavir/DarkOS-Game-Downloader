@@ -44,6 +44,14 @@ from dw_cli.preferences import (
 )
 from dw_cli.store import GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
+from dw_cli.updater import (
+    ReleaseUpdate,
+    UpdateCancelled,
+    UpdateError,
+    find_update,
+    installed_version,
+    stage_update,
+)
 
 type Window = Any
 
@@ -92,6 +100,7 @@ class DownloaderTui:
             self.store_catalog.find(preferences.store_id) if preferences.store_id else None
         )
         self.exit_after_refresh = False
+        self.exit_after_update = False
         self.compatibility_client = R36SCompatibilityClient(
             config.download_directory / ".r36s-game-list-cache.json",
             timeout_seconds=config.timeout_seconds,
@@ -159,7 +168,7 @@ class DownloaderTui:
                     self._settings_screen()
                 elif choice == 4:
                     self._status_screen()
-                if self.exit_after_refresh:
+                if self.exit_after_refresh or self.exit_after_update:
                     return
         finally:
             if self.gamepad is not None:
@@ -559,11 +568,120 @@ class DownloaderTui:
         current = self.selected_store.display_name if self.selected_store is not None else "not set"
         choice = self._menu(
             "SETTINGS",
-            (f"Change download store  [current: {current}]", "Back"),
-            "The selected store is remembered for future launches",
+            (
+                f"Change download store  [current: {current}]",
+                f"Check for application update  [installed: v{installed_version()}]",
+                "Back",
+            ),
+            "Store settings and self-contained R36S updates",
         )
         if choice == 0:
             self._configure_store()
+        elif choice == 1:
+            self._application_update_flow()
+
+    def _application_update_flow(self) -> None:
+        install_directory = self.config.install_directory
+        if install_directory is None:
+            self._error(
+                "Automatic updates are available from the self-contained R36S package. "
+                "Local development checkouts should update with git and uv."
+            )
+            return
+        current = installed_version()
+        self._draw_message(
+            "CHECKING FOR UPDATE",
+            f"Installed: v{current}\nReading the latest GitHub release...",
+            1,
+        )
+        try:
+            release = find_update(
+                current,
+                self.config.update_api_url,
+                self.config.timeout_seconds,
+            )
+        except UpdateError as error:
+            self._error(str(error))
+            return
+        if release is None:
+            self._draw_message(
+                "ALREADY UP TO DATE",
+                f"v{current} is the latest published dArkOS release.",
+                4,
+                wait=True,
+            )
+            return
+        choice = self._menu(
+            "APPLICATION UPDATE AVAILABLE",
+            (f"Download and install v{release.version}", "Later"),
+            f"Installed: v{current}   Published: {release.tag}",
+        )
+        if choice != 0:
+            return
+        try:
+            self._stage_application_update(release, install_directory)
+        except UpdateCancelled:
+            self._draw_message(
+                "UPDATE CANCELLED",
+                "The installed application was not changed.",
+                3,
+                wait=True,
+            )
+            return
+        except UpdateError as error:
+            self._error(str(error))
+            return
+        self._draw_message(
+            "UPDATE READY",
+            f"v{release.version} will be installed now.\n"
+            "Reopen dArkOS Downloader from Tools after this screen closes.",
+            4,
+            wait=True,
+        )
+        self.exit_after_update = True
+
+    def _stage_application_update(
+        self,
+        release: ReleaseUpdate,
+        install_directory: Path,
+    ) -> Path:
+        """Stage an update while keeping controller cancellation responsive."""
+
+        cancelled = Event()
+        state_lock = Lock()
+        progress_state: list[str | int | None] = ["Connecting to GitHub...", 0, release.asset_size]
+
+        def report(label: str, current: int, total: int | None) -> None:
+            with state_lock:
+                progress_state[:] = [label, current, total]
+
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tui-update") as executor:
+            future = executor.submit(
+                stage_update,
+                release,
+                install_directory,
+                self.config.timeout_seconds,
+                report,
+                cancelled.is_set,
+            )
+            while not future.done():
+                with state_lock:
+                    label, current, total = progress_state
+                if cancelled.is_set():
+                    self._draw_message(
+                        "CANCELLING UPDATE",
+                        "Removing the incomplete update; the installed version is unchanged...",
+                        3,
+                    )
+                else:
+                    assert isinstance(label, str)
+                    assert isinstance(current, int)
+                    assert total is None or isinstance(total, int)
+                    self._progress(label, current, total)
+                pressed = self._poll_input()
+                if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
+                    cancelled.set()
+            return future.result()
 
     def _confirm_exit(self) -> bool:
         choice = self._menu(

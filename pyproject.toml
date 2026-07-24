@@ -55,7 +55,7 @@ ini_options.testpaths = [ "tests" ]
 ini_options.pythonpath = [ "." ]
 ini_options.addopts = "-q"
 ini_options.markers = [
-  "e2e: live search contract tests against the real configured remote service",
+  "e2e: end-to-end workflow or remote contract test",
   "integration: offline workflows using a localhost HTTP server and temporary ROM cards",
   "live: test requires internet access and contacts the configured real store URLs",
 ]

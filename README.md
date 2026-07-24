@@ -26,7 +26,7 @@ environment that uses fake games and temporary SD-card folders.
 - Detects and manages both `/roms` and `/roms2` in a dual-card setup.
 - Downloads to a staging directory and then moves the completed file into the selected ROM folder.
 - Downloads only the selected file from Minerva's platform torrent with a native Python
-  BitTorrent client; no aria2, torrent application, daemon, or PortMaster component is required.
+  BitTorrent client; no aria2, torrent application, daemon, or external component is required.
 - Installs BIOS files explicitly bundled under a `bios/` directory in a downloaded ZIP, without
   overwriting existing firmware or unpacking ordinary arcade/merged ROM archives.
 - Scans installed games on both cards.
@@ -34,6 +34,8 @@ environment that uses fake games and temporary SD-card folders.
   skipping artwork, manuals, screenshots, and videos.
 - Deletes a selected game, including files referenced by `.cue` and `.m3u` playlists.
 - Updates a selected game by downloading first and replacing the old copy only after success.
+- Checks GitHub Releases from **Settings** and installs the exact newer R36S ARM64 bundle without
+  Python, uv, or another updater; preferences and cached data are preserved.
 - Requests an EmulationStation game-list refresh after an install, update, or deletion, then exits
   the TUI so the launcher can apply it without reopening the application or rebooting the handheld.
 - Cancels an active direct or torrent download with B/Escape and removes its partial file.
@@ -187,6 +189,8 @@ right to use.
 | `DW_ROMS_DIR` | One explicit ROM root for local or single-card testing | Auto-detect |
 | `DW_ROMS_DIRS` | Multiple ROM roots separated by the OS path separator; takes precedence over `DW_ROMS_DIR` | Auto-detect `/roms2`, then `/roms` |
 | `DW_TIMEOUT` | Network timeout in seconds | `30` |
+| `DW_UPDATE_API_URL` | Latest-release API endpoint; primarily useful for offline updater tests | Project GitHub Releases API |
+| `DW_INSTALL_DIR` | Packaged application directory used by self-update | Set automatically by the device launcher |
 
 `TERM` is normally provided by the terminal. If curses reports an unknown terminal locally, try
 `TERM=xterm-256color`. The R36S Tools launcher sets a terminal value automatically.
@@ -251,7 +255,7 @@ Use the fake server URL above only while `scripts/local_vault_server.py` is runn
 
 ## Automated tests
 
-Run everything:
+Run everything locally, including the opt-in remote contracts:
 
 ```sh
 uv run pytest
@@ -260,23 +264,24 @@ uv run pytest
 Generate the same branch-coverage measurement used by GitHub:
 
 ```sh
-uv run pytest --cov=dw_cli --cov-branch --cov-report=term-missing
+uv run pytest -m "not live" --cov=dw_cli --cov-branch --cov-report=term-missing
 ```
 
-Run the live search E2E test against the real service:
+Run only the offline, localhost-backed E2E workflows used on GitHub:
 
 ```sh
-uv run pytest -m e2e -v
+uv run pytest -m "e2e and not live" -v
 ```
 
-Override the live target when testing a compatible deployment:
+Run the live remote-contract E2E tests locally when you explicitly want to contact the source
+services:
 
 ```sh
-DW_LIVE_BASE_URL=https://vimm.net uv run pytest -m e2e -v
+uv run pytest -m "e2e and live" -v
 ```
 
-Minerva's live endpoints can be overridden independently with `DW_LIVE_MINERVA_BASE_URL` and
-`DW_LIVE_MINERVA_TORRENT_BASE_URL`.
+The live targets can be overridden with `DW_LIVE_BASE_URL`, `DW_LIVE_MINERVA_BASE_URL`, and
+`DW_LIVE_MINERVA_TORRENT_BASE_URL` when testing compatible deployments.
 
 Run the offline localhost integration workflows:
 
@@ -296,13 +301,14 @@ Run everything that does not need internet access:
 uv run pytest -m "not live"
 ```
 
-The live E2E tests contact the real Vimm, Minerva, and R36S Game List URLs. They verify
-case-insensitive prefix searches, all-platform searches, empty catalogues, a real Minerva torrent
-download and file mapping, and a known compatibility entry. The native selective peer transfer is
-covered by deterministic tests because public torrent peers are not guaranteed to accept
-connections from GitHub-hosted runners.
+Live E2E tests are local opt-in checks and are never run by GitHub Actions because the source
+services may block shared runner addresses. They contact the real Vimm, Minerva, and R36S Game List
+URLs and verify case-insensitive prefix searches, all-platform searches, empty catalogues, a real
+Minerva torrent download and file mapping, and a known compatibility entry. The native selective
+peer transfer is covered by deterministic tests because public torrent peers are not guaranteed to
+accept connections from GitHub-hosted runners.
 
-The offline integration suite binds a random localhost port and exercises:
+The offline integration/E2E suite binds a random localhost port and exercises:
 
 - CLI prefix search and empty catalogue listing.
 - Real HTTP request/response handling and HTML parsing.
@@ -351,8 +357,8 @@ For a private repository, the GitHub plan must support Pages for private reposit
 Badge action creates and maintains `gh-pages`; the documentation site itself still uses the GitHub
 Actions Pages source. No deploy key, custom token, or repository secret is required.
 
-Pull requests targeting `main` run a pre-commit job and one all-tests job that includes the offline,
-integration, and real-service E2E suites.
+Pull requests targeting `main` run a pre-commit job and one all-tests job containing unit tests,
+localhost integration tests, and offline E2E workflows. Tests marked `live` are excluded on GitHub.
 
 ## Copy the prebuilt package to dArkOS
 
@@ -384,6 +390,10 @@ switches back after exit. Startup and crash details are written to
 `tools/darkos-downloader/darkos-downloader.log`.
 The selected default store is saved under `tools/darkos-downloader/.downloads`, so replacing the
 application files with a newer release keeps the setting.
+For future updates, open **Settings → Check for application update**. The TUI downloads and validates
+the exact new R36S bundle, closes, and lets the Tools launcher swap it into place while preserving
+`.downloads`. Reopen the tool after the success message. Manual copying remains available as a
+recovery path if an SD-card write is interrupted.
 The application reads the live device tree exposed by Linux; you do not need to find or decompile a
 `.dtb` file. Device-tree key labels and `linux,code` values are diagnostic clues. The active
 joystick ioctl mapping remains authoritative because a DTB does not reliably describe joydev button
@@ -465,8 +475,8 @@ are required.
 ## Automated releases
 
 Every new commit pushed to `main` starts `.github/workflows/release.yml`, whether it comes from a
-pull-request merge or a direct push. Its pre-commit job and full test job run the same checks as the
-pull-request workflow, including the real-service E2E test. The official
+pull-request merge or a direct push. Its pre-commit job and full test job run the same offline checks
+as the pull-request workflow; remote services are not contacted from GitHub-hosted runners. The official
 [Python Semantic Release](https://python-semantic-release.readthedocs.io/) GitHub actions then read
 the conventional commits since the previous tag and:
 
@@ -488,9 +498,32 @@ Use conventional commit messages so the release type and notes are deterministic
 - Documentation, test, build, and chore-only commits do not create a release by default.
 
 When using squash merges, make the pull-request title conventional because it becomes the commit
-subject. The release job needs GitHub Actions `contents: write` permission. If `main` has branch
-protection that blocks the release bot's version commit, allow GitHub Actions to bypass that rule or
-replace `GITHUB_TOKEN` with an appropriately scoped repository token.
+subject.
+
+### Enable protected releases and admin-only merges
+
+The repository stores two layered rulesets for `main`. The first requires a pull request, an
+up-to-date branch, and successful **Pre-commit** and **All tests** jobs. The second restricts updates
+to repository administrators through pull requests. Because rulesets are aggregated, an admin can
+merge but cannot skip either required job. A dedicated release GitHub App is the only direct-update
+exception, allowing Python Semantic Release to write its version commit and protected tag.
+
+Configure GitHub once before syncing the rulesets:
+
+1. Create a GitHub App for this repository with **Contents: Read and write**, generate a private
+   key, and install the App on `zhavir/DarkOS-Game-Downloader`.
+2. Add an Actions repository variable named `RELEASE_APP_ID` containing the App's numeric ID.
+3. Add an Actions repository secret named `RELEASE_APP_PRIVATE_KEY` containing the complete PEM
+   private key.
+4. Add `GH_TOKEN` as an Actions repository secret. Use a fine-grained personal access token from a
+   repository administrator with **Administration: Read and write** for this repository. This token
+   only creates and updates rulesets; release pushes use the GitHub App token.
+5. Open **Actions → Sync GitHub rulesets → Run workflow** once. Later changes under
+   `.github/rulesets/` are synchronized automatically after they reach `main`.
+
+The stored ruleset JSON uses integration actor ID `0` as a template placeholder; the sync workflow
+replaces it with `RELEASE_APP_ID` before calling GitHub. Do not paste the JSON into GitHub without
+that substitution.
 
 Before enabling releases in a brand-new repository, create the one-time baseline tag matching the
 version already present in `pyproject.toml`:

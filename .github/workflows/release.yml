@@ -44,13 +44,9 @@ jobs:
         run: uv sync --frozen
       - name: Prepare coverage output
         run: mkdir -p coverage-reports
-      - name: Run offline, integration, and real-service E2E tests
-        env:
-          DW_LIVE_BASE_URL: https://vimm.net
-          DW_LIVE_MINERVA_BASE_URL: https://minerva-archive.org
-          DW_LIVE_MINERVA_TORRENT_BASE_URL: https://cdn.minerva-archive.org/torrents
+      - name: Run unit, integration, and offline E2E tests
         run: >-
-          uv run --frozen pytest -v --cov=dw_cli --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
+          uv run --frozen pytest -v -m "not live" --cov=dw_cli --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v7.0.1
@@ -67,11 +63,19 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - name: Create release GitHub App token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: Check out main with release history
         uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           ref: main
+          token: ${{ steps.release-token.outputs.token }}
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -85,7 +89,7 @@ jobs:
         id: release
         uses: python-semantic-release/python-semantic-release@v10.6.1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.release-token.outputs.token }}
           git_committer_name: github-actions[bot]
           git_committer_email: 41898282+github-actions[bot]@users.noreply.github.com
           build: "true"
@@ -106,7 +110,7 @@ jobs:
         if: steps.release.outputs.released == 'true'
         uses: python-semantic-release/publish-action@v10.6.1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.release-token.outputs.token }}
           tag: ${{ steps.release.outputs.tag }}
       - name: Preserve workflow artifacts
         if: steps.release.outputs.released == 'true'
@@ -118,6 +122,6 @@ jobs:
       - name: Request documentation deployment
         if: steps.release.outputs.released == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
         run: >-
           gh api --method POST repos/${GITHUB_REPOSITORY}/dispatches -f event_type=release-documentation -F "client_payload[run_id]=${GITHUB_RUN_ID}" -f "client_payload[sha]=${GITHUB_SHA}"

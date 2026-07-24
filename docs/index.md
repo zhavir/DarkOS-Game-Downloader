@@ -30,7 +30,7 @@ The TUI reads the R36S controls directly from `/dev/input/js*`. Up/down moves th
 supports press-and-hold scrolling. On the on-screen keyboard, all four directions navigate and X
 submits the current search—even when it is empty.
 
-## No PortMaster dependency
+## Standalone device package
 
 The application and launcher are independent. Copy the release's `tools` content to the ROM card,
 put the card back in the device, and launch it from EmulationStation's Tools menu.

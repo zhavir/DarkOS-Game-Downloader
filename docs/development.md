@@ -31,10 +31,13 @@ uv run prek run --all-files
 uv run pytest
 ```
 
+The plain `pytest` command includes local opt-in remote contracts. GitHub uses the offline selection
+shown below.
+
 Generate the same branch-coverage measurement used by GitHub:
 
 ```sh
-uv run pytest --cov=dw_cli --cov-branch --cov-report=term-missing
+uv run pytest -m "not live" --cov=dw_cli --cov-branch --cov-report=term-missing
 ```
 
 Run only tests that do not open a local server or contact a live service:
@@ -43,20 +46,34 @@ Run only tests that do not open a local server or contact a live service:
 uv run pytest -m "not e2e and not integration"
 ```
 
-The full test suite includes offline unit/integration tests and real-service E2E contracts for
-Vimm, Minerva's browse and torrent endpoints, a real torrent metadata download, and the R36S
-compatibility frontend. Native selective peer transfer is tested deterministically because public
-torrent peers are not a stable CI dependency. Use this to skip network tests:
+GitHub runs unit tests, localhost integration tests, and offline E2E workflows with:
 
 ```sh
 uv run pytest -m "not live"
 ```
+
+Live remote-contract E2E tests for Vimm, Minerva's browse and torrent endpoints, a real torrent
+metadata download, and the R36S compatibility frontend remain available locally with
+`uv run pytest -m "e2e and live"`. GitHub does not run them because source services may block shared
+runner addresses. Native selective peer transfer remains covered deterministically because public
+torrent peers are not a stable CI dependency.
 
 Python Semantic Release updates `pyproject.toml` during a release. Its configured build hook
 installs the pinned uv release tool inside the action container, runs every prek hook against the
 complete tree, stages the resulting release files with `git add .`, and builds the distributions
 before the version commit and tag are created. The prek `uv-lock` hook updates and verifies
 `uv.lock`, keeping the release commit usable with `uv sync --frozen`.
+
+Protected releases use a repository-installed GitHub App. `RELEASE_APP_ID` identifies the App in
+both the release workflow and the stored ruleset templates, while `RELEASE_APP_PRIVATE_KEY` creates
+a short-lived token. The separate ruleset-sync workflow uses the administrator-owned `GH_TOKEN`
+secret with repository Administration write permission. Run **Sync GitHub rulesets** manually after
+the initial secrets and variable are configured.
+
+The two `main` rulesets deliberately layer: required PR checks have no human bypass, while a second
+restrict-update rule grants repository administrators PR-only bypass. The release App is the sole
+always-bypass actor so semantic release can create its version commit and tag after the pushed
+revision passes all tests.
 
 ## Documentation
 

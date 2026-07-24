@@ -54,6 +54,15 @@ files are deleted together.
 After a successful install, update, or deletion, acknowledge the completion message. The TUI then
 closes so the Tools launcher can refresh EmulationStation; it does not reopen automatically.
 
+## Update dArkOS Downloader
+
+Open **Settings → Check for application update**. The installed semantic version is compared with
+the latest GitHub release. Confirming a newer release downloads the matching R36S ARM64 ZIP; press
+B/Escape to cancel without changing the installed application. After validation, the TUI exits and
+the Tools launcher replaces the application while preserving `.downloads`. Reopen the tool after
+the success message. This self-update option is intentionally unavailable from a local source
+checkout, where `git` and uv remain the update mechanism.
+
 ## Bundled BIOS files
 
 Only files under an explicit `bios/` subtree in a downloaded ZIP are treated as firmware. They are

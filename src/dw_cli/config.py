@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
+from dw_cli.updater import DEFAULT_UPDATE_API_URL
+
 DEFAULT_BASE_URL = "https://vimm.net"
 DEFAULT_MINERVA_BASE_URL = "https://minerva-archive.org"
 DEFAULT_MINERVA_TORRENT_BASE_URL = "https://cdn.minerva-archive.org/torrents"
@@ -21,6 +23,8 @@ class Config:
     minerva_base_url: str = DEFAULT_MINERVA_BASE_URL
     minerva_torrent_base_url: str = DEFAULT_MINERVA_TORRENT_BASE_URL
     enabled_stores: tuple[str, ...] = ("vimm", "minerva")
+    install_directory: Path | None = None
+    update_api_url: str = DEFAULT_UPDATE_API_URL
 
     @classmethod
     def from_environment(cls) -> Self:
@@ -54,6 +58,9 @@ class Config:
                 if store.strip()
             )
         )
+        install_value = os.environ.get("DW_INSTALL_DIR")
+        install_directory = Path(install_value).expanduser() if install_value else None
+        update_api_url = os.environ.get("DW_UPDATE_API_URL", DEFAULT_UPDATE_API_URL)
         return cls(
             base_url=base_url,
             download_directory=directory,
@@ -62,4 +69,6 @@ class Config:
             minerva_base_url=minerva_base_url,
             minerva_torrent_base_url=minerva_torrent_base_url,
             enabled_stores=enabled_stores,
+            install_directory=install_directory,
+            update_api_url=update_api_url,
         )

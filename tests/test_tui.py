@@ -21,6 +21,7 @@ from dw_cli.tui import (
     KEYBOARD_GAMEPAD_KEYS,
     DownloaderTui,
 )
+from dw_cli.updater import ReleaseUpdate
 from dw_cli.vimm_store import VimmStore
 
 
@@ -174,6 +175,41 @@ def test_exit_requires_explicit_yes() -> None:
     assert tui._confirm_exit() is False
     assert tui._confirm_exit() is False
     assert tui._confirm_exit() is True
+
+
+def test_application_update_is_staged_and_closes_tui(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_directory = tmp_path / "tools" / "darkos-downloader"
+    release = ReleaseUpdate(
+        "1.2.0",
+        "v1.2.0",
+        "darkos-downloader-1.2.0-r36s-arm64.zip",
+        "https://example.test/update.zip",
+        100,
+    )
+    tui = object.__new__(DownloaderTui)
+    tui.config = SimpleNamespace(
+        install_directory=install_directory,
+        update_api_url="https://api.example.test/releases/latest",
+        timeout_seconds=1.0,
+    )
+    tui.exit_after_update = False
+    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    tui._error = lambda message: pytest.fail(message)  # type: ignore[method-assign]
+    tui._menu = lambda *_args: 0  # type: ignore[method-assign]
+    staged: list[tuple[ReleaseUpdate, Path]] = []
+    tui._stage_application_update = (  # type: ignore[method-assign]
+        lambda update, directory: staged.append((update, directory)) or directory.parent
+    )
+    monkeypatch.setattr("dw_cli.tui.installed_version", lambda: "1.0.1")
+    monkeypatch.setattr("dw_cli.tui.find_update", lambda *_args: release)
+
+    tui._application_update_flow()
+
+    assert staged == [(release, install_directory)]
+    assert tui.exit_after_update is True
 
 
 def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
