@@ -7,7 +7,6 @@ import pytest
 
 from dw_cli.bittorrent import parse_torrent
 from dw_cli.config import DEFAULT_MINERVA_BASE_URL, DEFAULT_MINERVA_TORRENT_BASE_URL
-from dw_cli.downloader import download_files
 from dw_cli.minerva_store import MinervaStore
 from dw_cli.models import MediaDownload
 
@@ -62,8 +61,8 @@ def test_real_minerva_search_catalogue_all_platform_and_resolution() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.live
-def test_real_minerva_downloads_and_verifies_a_complete_file(tmp_path) -> None:
-    """Download a tiny Arduboy homebrew archive through real trackers and peers."""
+def test_real_minerva_downloads_and_validates_torrent_metadata(tmp_path) -> None:
+    """Download real Minerva torrent metadata and validate its selected file."""
 
     base_url = os.environ.get("DW_LIVE_MINERVA_BASE_URL", DEFAULT_MINERVA_BASE_URL)
     torrent_base_url = os.environ.get(
@@ -78,16 +77,15 @@ def test_real_minerva_downloads_and_verifies_a_complete_file(tmp_path) -> None:
     )
     request = client.download_request(result.link)
 
-    completed = download_files(
-        [request],
-        tmp_path,
-        client.download_referrer,
-        timeout_seconds=90,
-    )
+    torrent_path = tmp_path / "minerva.torrent"
+    with urlopen(Request(request.url), timeout=90) as response:
+        assert response.status == 200
+        assert response.headers.get_content_type() == "application/x-bittorrent"
+        torrent_path.write_bytes(response.read())
 
-    assert len(completed) == 1
-    downloaded = completed[0].path
-    assert downloaded.name == request.expected_filename
-    assert downloaded.stat().st_size > 10_000
-    assert downloaded.read_bytes().startswith(b"PK")
-    assert not downloaded.with_name(downloaded.name + ".part").exists()
+    torrent = parse_torrent(torrent_path.read_bytes())
+    assert request.torrent_file_index is not None
+    assert request.expected_filename is not None
+    selected_file = torrent.files[request.torrent_file_index - 1]
+    assert selected_file.path[-1] == request.expected_filename
+    assert selected_file.length > 10_000

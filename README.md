@@ -1,7 +1,7 @@
 # dArkOS Downloader
 
 [![Latest release](https://img.shields.io/github/v/release/zhavir/DarkOS-Game-Downloader?display_name=tag&sort=semver)](https://github.com/zhavir/DarkOS-Game-Downloader/releases/latest)
-[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fzhavir.github.io%2FDarkOS-Game-Downloader%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage)](https://zhavir.github.io/DarkOS-Game-Downloader/coverage/)
+[![Coverage](https://raw.githubusercontent.com/zhavir/DarkOS-Game-Downloader/gh-pages/badges/coverage.svg)](https://zhavir.github.io/DarkOS-Game-Downloader/coverage/)
 
 dArkOS Downloader is a controller-first game library manager for RK3326 R36S handhelds running
 dArkOS or dArkOSRE. It can also run locally with a keyboard, including in a completely offline demo
@@ -297,9 +297,10 @@ uv run pytest -m "not live"
 ```
 
 The live E2E tests contact the real Vimm, Minerva, and R36S Game List URLs. They verify
-case-insensitive prefix searches, all-platform searches, empty catalogues, Minerva's real torrent
-metadata/file mapping, a complete verified download of a tiny Arduboy program through real trackers
-and peers, and a known compatibility entry.
+case-insensitive prefix searches, all-platform searches, empty catalogues, a real Minerva torrent
+download and file mapping, and a known compatibility entry. The native selective peer transfer is
+covered by deterministic tests because public torrent peers are not guaranteed to accept
+connections from GitHub-hosted runners.
 
 The offline integration suite binds a random localhost port and exercises:
 
@@ -338,16 +339,17 @@ Configure the repository once:
 1. Open **Settings → Pages**.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 3. Open **Settings → Actions → General**.
-4. Under **Workflow permissions**, keep at least **Read repository contents** enabled. The docs
-   workflow declares its narrower `contents: read`, `pages: write`, and `id-token: write`
-   permissions itself.
+4. Under **Workflow permissions**, select **Read and write permissions**. The docs workflow needs
+   `contents: write` so the Coverage Badge action can update `badges/coverage.svg` on `gh-pages`;
+   it also declares `pages: write` and `id-token: write` for the documentation deployment.
 5. Merge or push a documentation change to `main`, or run the **Documentation** workflow manually
    from the Actions tab.
 6. Wait for the `github-pages` deployment environment to complete, then open
    [zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/).
 
-For a private repository, the GitHub plan must support Pages for private repositories. No
-`gh-pages` branch, deploy key, custom token, or repository secret is required by this workflow.
+For a private repository, the GitHub plan must support Pages for private repositories. The Coverage
+Badge action creates and maintains `gh-pages`; the documentation site itself still uses the GitHub
+Actions Pages source. No deploy key, custom token, or repository secret is required.
 
 Pull requests targeting `main` run a pre-commit job and one all-tests job that includes the offline,
 integration, and real-service E2E suites.

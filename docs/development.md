@@ -44,8 +44,9 @@ uv run pytest -m "not e2e and not integration"
 ```
 
 The full test suite includes offline unit/integration tests and real-service E2E contracts for
-Vimm, Minerva's browse and torrent endpoints, a complete verified tiny Arduboy download through
-real peers, and the R36S compatibility frontend. Use this to skip network tests:
+Vimm, Minerva's browse and torrent endpoints, a real torrent metadata download, and the R36S
+compatibility frontend. Native selective peer transfer is tested deterministically because public
+torrent peers are not a stable CI dependency. Use this to skip network tests:
 
 ```sh
 uv run pytest -m "not live"
@@ -74,7 +75,8 @@ uv run zensical build --clean --strict
 Pull-request and release workflows append the coverage table to the GitHub job summary and upload
 the XML, JSON, and browsable HTML reports as a `coverage-*` Actions artifact. The Pages workflow
 publishes the latest `main` HTML report under `/coverage/` and its JSON summary at
-`/coverage.json`; the README uses that GitHub-hosted value in a standard Shields.io badge.
+`/coverage.json`. The Marketplace Coverage Badge action publishes `badges/coverage.svg` on the
+`gh-pages` branch, and the README displays that generated badge.
 
 The generated `site/` directory is ignored. Pushing documentation changes to `main` invokes the
 Pages workflow and publishes the generated artifact.
