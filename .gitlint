@@ -1,0 +1,18 @@
+### GENERAL CONFIG  ###
+[general]
+ignore = B6
+ignore-merge-commits=true
+ignore-revert-commits=true
+ignore-fixup-commits=true
+ignore-fixup-amend-commits=true
+ignore-squash-commits=true
+ignore-stdin=true
+fail-without-commits=true
+contrib=contrib-title-conventional-commits
+### RULE CONFIGURATION ###
+[title-max-length]
+line-length=120
+[title-min-length]
+min-length=5
+[body-max-line-length]
+line-length=120

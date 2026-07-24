@@ -1,0 +1,50 @@
+name: Pull request checks
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          version: "0.11.32"
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Install locked development environment
+        run: uv sync --frozen
+      - name: Run pre-commit checks
+        run: uv run --frozen prek run --all-files
+      - name: Build documentation
+        run: uv run --frozen zensical build --clean --strict
+  tests:
+    name: All tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          version: "0.11.32"
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Install locked development environment
+        run: uv sync --frozen
+      - name: Run offline, integration, and real-service E2E tests
+        env:
+          DW_LIVE_BASE_URL: https://vimm.net
+        run: uv run --frozen pytest -v

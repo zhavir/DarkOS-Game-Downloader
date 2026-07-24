@@ -1,0 +1,111 @@
+name: Release merged pull request
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+permissions:
+  contents: read
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+jobs:
+  pre-commit:
+    name: Pre-commit
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out merged revision
+        uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          version: "0.11.32"
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Install locked development environment
+        run: uv sync --frozen
+      - name: Run pre-commit checks
+        run: uv run --frozen prek run --all-files
+      - name: Build documentation
+        run: uv run --frozen zensical build --clean --strict
+  tests:
+    name: All tests
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out merged revision
+        uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          version: "0.11.32"
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Install locked development environment
+        run: uv sync --frozen
+      - name: Run offline, integration, and real-service E2E tests
+        env:
+          DW_LIVE_BASE_URL: https://vimm.net
+        run: uv run --frozen pytest -v
+  release:
+    name: Version, build, and publish
+    if: github.event.pull_request.merged == true
+    needs: [pre-commit, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Check out main with release history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          version: "0.11.32"
+      - name: Install Python
+        run: uv python install 3.14
+      - name: Install locked development environment
+        run: uv sync --frozen
+      - name: Create semantic version, changelog, tag, and GitHub release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v10.6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          git_committer_name: github-actions[bot]
+          git_committer_email: 41898282+github-actions[bot]@users.noreply.github.com
+      - name: Install dArkOS build prerequisites
+        if: steps.release.outputs.released == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes curl file zip
+      - name: Build release artifacts
+        if: steps.release.outputs.released == 'true'
+        env:
+          NEW_VERSION: ${{ steps.release.outputs.version }}
+        run: sh scripts/build_artifacts.sh
+      - name: Upload artifacts to GitHub release
+        if: steps.release.outputs.released == 'true'
+        uses: python-semantic-release/publish-action@v10.6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.tag }}
+      - name: Preserve workflow artifacts
+        if: steps.release.outputs.released == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.release.outputs.tag }}-release-artifacts
+          path: dist/
+          if-no-files-found: error
