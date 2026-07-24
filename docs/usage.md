@@ -11,8 +11,8 @@
 | B or Select | Back |
 | L1 / R1 | Previous / next page |
 | X | Backspace on the on-screen keyboard |
-| Y | Space on the on-screen keyboard |
-| Start | Submit search immediately; select in ordinary menus |
+| Y | Submit the on-screen keyboard search, including empty text |
+| Start | Select in ordinary menus; ignored by the on-screen keyboard |
 
 Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace, and normal typing.
 
@@ -22,7 +22,7 @@ Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace,
 2. Select the download store. Vimm is the only implementation currently available.
 3. Select a platform or **All platforms**.
 4. Enter a title prefix. Matching is case-insensitive and starts at the beginning of the title.
-5. Press **Start** to search. Empty text is valid and lists the complete catalogue.
+5. Press **Y** to search. Empty text is valid and lists the complete catalogue.
 6. Review the compatibility badge in the results list and the source detail on the title screen.
 7. Select **Download**, then choose SD1 or SD2 when both are available.
 

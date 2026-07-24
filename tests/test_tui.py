@@ -10,7 +10,13 @@ from dw_cli.gamepad import InputAction
 from dw_cli.models import InstalledGame, SearchResult
 from dw_cli.platforms import resolve_platform
 from dw_cli.store_catalog import StoreCatalog
-from dw_cli.tui import GAMEPAD_KEYS, GAMEPAD_START_KEY, DownloaderTui
+from dw_cli.tui import (
+    GAMEPAD_KEYS,
+    GAMEPAD_NOOP_KEY,
+    GAMEPAD_SEARCH_KEY,
+    KEYBOARD_GAMEPAD_KEYS,
+    DownloaderTui,
+)
 from dw_cli.vimm_store import VimmStore
 
 
@@ -36,26 +42,42 @@ def keyboard_with_inputs(
     tui._footer = lambda _text: None  # type: ignore[method-assign]
     tui._safe_add = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
     pending: Iterator[int] = iter(inputs)
-    tui._get_input = lambda: next(pending)  # type: ignore[method-assign]
+    tui._get_input = lambda *_args: next(pending)  # type: ignore[method-assign]
     monkeypatch.setattr(curses, "color_pair", lambda _number: 0)
     return tui
 
 
-def test_start_submits_empty_search(monkeypatch: pytest.MonkeyPatch) -> None:
-    tui = keyboard_with_inputs(monkeypatch, (GAMEPAD_START_KEY,))
+def test_y_submits_empty_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    tui = keyboard_with_inputs(monkeypatch, (GAMEPAD_SEARCH_KEY,))
 
     assert tui._on_screen_keyboard("SEARCH") == ""
 
 
-def test_start_submits_current_search_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    tui = keyboard_with_inputs(monkeypatch, (ord("a"), ord("D"), ord("v"), GAMEPAD_START_KEY))
+def test_y_submits_current_search_and_start_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    tui = keyboard_with_inputs(
+        monkeypatch,
+        (ord("a"), GAMEPAD_NOOP_KEY, ord("D"), ord("v"), GAMEPAD_SEARCH_KEY),
+    )
 
     assert tui._on_screen_keyboard("SEARCH") == "aDv"
 
 
-def test_r36s_horizontal_stick_is_back_and_select() -> None:
+def test_gamepad_mapping_is_context_aware_for_keyboard_navigation() -> None:
     assert GAMEPAD_KEYS[InputAction.LEFT] == 27
     assert GAMEPAD_KEYS[InputAction.RIGHT] == 10
+    assert KEYBOARD_GAMEPAD_KEYS[InputAction.LEFT] == curses.KEY_LEFT
+    assert KEYBOARD_GAMEPAD_KEYS[InputAction.RIGHT] == curses.KEY_RIGHT
+    assert KEYBOARD_GAMEPAD_KEYS[InputAction.SUBMIT_SEARCH] == GAMEPAD_SEARCH_KEY
+    assert KEYBOARD_GAMEPAD_KEYS[InputAction.START] == GAMEPAD_NOOP_KEY
+
+
+def test_keyboard_dpad_right_moves_to_next_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    tui = keyboard_with_inputs(
+        monkeypatch,
+        (curses.KEY_RIGHT, 10, GAMEPAD_SEARCH_KEY),
+    )
+
+    assert tui._on_screen_keyboard("SEARCH") == "2"
 
 
 def test_store_picker_returns_registered_store() -> None:

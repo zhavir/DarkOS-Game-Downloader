@@ -4,7 +4,7 @@ import contextlib
 import curses
 import locale
 import textwrap
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +38,8 @@ from dw_cli.store_catalog import StoreCatalog
 type Window = Any
 
 GAMEPAD_START_KEY = 0x110000
+GAMEPAD_SEARCH_KEY = 0x110001
+GAMEPAD_NOOP_KEY = 0x110002
 
 GAMEPAD_KEYS: dict[InputAction, int] = {
     InputAction.UP: curses.KEY_UP,
@@ -48,10 +50,18 @@ GAMEPAD_KEYS: dict[InputAction, int] = {
     InputAction.SELECT: 10,
     InputAction.BACK: 27,
     InputAction.BACKSPACE: curses.KEY_BACKSPACE,
-    InputAction.SPACE: ord(" "),
+    InputAction.SUBMIT_SEARCH: GAMEPAD_NOOP_KEY,
     InputAction.PAGE_UP: curses.KEY_PPAGE,
     InputAction.PAGE_DOWN: curses.KEY_NPAGE,
     InputAction.START: GAMEPAD_START_KEY,
+}
+
+KEYBOARD_GAMEPAD_KEYS: dict[InputAction, int] = {
+    **GAMEPAD_KEYS,
+    InputAction.LEFT: curses.KEY_LEFT,
+    InputAction.RIGHT: curses.KEY_RIGHT,
+    InputAction.SUBMIT_SEARCH: GAMEPAD_SEARCH_KEY,
+    InputAction.START: GAMEPAD_NOOP_KEY,
 }
 
 
@@ -514,7 +524,7 @@ class DownloaderTui:
             "D-pad / sticks / arrows   Move selection",
             "A / Enter        Select",
             "B / Escape       Go back",
-            "Start            Submit search text",
+            "Y                Submit search text",
             "",
             "Search text can be entered with the built-in on-screen keyboard.",
         )
@@ -561,15 +571,15 @@ class DownloaderTui:
                         label,
                         attribute,
                     )
-            footer = "D-pad/stick: move   A: key   Start: search   B: cancel"
+            footer = "D-pad/stick: move   A: key   Y: search   B: cancel"
             if empty_hint:
                 footer = f"{footer}   {empty_hint}"
             self._footer(footer)
             self.screen.refresh()
-            pressed = self._get_input()
+            pressed = self._get_input(KEYBOARD_GAMEPAD_KEYS)
             if pressed == 27:
                 return None
-            if pressed == GAMEPAD_START_KEY:
+            if pressed == GAMEPAD_SEARCH_KEY:
                 return value.strip()
             if pressed in (curses.KEY_UP, ord("k")):
                 row = (row - 1) % len(rows)
@@ -676,14 +686,14 @@ class DownloaderTui:
         if wait:
             self._get_input()
 
-    def _get_input(self) -> int:
+    def _get_input(self, gamepad_keys: Mapping[InputAction, int] = GAMEPAD_KEYS) -> int:
         """Wait for a keyboard key or a directly connected dArkOS controller action."""
 
         while True:
             if self.gamepad is not None:
                 action = self.gamepad.poll()
                 if action is not None:
-                    return GAMEPAD_KEYS[action]
+                    return gamepad_keys[action]
             pressed = self.screen.getch()
             if pressed != -1:
                 return int(pressed)

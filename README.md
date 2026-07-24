@@ -4,6 +4,9 @@ dArkOS Downloader is a controller-first game library manager for RK3326 R36S han
 dArkOS or dArkOSRE. It can also run locally with a keyboard, including in a completely offline demo
 environment that uses fake games and temporary SD-card folders.
 
+**Documentation:**
+[zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/)
+
 ## Features
 
 - Searches by a case-insensitive title prefix, including across all platforms.
@@ -27,7 +30,8 @@ environment that uses fake games and temporary SD-card folders.
 - Requests an EmulationStation game-list refresh after an install, update, or deletion; the
   handheld does not need to be rebooted.
 - Supports the R36S D-pad and both analog sticks directly through `/dev/input/js*`, and has an
-  on-screen keyboard whose Start button submits the current text, including an empty search.
+  on-screen keyboard where every direction navigates and Y submits the current text, including an
+  empty search.
 - Provides typed CLI commands for automation and troubleshooting.
 
 Normal downloads never overwrite an existing ROM silently. An explicit update leaves the installed
@@ -42,9 +46,6 @@ copy untouched until the replacement has downloaded successfully.
 | Automated unit and E2E tests | uv; network for live E2E | `uv run pytest` |
 | R36S use | The prebuilt ZIP only | `dist/darkos-downloader-<version>-r36s-arm64.zip` |
 | Rebuild every release artifact | uv plus Docker and host utilities | `sh scripts/build_artifacts.sh` |
-
-The rendered documentation is built with Zensical and published at
-[zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/).
 
 ## Local prerequisites
 
@@ -113,11 +114,12 @@ Suggested manual end-to-end walkthrough:
 7. Return to game management and test **Delete from device**.
 
 Keyboard controls are arrow keys, Enter to select, Escape to go back, Page Up/Page Down to page,
-Backspace to erase, and normal typing in the on-screen keyboard. On R36S, up/down navigate and can
-be held for continuous scrolling, left acts as B, right acts as A, and Start immediately runs the
-search with the text entered so far. An empty value lists the complete numeric and A-Z catalogue
-for the selected platform, including **All platforms**. The R36S controller is optional when
-running locally.
+Backspace to erase, and normal typing in the on-screen keyboard. In ordinary R36S menus, up/down
+navigate and can be held for continuous scrolling, left acts as B, and right acts as A. While the
+on-screen keyboard is open, both the D-pad and analog stick navigate in all four directions; press
+Y to search with the text entered so far. An empty value lists the complete numeric and A-Z
+catalogue for the selected platform, including **All platforms**. The R36S controller is optional
+when running locally.
 
 To use a different persistent demo location:
 
@@ -291,11 +293,28 @@ uv build
 
 Preview the documentation locally with `uv run zensical serve`. The
 `.github/workflows/docs.yml` workflow publishes the strict build to GitHub Pages after relevant
-changes reach `main`. In the repository's **Settings → Pages**, the source must be set to **GitHub
-Actions** once before the first deployment.
+changes reach `main`.
 
-Pull requests targeting `main` run those lint/type checks, all offline tests, and a separate live
-search E2E job against the real remote service.
+### Enable the documentation site on GitHub
+
+Configure the repository once:
+
+1. Open **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Open **Settings → Actions → General**.
+4. Under **Workflow permissions**, keep at least **Read repository contents** enabled. The docs
+   workflow declares its narrower `contents: read`, `pages: write`, and `id-token: write`
+   permissions itself.
+5. Merge or push a documentation change to `main`, or run the **Documentation** workflow manually
+   from the Actions tab.
+6. Wait for the `github-pages` deployment environment to complete, then open
+   [zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/).
+
+For a private repository, the GitHub plan must support Pages for private repositories. No
+`gh-pages` branch, deploy key, custom token, or repository secret is required by this workflow.
+
+Pull requests targeting `main` run a pre-commit job and one all-tests job that includes the offline,
+integration, and real-service E2E suites.
 
 ## Copy the prebuilt package to dArkOS
 
@@ -339,9 +358,9 @@ To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` director
 | B | Back |
 | L1 / R1 | Previous / next page |
 | X | Backspace in the on-screen keyboard |
-| Y | Space in the on-screen keyboard |
+| Y | Submit the current on-screen keyboard search, including empty text |
 | Select | Back |
-| Start | Submit the current search immediately; select in ordinary menus |
+| Start | Select in ordinary menus; ignored by the on-screen keyboard |
 
 ## Refresh the EmulationStation game list
 

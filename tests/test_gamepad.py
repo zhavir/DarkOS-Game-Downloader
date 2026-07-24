@@ -23,6 +23,7 @@ def test_common_r36s_buttons() -> None:
     try:
         assert device.decode_event(1, JS_EVENT_BUTTON, 0) == InputAction.BACK
         assert device.decode_event(1, JS_EVENT_BUTTON, 1) == InputAction.SELECT
+        assert device.decode_event(1, JS_EVENT_BUTTON, 3) == InputAction.SUBMIT_SEARCH
         assert device.decode_event(1, JS_EVENT_BUTTON, 4) == InputAction.PAGE_UP
         assert device.decode_event(1, JS_EVENT_BUTTON, 7) == InputAction.START
         assert device.decode_event(1, JS_EVENT_BUTTON, 9) == InputAction.START
@@ -45,11 +46,24 @@ def test_dpad_axes_emit_once_until_released() -> None:
 def test_r36s_dpad_buttons_map_to_all_four_directions() -> None:
     device = joystick()
     try:
+        assert device.decode_event(0, JS_EVENT_BUTTON | JS_EVENT_INIT, 17) is None
         assert device.decode_event(1, JS_EVENT_BUTTON, 14) == InputAction.UP
         assert device.decode_event(1, JS_EVENT_BUTTON, 15) == InputAction.DOWN
         assert device.decode_event(1, JS_EVENT_BUTTON, 16) == InputAction.LEFT
         assert device.decode_event(1, JS_EVENT_BUTTON, 17) == InputAction.RIGHT
         assert device.decode_event(0, JS_EVENT_BUTTON, 14) is None
+    finally:
+        device.close()
+
+
+def test_standard_dpad_button_layout_is_detected_from_initialization() -> None:
+    device = joystick()
+    try:
+        assert device.decode_event(0, JS_EVENT_BUTTON | JS_EVENT_INIT, 14) is None
+        assert device.decode_event(1, JS_EVENT_BUTTON, 11) == InputAction.UP
+        assert device.decode_event(1, JS_EVENT_BUTTON, 12) == InputAction.DOWN
+        assert device.decode_event(1, JS_EVENT_BUTTON, 13) == InputAction.LEFT
+        assert device.decode_event(1, JS_EVENT_BUTTON, 14) == InputAction.RIGHT
     finally:
         device.close()
 

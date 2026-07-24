@@ -108,10 +108,10 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "prek", specifier = ">=0.4.10" },
-    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest", specifier = ">=9.1.1" },
     { name = "python-semantic-release", specifier = ">=10.6.1,<11" },
-    { name = "ruff", specifier = ">=0.9" },
-    { name = "ty", specifier = ">=0.0.1a1" },
+    { name = "ruff", specifier = ">=0.16.0" },
+    { name = "ty", specifier = ">=0.0.63" },
     { name = "zensical", specifier = ">=0.0.51,<0.1" },
 ]
 

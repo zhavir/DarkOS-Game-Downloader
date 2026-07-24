@@ -24,10 +24,10 @@ scripts.dw = "dw_cli.app:main"
 [dependency-groups]
 dev = [
   "prek>=0.4.10",
-  "pytest>=8.3",
+  "pytest>=9.1.1",
   "python-semantic-release>=10.6.1,<11",
-  "ruff>=0.9",
-  "ty>=0.0.1a1",
+  "ruff>=0.16",
+  "ty>=0.0.63",
   "zensical>=0.0.51,<0.1",
 ]
 
