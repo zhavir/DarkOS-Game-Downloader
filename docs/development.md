@@ -73,13 +73,14 @@ uv run zensical build --clean --strict
 ```
 
 Pull-request and release workflows append the coverage table to the GitHub job summary and upload
-the XML, JSON, and browsable HTML reports as a `coverage-*` Actions artifact. The Pages workflow
-publishes the latest `main` HTML report under `/coverage/` and its JSON summary at
-`/coverage.json`. The Marketplace Coverage Badge action publishes `badges/coverage.svg` on the
-`gh-pages` branch, and the README displays that generated badge.
+the XML, JSON, and browsable HTML reports as a `coverage-*` Actions artifact. After Python Semantic
+Release and every release artifact succeed, the release workflow dispatches the Pages workflow.
+It reuses that run's coverage artifact, publishes the latest `main` HTML report under `/coverage/`
+and its JSON summary at `/coverage.json`, then updates `badges/coverage.svg` on `gh-pages` through
+the Marketplace Coverage Badge action.
 
-The generated `site/` directory is ignored. Pushing documentation changes to `main` invokes the
-Pages workflow and publishes the generated artifact.
+The generated `site/` directory is ignored. Documentation-only changes are published with the next
+successful semantic release rather than directly on every push to `main`.
 
 ## Add another download store
 

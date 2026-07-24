@@ -329,8 +329,8 @@ uv build
 ```
 
 Preview the documentation locally with `uv run zensical serve`. The
-`.github/workflows/docs.yml` workflow publishes the strict build to GitHub Pages after relevant
-changes reach `main`.
+`.github/workflows/docs.yml` workflow publishes the strict build to GitHub Pages only after Python
+Semantic Release has created a release and the release artifacts have been built successfully.
 
 ### Enable the documentation site on GitHub
 
@@ -342,8 +342,8 @@ Configure the repository once:
 4. Under **Workflow permissions**, select **Read and write permissions**. The docs workflow needs
    `contents: write` so the Coverage Badge action can update `badges/coverage.svg` on `gh-pages`;
    it also declares `pages: write` and `id-token: write` for the documentation deployment.
-5. Merge or push a documentation change to `main`, or run the **Documentation** workflow manually
-   from the Actions tab.
+5. Merge a pull request whose conventional commits produce a semantic release. The successful
+   release workflow dispatches the **Documentation** workflow automatically.
 6. Wait for the `github-pages` deployment environment to complete, then open
    [zhavir.github.io/DarkOS-Game-Downloader](https://zhavir.github.io/DarkOS-Game-Downloader/).
 
@@ -471,10 +471,13 @@ actions then read the conventional commits since the previous tag and:
 
 1. Determines the next semantic version.
 2. Updates `pyproject.toml` and `CHANGELOG.md`.
-3. Builds the uv wheel and source distribution.
-4. Builds and verifies the self-contained Linux ARM64 dArkOS R36S ZIP.
-5. Creates a `v<version>` tag and GitHub release with commit-derived notes.
-6. Attaches the wheel, source archive, and dArkOS ZIP.
+3. Runs every prek hook, including the lock-file synchronization, before committing the release.
+4. Creates a `v<version>` tag and GitHub release with commit-derived notes.
+5. After semantic release succeeds, builds the uv wheel, source distribution, and verified
+   self-contained Linux ARM64 dArkOS R36S ZIP.
+6. Attaches all three artifacts to the GitHub release.
+7. After every artifact succeeds, dispatches the documentation deployment and coverage-badge
+   update.
 
 Use conventional commit messages so the release type and notes are deterministic:
 

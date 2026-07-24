@@ -1,18 +1,9 @@
 name: Documentation
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/docs.yml
-      - docs/**
-      - pyproject.toml
-      - README.md
-      - src/**
-      - tests/**
-      - uv.lock
-      - zensical.toml
-  workflow_dispatch:
+  repository_dispatch:
+    types: [release-documentation]
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -30,6 +21,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
+        with:
+          ref: main
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6.0.0
       - name: Install uv
@@ -41,19 +34,19 @@ jobs:
         run: uv python install 3.14
       - name: Install locked documentation environment
         run: uv sync --frozen
-      - name: Prepare coverage output
-        run: mkdir -p coverage-reports
-      - name: Measure complete test coverage
-        env:
-          DW_LIVE_BASE_URL: https://vimm.net
-          DW_LIVE_MINERVA_BASE_URL: https://minerva-archive.org
-          DW_LIVE_MINERVA_TORRENT_BASE_URL: https://cdn.minerva-archive.org/torrents
-        run: >-
-          uv run --frozen pytest --cov=dw_cli --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
+      - name: Download released revision coverage
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: coverage-main-${{ github.event.client_payload.sha }}
+          path: coverage-reports
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.client_payload.run_id }}
       - name: Build documentation
         run: uv run --frozen zensical build --clean --strict
       - name: Add browsable coverage report
         run: |
+          cp coverage-reports/coverage.json coverage.json
           cp coverage.json site/coverage.json
           cp -R coverage-reports/html site/coverage
       - name: Upload GitHub Pages artifact

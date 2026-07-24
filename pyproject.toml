@@ -73,7 +73,6 @@ build_command = '''set -eu
 python -m pip install --disable-pip-version-check -e '.[release]'
 uv run prek --all-files
 git add .
-uv build
 '''
 commit_message = "chore(release): {version} [skip ci]"
 commit_parser = "conventional"

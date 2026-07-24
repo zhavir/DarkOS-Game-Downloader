@@ -26,8 +26,6 @@ jobs:
         run: uv sync --frozen
       - name: Run pre-commit checks
         run: uv run --frozen prek run --all-files
-      - name: Build documentation
-        run: uv run --frozen zensical build --clean --strict
   tests:
     name: All tests
     runs-on: ubuntu-latest

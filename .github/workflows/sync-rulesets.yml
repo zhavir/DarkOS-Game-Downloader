@@ -7,18 +7,38 @@ on:
     paths:
       - ".github/rulesets/*.json"
       - ".github/workflows/sync-rulesets.yml"
+permissions:
+  contents: read
 jobs:
   sync:
-    name: Apply repository rulesets
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Verify token
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::RULESET_TOKEN is empty or unavailable"
+            exit 1
+          fi
+
+          is_admin="$(
+            gh api "repos/${GH_REPO}" \
+              --jq '.permissions.admin'
+          )"
+
+          if [[ "${is_admin}" != "true" ]]; then
+            echo "::error::The account associated with RULESET_TOKEN is not a repository administrator"
+            exit 1
+          fi
       - name: Create or update rulesets
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -27,7 +47,6 @@ jobs:
 
             payload="$(mktemp)"
 
-            # Keep only fields accepted by the create/update API.
             jq '{
               name,
               target,
@@ -41,30 +60,33 @@ jobs:
 
             ruleset_id="$(
               gh api \
+                -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2026-03-10" \
-                "/repos/${GH_REPO}/rulesets?includes_parents=false&per_page=100" |
+                "repos/${GH_REPO}/rulesets?includes_parents=false&per_page=100" |
               jq -r --arg name "${name}" \
                 '.[] | select(.name == $name) | .id' |
               head -n 1
             )"
 
             if [[ -n "${ruleset_id}" ]]; then
-              echo "Updating '${name}' (${ruleset_id})"
+              echo "Updating '${name}'"
 
               gh api \
                 --method PUT \
+                -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2026-03-10" \
-                "/repos/${GH_REPO}/rulesets/${ruleset_id}" \
+                "repos/${GH_REPO}/rulesets/${ruleset_id}" \
                 --input "${payload}"
             else
               echo "Creating '${name}'"
 
               gh api \
                 --method POST \
+                -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2026-03-10" \
-                "/repos/${GH_REPO}/rulesets" \
+                "repos/${GH_REPO}/rulesets" \
                 --input "${payload}"
             fi
 
-            rm "${payload}"
+            rm -f "${payload}"
           done
