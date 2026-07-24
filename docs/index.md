@@ -10,8 +10,9 @@ so neither Python, uv, nor a package manager is required on the handheld.
 ## What it does
 
 - Searches the remote library by a case-insensitive title prefix.
-- Prompts for a download store before searches and updates. Vimm is currently registered, while a
-  store contract keeps the TUI independent of future implementations.
+- Prompts for a download store before searches and updates. Vimm and Minerva Archive's
+  RetroAchievements collection share the same extensible store contract.
+- Selectively downloads Minerva torrent pieces in native Python with no external torrent client.
 - Accepts an empty search to list the complete selected catalogue, including **All platforms**.
 - Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
 - Installs explicitly bundled BIOS files without overwriting existing firmware.
@@ -25,7 +26,7 @@ so neither Python, uv, nor a package manager is required on the handheld.
 ## Controller-first
 
 The TUI reads the R36S controls directly from `/dev/input/js*`. Up/down moves through menus and
-supports press-and-hold scrolling. On the on-screen keyboard, all four directions navigate and Y
+supports press-and-hold scrolling. On the on-screen keyboard, all four directions navigate and X
 submits the current search—even when it is empty.
 
 ## No PortMaster dependency

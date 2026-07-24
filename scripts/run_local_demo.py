@@ -23,7 +23,7 @@ def prepare_demo_environment(workspace: Path, base_url: str) -> dict[str, str]:
         "DW_BASE_URL": base_url,
         "DW_DOWNLOAD_DIR": str(downloads),
         "DW_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
-        "DW_DISABLE_ARIA2": "1",
+        "DW_STORES": "vimm",
         "DW_TIMEOUT": "5",
     }
 

@@ -57,8 +57,6 @@ BTN_DPAD_RIGHT = 0x223
 JSIOCGBUTTONS = 0x80016A12
 JSIOCGBTNMAP = 0x84006A34
 BUTTON_MAP_BYTES = 1024
-GAMEPAD_LOG_ENV = "DW_GAMEPAD_LOG"
-
 BUTTON_CODE_ACTIONS: dict[int, InputAction] = {
     KEY_UP: InputAction.UP,
     KEY_DOWN: InputAction.DOWN,
@@ -66,8 +64,8 @@ BUTTON_CODE_ACTIONS: dict[int, InputAction] = {
     KEY_RIGHT: InputAction.RIGHT,
     BTN_SOUTH: InputAction.BACK,
     BTN_EAST: InputAction.SELECT,
-    BTN_NORTH: InputAction.BACKSPACE,
-    BTN_WEST: InputAction.SUBMIT_SEARCH,
+    BTN_NORTH: InputAction.SUBMIT_SEARCH,
+    BTN_WEST: InputAction.BACKSPACE,
     BTN_TL: InputAction.PAGE_UP,
     BTN_TR: InputAction.PAGE_DOWN,
     BTN_SELECT: InputAction.BACK,
@@ -81,8 +79,8 @@ BUTTON_CODE_ACTIONS: dict[int, InputAction] = {
 BUTTON_ACTIONS: dict[int, InputAction] = {
     0: InputAction.BACK,
     1: InputAction.SELECT,
-    2: InputAction.BACKSPACE,
-    3: InputAction.SUBMIT_SEARCH,
+    2: InputAction.SUBMIT_SEARCH,
+    3: InputAction.BACKSPACE,
     4: InputAction.PAGE_UP,
     5: InputAction.PAGE_DOWN,
     # The R36S exists with two common dArkOS/ArkOS controller layouts.  Keep
@@ -134,8 +132,6 @@ class LinuxJoystick:
             except OSError:
                 continue
             button_codes = cls._read_button_codes(descriptor)
-            mapping = ", ".join(f"{index}={code}" for index, code in enumerate(button_codes))
-            _write_diagnostic(f"gamepad map {path}: {mapping or 'unavailable'}")
             return cls(
                 path=path,
                 _file_descriptor=descriptor,
@@ -153,8 +149,7 @@ class LinuxJoystick:
             count = count_buffer[0]
             mapping_buffer = bytearray(BUTTON_MAP_BYTES)
             fcntl.ioctl(descriptor, JSIOCGBTNMAP, mapping_buffer, True)
-        except OSError as error:
-            _write_diagnostic(f"gamepad semantic map unavailable: {error}")
+        except OSError:
             return ()
         return struct.unpack_from(f"={count}H", mapping_buffer)
 
@@ -188,10 +183,6 @@ class LinuxJoystick:
             return None
         if kind == JS_EVENT_BUTTON:
             action = self._button_action(number)
-            if value:
-                code = self._button_codes[number] if number < len(self._button_codes) else None
-                label = action.value if action is not None else "ignored"
-                _write_diagnostic(f"gamepad button index={number} code={code} action={label}")
             if action not in REPEAT_ACTIONS:
                 return action if value else None
             if value:
@@ -266,16 +257,3 @@ class LinuxJoystick:
             os.close(self._file_descriptor)
         finally:
             self._file_descriptor = -1
-
-
-def _write_diagnostic(message: str) -> None:
-    """Append controller diagnostics when the device launcher supplies a log path."""
-
-    log_value = os.environ.get(GAMEPAD_LOG_ENV)
-    if not log_value:
-        return
-    try:
-        with Path(log_value).open("a", encoding="utf-8") as stream:
-            stream.write(message + "\n")
-    except OSError:
-        pass

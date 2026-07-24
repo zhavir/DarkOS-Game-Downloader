@@ -7,6 +7,7 @@ APP_DIR="$SCRIPT_DIR/darkos-downloader"
 EXECUTABLE="$APP_DIR/darkos-downloader"
 LOG_FILE="$APP_DIR/darkos-downloader.log"
 REFRESH_FILE="$APP_DIR/.refresh-emulationstation"
+CA_BUNDLE="$APP_DIR/ca-certificates.crt"
 
 show_failure() {
     message="dArkOS Downloader stopped with exit code $1.\n\nDiagnostic log:\n$LOG_FILE"
@@ -45,8 +46,10 @@ esac
 mkdir -p "$APP_DIR/.downloads"
 export DW_DOWNLOAD_DIR="${DW_DOWNLOAD_DIR:-$APP_DIR/.downloads}"
 export DW_ES_REFRESH_FILE="$REFRESH_FILE"
-export DW_GAMEPAD_LOG="$LOG_FILE"
 export TERM="${TERM:-xterm-256color}"
+if [ -f "$CA_BUNDLE" ]; then
+    export SSL_CERT_FILE="$CA_BUNDLE"
+fi
 
 refresh_emulationstation() {
     if [ ! -f "$REFRESH_FILE" ]; then

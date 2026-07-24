@@ -206,7 +206,13 @@ def discover_platforms(
 def _build_aliases() -> dict[str, Platform]:
     aliases: dict[str, Platform] = {}
     for platform in PLATFORMS:
-        values = (platform.slug, platform.alias, platform.code, *platform.arkos_folders)
+        values = (
+            platform.name,
+            platform.slug,
+            platform.alias,
+            platform.code,
+            *platform.arkos_folders,
+        )
         for value in values:
             if value:
                 aliases[value.casefold()] = platform

@@ -33,7 +33,8 @@ def test_common_r36s_buttons() -> None:
     try:
         assert device.decode_event(1, JS_EVENT_BUTTON, 0) == InputAction.BACK
         assert device.decode_event(1, JS_EVENT_BUTTON, 1) == InputAction.SELECT
-        assert device.decode_event(1, JS_EVENT_BUTTON, 3) == InputAction.SUBMIT_SEARCH
+        assert device.decode_event(1, JS_EVENT_BUTTON, 2) == InputAction.SUBMIT_SEARCH
+        assert device.decode_event(1, JS_EVENT_BUTTON, 3) == InputAction.BACKSPACE
         assert device.decode_event(1, JS_EVENT_BUTTON, 4) == InputAction.PAGE_UP
         assert device.decode_event(1, JS_EVENT_BUTTON, 7) == InputAction.START
         assert device.decode_event(1, JS_EVENT_BUTTON, 9) == InputAction.START
@@ -61,8 +62,8 @@ def test_kernel_button_map_overrides_raw_indices_for_dpad_and_face_buttons() -> 
         assert device.decode_event(1, JS_EVENT_BUTTON, 3) == InputAction.RIGHT
         assert device.decode_event(1, JS_EVENT_BUTTON, 4) == InputAction.BACK
         assert device.decode_event(1, JS_EVENT_BUTTON, 5) == InputAction.SELECT
-        assert device.decode_event(1, JS_EVENT_BUTTON, 6) == InputAction.BACKSPACE
-        assert device.decode_event(1, JS_EVENT_BUTTON, 7) == InputAction.SUBMIT_SEARCH
+        assert device.decode_event(1, JS_EVENT_BUTTON, 6) == InputAction.SUBMIT_SEARCH
+        assert device.decode_event(1, JS_EVENT_BUTTON, 7) == InputAction.BACKSPACE
     finally:
         device.close()
 

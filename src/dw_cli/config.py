@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Self
 
 DEFAULT_BASE_URL = "https://vimm.net"
+DEFAULT_MINERVA_BASE_URL = "https://minerva-archive.org"
+DEFAULT_MINERVA_TORRENT_BASE_URL = "https://cdn.minerva-archive.org/torrents"
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +18,9 @@ class Config:
     download_directory: Path
     roms_directories: tuple[Path, ...]
     timeout_seconds: float = 30.0
+    minerva_base_url: str = DEFAULT_MINERVA_BASE_URL
+    minerva_torrent_base_url: str = DEFAULT_MINERVA_TORRENT_BASE_URL
+    enabled_stores: tuple[str, ...] = ("vimm", "minerva")
 
     @classmethod
     def from_environment(cls) -> Self:
@@ -36,9 +41,25 @@ class Config:
             roms_value = os.environ.get("DW_ROMS_DIR")
             roms_directories = (Path(roms_value).expanduser(),) if roms_value else ()
         timeout = float(os.environ.get("DW_TIMEOUT", "30"))
+        minerva_base_url = os.environ.get("DW_MINERVA_BASE_URL", DEFAULT_MINERVA_BASE_URL).rstrip(
+            "/"
+        )
+        minerva_torrent_base_url = os.environ.get(
+            "DW_MINERVA_TORRENT_BASE_URL", DEFAULT_MINERVA_TORRENT_BASE_URL
+        ).rstrip("/")
+        enabled_stores = tuple(
+            dict.fromkeys(
+                store.strip().casefold()
+                for store in os.environ.get("DW_STORES", "vimm,minerva").split(",")
+                if store.strip()
+            )
+        )
         return cls(
             base_url=base_url,
             download_directory=directory,
             roms_directories=roms_directories,
             timeout_seconds=timeout,
+            minerva_base_url=minerva_base_url,
+            minerva_torrent_base_url=minerva_torrent_base_url,
+            enabled_stores=enabled_stores,
         )

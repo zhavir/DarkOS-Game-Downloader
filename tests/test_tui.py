@@ -47,13 +47,13 @@ def keyboard_with_inputs(
     return tui
 
 
-def test_y_submits_empty_search(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_x_submits_empty_search(monkeypatch: pytest.MonkeyPatch) -> None:
     tui = keyboard_with_inputs(monkeypatch, (GAMEPAD_SEARCH_KEY,))
 
     assert tui._on_screen_keyboard("SEARCH") == ""
 
 
-def test_y_submits_current_search_and_start_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_x_submits_current_search_and_start_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
     tui = keyboard_with_inputs(
         monkeypatch,
         (ord("a"), GAMEPAD_NOOP_KEY, ord("D"), ord("v"), GAMEPAD_SEARCH_KEY),
@@ -138,7 +138,7 @@ def test_update_selects_store_before_remote_search(
             or [SearchResult("Advance Wars", "https://example.test/vault/1")]
         ),
     )
-    tui._choose_store = lambda _title: store  # type: ignore[method-assign]
+    tui._choose_store = lambda _title, _platform=None: store  # type: ignore[method-assign]
     tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
     tui._menu = lambda _title, _options, _footer: None  # type: ignore[method-assign]
 

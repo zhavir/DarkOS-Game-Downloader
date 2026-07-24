@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import ClassVar
 
-from dw_cli.models import Platform, SearchResult
+from dw_cli.models import MediaDownload, Platform, SearchResult
 
 type CatalogProgress = Callable[[int, int], None]
 USER_AGENT = (
@@ -42,6 +42,11 @@ class GameStore(ABC):
     def platform_code(self, platform: Platform) -> str:
         """Translate shared platform metadata to this store's identifier."""
 
+    def supports_platform(self, platform: Platform) -> bool:
+        """Return whether this store can search the shared platform."""
+
+        return True
+
     @abstractmethod
     def search(
         self,
@@ -58,3 +63,8 @@ class GameStore(ABC):
     @abstractmethod
     def retrieve_download_url(self, detail_url: str) -> str:
         """Resolve one store detail page to its downloadable media URL."""
+
+    def download_request(self, detail_url: str) -> MediaDownload:
+        """Resolve download metadata; direct-download stores only need the URL."""
+
+        return MediaDownload(self.retrieve_download_url(detail_url))

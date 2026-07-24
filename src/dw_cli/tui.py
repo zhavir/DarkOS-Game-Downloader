@@ -17,6 +17,7 @@ from dw_cli.config import Config
 from dw_cli.downloader import DownloadError, download_files
 from dw_cli.frontend import request_emulationstation_refresh
 from dw_cli.gamepad import InputAction, LinuxJoystick
+from dw_cli.hardware import detect_hardware_profile
 from dw_cli.library import (
     LibraryError,
     delete_game,
@@ -82,6 +83,7 @@ class DownloaderTui:
         )
         self.roms_directories = detect_roms_directories(config.roms_directories or None)
         self.platforms = discover_platforms(self.roms_directories)
+        self.hardware = detect_hardware_profile()
         self.gamepad = LinuxJoystick.open_first()
         self._setup_screen()
 
@@ -137,11 +139,14 @@ class DownloaderTui:
         store = self._choose_store("CHOOSE A DOWNLOAD STORE")
         if store is None:
             return
-        labels = [f"{item.name}  [{item.alias}]" for item in self.platforms]
+        platforms = tuple(
+            platform for platform in self.platforms if store.supports_platform(platform)
+        )
+        labels = [f"{item.name}  [{item.alias}]" for item in platforms]
         choice = self._menu("CHOOSE A PLATFORM", labels, "B/Esc: back")
         if choice is None:
             return
-        platform = self.platforms[choice]
+        platform = platforms[choice]
         query = self._on_screen_keyboard(
             f"SEARCH {platform.alias}",
             empty_hint="DONE with no text: list all games",
@@ -265,7 +270,7 @@ class DownloaderTui:
         self._draw_message("PREPARING", "Retrieving the download link...", 1)
         installed_bios: list[Path] = []
         try:
-            media_url = store.retrieve_download_url(detail_url)
+            media_url = store.download_request(detail_url)
             downloads = download_files(
                 [media_url],
                 self.config.download_directory,
@@ -391,7 +396,7 @@ class DownloaderTui:
         return True
 
     def _update_game(self, game: InstalledGame) -> bool:
-        store = self._choose_store("CHOOSE AN UPDATE STORE")
+        store = self._choose_store("CHOOSE AN UPDATE STORE", game.platform)
         if store is None:
             return False
         self._draw_message("SEARCHING FOR UPDATE", game.title, 1)
@@ -425,7 +430,7 @@ class DownloaderTui:
         if confirmation != 1:
             return False
         try:
-            media_url = store.retrieve_download_url(selected.link)
+            media_url = store.download_request(selected.link)
             downloads = download_files(
                 [media_url],
                 self.config.download_directory,
@@ -464,8 +469,12 @@ class DownloaderTui:
     def _choose_roms_directory(self) -> Path | None:
         return self._choose_from_roots(self.roms_directories, "CHOOSE DESTINATION CARD")
 
-    def _choose_store(self, title: str) -> GameStore | None:
-        stores = self.store_catalog.stores
+    def _choose_store(self, title: str, platform: Platform | None = None) -> GameStore | None:
+        stores = tuple(
+            store
+            for store in self.store_catalog.stores
+            if platform is None or store.supports_platform(platform)
+        )
         choice = self._menu(
             title,
             [f"{store.display_name} - {store.description}" for store in stores],
@@ -510,6 +519,10 @@ class DownloaderTui:
     def _status_screen(self) -> None:
         roms = ", ".join(str(path) for path in self.roms_directories) or "not detected"
         controller = str(self.gamepad.path) if self.gamepad is not None else "not detected"
+        terminal_height, terminal_width = self.screen.getmaxyx()
+        compatible = ", ".join(self.hardware.compatible[:2]) or "not detected"
+        dt_inputs = ", ".join(item.node for item in self.hardware.input_nodes) or "not detected"
+        key_count = len(self.hardware.keys)
         stores = ", ".join(
             f"{store.display_name} ({store.base_url})" for store in self.store_catalog.stores
         )
@@ -518,13 +531,18 @@ class DownloaderTui:
             f"Staging: {self.config.download_directory}",
             f"ROM root: {roms}",
             f"Platforms: {len(self.platforms) - 1}",
+            f"Hardware: {self.hardware.model}",
+            f"Compatible: {compatible}",
+            f"Display: {self.hardware.display_resolution} pixels; "
+            f"{terminal_width}x{terminal_height} terminal cells",
+            f"DT inputs: {dt_inputs} ({key_count} GPIO keys)",
             f"Controller: {controller} (native Linux input)",
             "",
             "Controls",
             "D-pad / sticks / arrows   Move selection",
             "A / Enter        Select",
             "B / Escape       Go back",
-            "Y                Submit search text",
+            "X                Submit search text",
             "",
             "Search text can be entered with the built-in on-screen keyboard.",
         )
@@ -571,7 +589,7 @@ class DownloaderTui:
                         label,
                         attribute,
                     )
-            footer = "D-pad/stick: move   A: key   Y: search   B: cancel"
+            footer = "D-pad/stick: move   A: key   X: search   B: cancel"
             if empty_hint:
                 footer = f"{footer}   {empty_hint}"
             self._footer(footer)

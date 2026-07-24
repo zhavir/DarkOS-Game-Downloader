@@ -10,8 +10,8 @@ environment that uses fake games and temporary SD-card folders.
 ## Features
 
 - Searches by a case-insensitive title prefix, including across all platforms.
-- Selects a download store before each TUI search and installed-game update. Vimm is the first
-  implementation; the store contract and registry are ready for additional sources.
+- Selects a download store before each TUI search and installed-game update. Vimm and Minerva
+  Archive's RetroAchievements collection are implemented behind the same store contract.
 - Lists a selected platform's complete numeric and A-Z remote catalogue when search text is empty.
 - Matches results against the frontend-only [R36S Game List](https://r36sgamelist.com/) index,
   caches it locally for seven days, and shows the RK3326 compatibility level before download.
@@ -20,6 +20,8 @@ environment that uses fake games and temporary SD-card folders.
 - Maps more than 100 R36S-compatible ROM destinations and discovers image-specific folders.
 - Detects and manages both `/roms` and `/roms2` in a dual-card setup.
 - Downloads to a staging directory and then moves the completed file into the selected ROM folder.
+- Downloads only the selected file from Minerva's platform torrent with a native Python
+  BitTorrent client; no aria2, torrent application, daemon, or PortMaster component is required.
 - Installs BIOS files explicitly bundled under a `bios/` directory in a downloaded ZIP, without
   overwriting existing firmware or unpacking ordinary arcade/merged ROM archives.
 - Scans installed games on both cards.
@@ -30,7 +32,7 @@ environment that uses fake games and temporary SD-card folders.
 - Requests an EmulationStation game-list refresh after an install, update, or deletion; the
   handheld does not need to be rebooted.
 - Supports the R36S D-pad and both analog sticks directly through `/dev/input/js*`, and has an
-  on-screen keyboard where every direction navigates and Y submits the current text, including an
+  on-screen keyboard where every direction navigates and X submits the current text, including an
   empty search.
 - Provides typed CLI commands for automation and troubleshooting.
 
@@ -95,8 +97,7 @@ This command:
 1. Starts a localhost-only fake catalogue on a random free port.
 2. Creates `.local-test/downloads`, `.local-test/sd1/gba`, and `.local-test/sd2/gba`.
 3. Configures the application to see both fake memory cards.
-4. Disables the optional aria2 fast path so downloads use the deterministic Python implementation.
-5. Opens the real curses TUI in the current terminal.
+4. Opens the real curses TUI in the current terminal.
 
 The demo data is harmless: downloaded “ROMs” are tiny text payloads with `.zip` names. The
 `.local-test` directory persists after exit so update, rescan, and delete behavior can be tested
@@ -117,7 +118,7 @@ Keyboard controls are arrow keys, Enter to select, Escape to go back, Page Up/Pa
 Backspace to erase, and normal typing in the on-screen keyboard. In ordinary R36S menus, up/down
 navigate and can be held for continuous scrolling, left acts as B, and right acts as A. While the
 on-screen keyboard is open, both the D-pad and analog stick navigate in all four directions; press
-Y to search with the text entered so far. An empty value lists the complete numeric and A-Z
+X to search with the text entered so far. An empty value lists the complete numeric and A-Z
 catalogue for the selected platform, including **All platforms**. The R36S controller is optional
 when running locally.
 
@@ -140,9 +141,9 @@ It listens on `http://127.0.0.1:8765` by default. In terminal 2 on Linux, macOS,
 ```sh
 mkdir -p .local-test/downloads .local-test/sd1/gba .local-test/sd2/gba
 export DW_BASE_URL=http://127.0.0.1:8765
+export DW_STORES=vimm
 export DW_DOWNLOAD_DIR="$PWD/.local-test/downloads"
 export DW_ROMS_DIRS="$PWD/.local-test/sd1:$PWD/.local-test/sd2"
-export DW_DISABLE_ARIA2=1
 uv run dw
 ```
 
@@ -160,20 +161,25 @@ export DW_ROMS_DIR="$PWD/.local-test/real-service/sd1"
 uv run dw
 ```
 
-The default service is `https://vimm.net`. Downloads may be large and service availability or page
-layout can change, so the offline demo should be used first. Only download content you have the
-legal right to use.
+The registered services are Vimm and Minerva Archive. Minerva searches only its
+`RetroAchievements` collection and uses public BitTorrent peers, so availability depends on
+seeders and your public IP address is visible to the swarm. The native client requests only the
+selected file's verified pieces and does not listen for uploads or seed. Downloads may be large and
+remote layouts can change, so use the offline demo first. Only download content you have the legal
+right to use.
 
 ## Environment variables
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `DW_BASE_URL` | Vimm store root; use the local fake server for offline tests | `https://vimm.net` |
+| `DW_MINERVA_BASE_URL` | Minerva browse/detail root | `https://minerva-archive.org` |
+| `DW_MINERVA_TORRENT_BASE_URL` | Minerva torrent metadata root | `https://cdn.minerva-archive.org/torrents` |
+| `DW_STORES` | Comma-separated enabled store IDs | `vimm,minerva` |
 | `DW_DOWNLOAD_DIR` | Temporary download/staging directory | Current directory; device launcher uses its private `.downloads` folder |
 | `DW_ROMS_DIR` | One explicit ROM root for local or single-card testing | Auto-detect |
 | `DW_ROMS_DIRS` | Multiple ROM roots separated by the OS path separator; takes precedence over `DW_ROMS_DIR` | Auto-detect `/roms2`, then `/roms` |
 | `DW_TIMEOUT` | Network timeout in seconds | `30` |
-| `DW_DISABLE_ARIA2` | Set to `1`, `true`, `yes`, or `on` to force the Python downloader | aria2 is used when found |
 
 `TERM` is normally provided by the terminal. If curses reports an unknown terminal locally, try
 `TERM=xterm-256color`. The R36S Tools launcher sets a terminal value automatically.
@@ -202,6 +208,14 @@ CLI automation uses Vimm by default. Select it explicitly with a global option w
 
 ```sh
 uv run dw --store vimm search GBA "advance"
+```
+
+Search Minerva's RetroAchievements collection with the same prefix and empty-search behavior:
+
+```sh
+uv run dw --store minerva search GBA "advance wars"
+uv run dw --store minerva search GBA
+uv run dw --store minerva search ALL "advance wars"
 ```
 
 Omit the query to list the selected platform's complete numeric and A-Z catalogue:
@@ -248,6 +262,9 @@ Override the live target when testing a compatible deployment:
 DW_LIVE_BASE_URL=https://vimm.net uv run pytest -m e2e -v
 ```
 
+Minerva's live endpoints can be overridden independently with `DW_LIVE_MINERVA_BASE_URL` and
+`DW_LIVE_MINERVA_TORRENT_BASE_URL`.
+
 Run the offline localhost integration workflows:
 
 ```sh
@@ -260,10 +277,10 @@ Run everything that does not need internet access:
 uv run pytest -m "not live"
 ```
 
-The live E2E tests contact the real URLs and verify current HTTP responses and HTML parsing for a
-case-insensitive GBA prefix, the same prefix across all platforms, an empty platform search across
-every numeric and A-Z catalogue section, and a known title in the frontend-only R36S compatibility
-index. They never download a game.
+The live E2E tests contact the real Vimm, Minerva, and R36S Game List URLs. They verify
+case-insensitive prefix searches, all-platform searches, empty catalogues, Minerva's real torrent
+metadata/file mapping, a complete verified download of a tiny Arduboy program through real trackers
+and peers, and a known compatibility entry.
 
 The offline integration suite binds a random localhost port and exercises:
 
@@ -337,15 +354,17 @@ tools/
 ├── dArkOS Downloader.sh
 └── darkos-downloader/
     ├── darkos-downloader
+    ├── ca-certificates.crt
     └── _internal/
 ```
 
 The Tools launcher detects a detached launch, opens the TUI on a real Linux virtual console, and
 switches back after exit. Startup and crash details are written to
 `tools/darkos-downloader/darkos-downloader.log`.
-That log also records the kernel's detected gamepad button map and each pressed button. If an R36S
-clone uses an unknown controller layout, attach its `gamepad map` and `gamepad button` lines when
-reporting the problem.
+The application reads the live device tree exposed by Linux; you do not need to find or decompile a
+`.dtb` file. Device-tree key labels and `linux,code` values are diagnostic clues. The active
+joystick ioctl mapping remains authoritative because a DTB does not reliably describe joydev button
+indexes or analog-stick behavior.
 
 To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` directory from the card's
 `tools` directory.
@@ -360,8 +379,8 @@ To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` director
 | A | Select |
 | B | Back |
 | L1 / R1 | Previous / next page |
-| X | Backspace in the on-screen keyboard |
-| Y | Submit the current on-screen keyboard search, including empty text |
+| X | Submit the current on-screen keyboard search, including empty text |
+| Y | Delete the last character in the on-screen keyboard |
 | Select | Back |
 | Start | Select in ordinary menus; ignored by the on-screen keyboard |
 
@@ -464,7 +483,8 @@ Existing repositories that already contain a semantic version tag do not need th
   them before starting the TUI.
 - **Fake server connection refused:** keep `scripts/local_vault_server.py` running or use the
   one-command `scripts/run_local_demo.py` workflow.
-- **Different downloader behavior because aria2 is installed:** set `DW_DISABLE_ARIA2=1`.
+- **Minerva reports no peers:** its downloads depend on public BitTorrent seeders and outbound HTTP,
+  UDP, and peer TCP traffic. Try again later or use Vimm.
 - **Native Windows import error for curses:** use WSL2.
 - **R36S returns immediately to EmulationStation:** copy the complete latest package again and inspect
   `tools/darkos-downloader/darkos-downloader.log`.

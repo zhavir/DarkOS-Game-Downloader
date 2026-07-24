@@ -31,8 +31,9 @@ uv run prek run --all-files
 uv run pytest
 ```
 
-The full test suite includes offline unit/integration tests and real-service E2E contracts for both
-the download catalogue and R36S compatibility frontend. Use this to skip network tests:
+The full test suite includes offline unit/integration tests and real-service E2E contracts for
+Vimm, Minerva's browse and torrent endpoints, a complete verified tiny Arduboy download through
+real peers, and the R36S compatibility frontend. Use this to skip network tests:
 
 ```sh
 uv run pytest -m "not live"
@@ -61,7 +62,8 @@ Implement the abstract `GameStore` contract in `src/dw_cli/store.py`, then regis
 class in `StoreCatalog.from_config`. Search, direct downloads, installed-game updates, and CLI
 automation consume the registry and do not need store-specific branches. Each implementation owns
 its platform-code translation, search behavior, detail-URL validation, media-URL resolution, base
-URL, and download referrer.
+URL, and download referrer. `MediaDownload` can describe either a direct URL or a one-based file
+selection in a BitTorrent v1 torrent; both are handled natively by the shared downloader.
 
 ## Build all release artifacts
 

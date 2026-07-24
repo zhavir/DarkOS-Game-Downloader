@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from dw_cli.config import Config
+from dw_cli.minerva_store import MinervaStore
 from dw_cli.models import Platform, SearchResult
 from dw_cli.store import CatalogProgress, GameStore
 from dw_cli.store_catalog import StoreCatalog
@@ -38,7 +39,7 @@ class FutureStore(GameStore):
         return f"{detail_url}/download"
 
 
-def test_configured_catalog_exposes_vimm_through_store_contract(tmp_path: Path) -> None:
+def test_configured_catalog_exposes_all_stores_through_store_contract(tmp_path: Path) -> None:
     config = Config("https://vimm.example", tmp_path, (), 12)
 
     catalog = StoreCatalog.from_config(config)
@@ -48,6 +49,9 @@ def test_configured_catalog_exposes_vimm_through_store_contract(tmp_path: Path) 
     assert store.store_id == "vimm"
     assert store.base_url == "https://vimm.example"
     assert store.download_referrer == "https://vimm.example/vault/"
+    minerva = catalog.find("MINERVA")
+    assert isinstance(minerva, MinervaStore)
+    assert minerva.base_url == "https://minerva-archive.org"
 
 
 def test_catalog_accepts_future_store_without_tui_or_cli_changes() -> None:

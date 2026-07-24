@@ -10,8 +10,8 @@
 | A | Select |
 | B or Select | Back |
 | L1 / R1 | Previous / next page |
-| X | Backspace on the on-screen keyboard |
-| Y | Submit the on-screen keyboard search, including empty text |
+| X | Submit the on-screen keyboard search, including empty text |
+| Y | Delete the last character on the on-screen keyboard |
 | Start | Select in ordinary menus; ignored by the on-screen keyboard |
 
 Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace, and normal typing.
@@ -19,15 +19,21 @@ Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace,
 ## Search and download
 
 1. Choose **Search the library**.
-2. Select the download store. Vimm is the only implementation currently available.
+2. Select Vimm or Minerva Archive. Minerva is limited to its RetroAchievements collection and only
+   shows platforms it provides.
 3. Select a platform or **All platforms**.
 4. Enter a title prefix. Matching is case-insensitive and starts at the beginning of the title.
-5. Press **Y** to search. Empty text is valid and lists the complete catalogue.
+5. Press **X** to search. Empty text is valid and lists the complete catalogue.
 6. Review the compatibility badge in the results list and the source detail on the title screen.
 7. Select **Download**, then choose SD1 or SD2 when both are available.
 
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
+
+Minerva distributes games through per-platform torrents. The application has its own Python
+BitTorrent client and retrieves only the chosen file's verified pieces. No external torrent client
+is installed or invoked. The client does not seed or accept incoming peer connections; your public
+IP address is still visible to peers and trackers while downloading.
 
 ## Update an installed game
 

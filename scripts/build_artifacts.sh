@@ -72,6 +72,8 @@ fi
 
 mkdir -p "$WORK_DIR/bundle/tools/darkos-downloader"
 cp -R "$WORK_DIR/export/darkos-downloader/." "$WORK_DIR/bundle/tools/darkos-downloader/"
+cp "$WORK_DIR/export/ca-certificates.crt" \
+    "$WORK_DIR/bundle/tools/darkos-downloader/ca-certificates.crt"
 cp "$PROJECT_DIR/darkos/dArkOS Downloader.sh" "$WORK_DIR/bundle/tools/dArkOS Downloader.sh"
 chmod +x \
     "$WORK_DIR/bundle/tools/dArkOS Downloader.sh" \
