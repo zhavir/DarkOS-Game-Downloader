@@ -47,4 +47,6 @@ jobs:
       - name: Run offline, integration, and real-service E2E tests
         env:
           DW_LIVE_BASE_URL: https://vimm.net
+          DW_LIVE_MINERVA_BASE_URL: https://minerva-archive.org
+          DW_LIVE_MINERVA_TORRENT_BASE_URL: https://cdn.minerva-archive.org/torrents
         run: uv run --frozen pytest -v

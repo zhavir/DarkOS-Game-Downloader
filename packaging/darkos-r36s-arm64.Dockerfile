@@ -2,7 +2,7 @@
 FROM ubuntu:18.04 AS builder
 
 RUN apt-get update && \
-    apt-get install --yes --no-install-recommends binutils && \
+    apt-get install --yes --no-install-recommends binutils ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 COPY .build-cache/cpython-3.14.6-aarch64-linux-gnu.tar.gz /tmp/python.tar.gz
@@ -36,3 +36,4 @@ RUN python3 -m PyInstaller \
 
 FROM scratch AS export
 COPY --from=builder /work/dist/darkos-downloader /darkos-downloader
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /ca-certificates.crt

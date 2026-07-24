@@ -51,6 +51,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+/.r36s-game-list-cache.json
 
 # Translations
 *.mo

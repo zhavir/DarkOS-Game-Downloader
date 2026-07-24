@@ -1,17 +1,17 @@
-"""Download engine with an aria2 fast path and a standard-library fallback."""
+"""Native HTTP and selective BitTorrent download engine."""
 
 import os
 import re
-import shutil
 import ssl
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
-from dw_cli.models import DownloadResult
+from dw_cli.bittorrent import BitTorrentError, download_torrent_file
+from dw_cli.models import DownloadResult, MediaDownload
 from dw_cli.store import USER_AGENT
 
 type ProgressCallback = Callable[[str, int, int | None], None]
@@ -36,78 +36,52 @@ def _filename_from_headers(headers: Mapping[str, str], url: str) -> str:
 
 
 def download_files(
-    urls: Sequence[str],
+    downloads: Sequence[str | MediaDownload],
     directory: Path,
     referer: str,
     timeout_seconds: float = 30.0,
     progress: ProgressCallback | None = None,
 ) -> list[DownloadResult]:
-    """Download URLs serially, preferring aria2 when it is installed."""
+    """Download direct URLs or selected torrent files without external tools."""
 
-    if not urls:
+    if not downloads:
         raise DownloadError("The download list is empty.")
     directory.mkdir(parents=True, exist_ok=True)
-    disable_aria2 = os.environ.get("DW_DISABLE_ARIA2", "").casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    aria2 = None if disable_aria2 else shutil.which("aria2c")
-    if aria2:
-        return _download_with_aria2(aria2, urls, directory, referer, progress)
-    return _download_with_urllib(urls, directory, referer, timeout_seconds, progress)
-
-
-def _download_with_aria2(
-    executable: str,
-    urls: Sequence[str],
-    directory: Path,
-    referer: str,
-    progress: ProgressCallback | None,
-) -> list[DownloadResult]:
-    base_command = [
-        executable,
-        f"--dir={directory}",
-        "--max-concurrent-downloads=1",
-        "--continue=true",
-        "--auto-file-renaming=false",
-        "--content-disposition=true",
-        "--summary-interval=1",
-        f"--referer={referer}",
-        f"--user-agent={USER_AGENT}",
-    ]
+    resolved = [_as_media_download(download) for download in downloads]
     results: list[DownloadResult] = []
-    for index, url in enumerate(urls, start=1):
-        if progress:
-            progress("Starting aria2 download %d" % index, index - 1, len(urls))
-        before = _directory_snapshot(directory)
+    for download in resolved:
+        if download.torrent_file_index is None:
+            results.extend(
+                _download_with_urllib(
+                    [download.url],
+                    directory,
+                    referer,
+                    timeout_seconds,
+                    progress,
+                )
+            )
+            continue
+        if not download.expected_filename:
+            raise DownloadError("The torrent download is missing its expected filename.")
+        destination = _unique_download_path(directory / download.expected_filename)
         try:
-            completed = subprocess.run([*base_command, url], check=False)
-        except OSError as error:
-            raise DownloadError(f"Could not start aria2: {error}") from error
-        if completed.returncode != 0:
-            raise DownloadError("aria2 exited with status %d." % completed.returncode)
-        changed = [
-            path
-            for path, signature in _directory_snapshot(directory).items()
-            if not path.name.endswith(".aria2") and before.get(path) != signature
-        ]
-        if len(changed) != 1:
-            raise DownloadError("Could not identify the file completed by aria2.")
-        results.append(DownloadResult(url=url, path=changed[0]))
-        if progress:
-            progress(changed[0].name, index, len(urls))
+            download_torrent_file(
+                download.url,
+                download.torrent_file_index,
+                download.expected_filename,
+                destination,
+                referer,
+                timeout_seconds,
+                partial(progress, download.expected_filename) if progress is not None else None,
+            )
+        except BitTorrentError as error:
+            raise DownloadError(str(error)) from error
+        results.append(DownloadResult(download.url, destination))
     return results
 
 
-def _directory_snapshot(directory: Path) -> dict[Path, tuple[int, int]]:
-    snapshot: dict[Path, tuple[int, int]] = {}
-    for path in directory.iterdir():
-        if path.is_file():
-            stat = path.stat()
-            snapshot[path] = (stat.st_size, stat.st_mtime_ns)
-    return snapshot
+def _as_media_download(download: str | MediaDownload) -> MediaDownload:
+    return download if isinstance(download, MediaDownload) else MediaDownload(download)
 
 
 def _download_with_urllib(

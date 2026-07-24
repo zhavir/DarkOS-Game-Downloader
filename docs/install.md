@@ -25,6 +25,7 @@ tools/
 ├── dArkOS Downloader.sh
 └── darkos-downloader/
     ├── darkos-downloader
+    ├── ca-certificates.crt
     └── _internal/
 ```
 
@@ -53,7 +54,8 @@ Startup and crash diagnostics are stored in:
 tools/darkos-downloader/darkos-downloader.log
 ```
 
-The log also records the kernel's detected gamepad button map and pressed button events. These
-lines identify controller-layout differences between R36S hardware and DTB variants.
+The runtime tree under `/proc/device-tree` is read directly, so the packaged `.dtb` does not need to
+be located or decompiled. The kernel joystick mapping is still authoritative because the tree does
+not reliably map joydev indexes or analog-stick events.
 
 To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` directory from `tools`.

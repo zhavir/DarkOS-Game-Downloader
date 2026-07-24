@@ -42,9 +42,9 @@ def test_demo_environment_creates_two_safe_local_cards(tmp_path: Path) -> None:
     environment = prepare_demo_environment(tmp_path / "demo", "http://127.0.0.1:9999")
     roots = tuple(Path(value) for value in environment["DW_ROMS_DIRS"].split(os.pathsep))
 
-    assert environment["DW_DISABLE_ARIA2"] == "1"
     assert (roots[0] / "gba").is_dir()
     assert (roots[1] / "gba").is_dir()
+    assert environment["DW_STORES"] == "vimm"
 
 
 @pytest.mark.integration
@@ -60,7 +60,6 @@ def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
     monkeypatch.setenv("DW_BASE_URL", local_vault)
     monkeypatch.setenv("DW_DOWNLOAD_DIR", str(staging))
     monkeypatch.setenv("DW_ROMS_DIR", str(card))
-    monkeypatch.setenv("DW_DISABLE_ARIA2", "1")
 
     assert main(["search", "GBA", "aDv"]) == 0
     search_output = capsys.readouterr().out
@@ -104,7 +103,6 @@ def test_dual_card_install_update_and_delete_workflow(
     monkeypatch.setenv("DW_DOWNLOAD_DIR", str(staging))
     monkeypatch.setenv("DW_ROMS_DIRS", os.pathsep.join((str(card_one), str(card_two))))
     monkeypatch.delenv("DW_ROMS_DIR", raising=False)
-    monkeypatch.setenv("DW_DISABLE_ARIA2", "true")
 
     config = Config.from_environment()
     assert config.roms_directories == (card_one, card_two)

@@ -55,7 +55,7 @@ ini_options.addopts = "-q"
 ini_options.markers = [
   "e2e: live search contract tests against the real configured remote service",
   "integration: offline workflows using a localhost HTTP server and temporary ROM cards",
-  "live: test requires internet access and contacts DW_LIVE_BASE_URL or the default service",
+  "live: test requires internet access and contacts the configured real store URLs",
 ]
 
 [tool.semantic_release]

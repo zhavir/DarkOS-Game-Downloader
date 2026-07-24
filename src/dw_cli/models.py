@@ -46,6 +46,15 @@ class DownloadResult:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaDownload:
+    """A resolved media download, optionally selecting one file from a torrent."""
+
+    url: str
+    torrent_file_index: int | None = None
+    expected_filename: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class InstalledGame:
     """One installed title, optionally composed of several referenced files."""
 

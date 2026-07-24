@@ -75,12 +75,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments.base_url:
         config = replace(config, base_url=arguments.base_url.rstrip("/"))
     store_catalog = StoreCatalog.from_config(config)
-    store = store_catalog.find(arguments.store)
-    if store is None:
-        available = ", ".join(item.store_id for item in store_catalog.stores)
-        parser.error(f"unknown store {arguments.store!r}; available stores: {available}")
 
     if arguments.command in (None, "tui"):
+        if not store_catalog.stores:
+            parser.error("no download stores are enabled; check DW_STORES")
         if not sys.stdin.isatty() or not sys.stdout.isatty():
             parser.error("the TUI needs an interactive terminal; use a subcommand for automation")
         try:
@@ -89,6 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"dw: {error}", file=sys.stderr)
             return 2
         return 0
+    store = store_catalog.find(arguments.store)
+    if store is None:
+        available = ", ".join(item.store_id for item in store_catalog.stores) or "none"
+        parser.error(f"unknown store {arguments.store!r}; available stores: {available}")
     if arguments.command == "search":
         return _run_search(store, arguments.console, " ".join(arguments.query))
     if arguments.command == "download":
@@ -109,6 +111,9 @@ def _run_search(store: GameStore, console: str, query: str) -> int:
     platform = resolve_platform(console)
     if platform is None:
         print(f"Unknown platform {console!r}.", file=sys.stderr)
+        return 2
+    if not store.supports_platform(platform):
+        print(f"{store.display_name} does not provide {platform.name}.", file=sys.stderr)
         return 2
     try:
         results = filter_supported_results(store.search(store.platform_code(platform), query))
@@ -135,7 +140,7 @@ def _run_download(
 ) -> int:
     installed_bios: list[Path] = []
     try:
-        media_urls = [store.retrieve_download_url(url) for url in detail_urls]
+        media_urls = [store.download_request(url) for url in detail_urls]
         downloads = download_files(
             media_urls,
             directory,
