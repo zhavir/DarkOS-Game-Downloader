@@ -45,6 +45,7 @@ esac
 mkdir -p "$APP_DIR/.downloads"
 export DW_DOWNLOAD_DIR="${DW_DOWNLOAD_DIR:-$APP_DIR/.downloads}"
 export DW_ES_REFRESH_FILE="$REFRESH_FILE"
+export DW_GAMEPAD_LOG="$LOG_FILE"
 export TERM="${TERM:-xterm-256color}"
 
 refresh_emulationstation() {
