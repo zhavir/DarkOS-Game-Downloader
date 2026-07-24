@@ -4,9 +4,10 @@ import json
 import re
 import ssl
 import unicodedata
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from html import unescape
 from pathlib import Path
 from time import time
@@ -26,6 +27,36 @@ _GAME_PATTERN = re.compile(
 )
 _BRACKETED_TEXT = re.compile(r"\s*[\[(][^\])]*[\])]\s*")
 _NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
+_MATCH_THRESHOLD = 0.82
+_AMBIGUITY_MARGIN = 0.04
+_TITLE_NOISE = frozenset(
+    {
+        "beta",
+        "demo",
+        "en",
+        "eng",
+        "europe",
+        "eur",
+        "fr",
+        "fre",
+        "germany",
+        "hack",
+        "ita",
+        "italy",
+        "japan",
+        "jpn",
+        "korea",
+        "proto",
+        "prototype",
+        "rev",
+        "revision",
+        "spa",
+        "spain",
+        "uk",
+        "usa",
+        "version",
+    }
+)
 
 # r36sgamelist.com currently assigns compatibility at console level.  A title
 # match therefore confirms that the game is listed; the level still comes from
@@ -144,6 +175,7 @@ _UNSUPPORTED_NAMES = frozenset(
 
 type GameKey = tuple[str, str]
 type FetchText = Callable[[str], str]
+type TitleIndex = Mapping[str, Sequence[str]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +184,7 @@ class CompatibilityInfo:
 
     level: str
     title_listed: bool
+    match_score: float | None = None
 
     @property
     def short_label(self) -> str:
@@ -159,15 +192,23 @@ class CompatibilityInfo:
 
         if self.level == "Not listed":
             return self.level
+        if self.title_listed and self.match_score is not None:
+            return f"{self.level} - {round(self.match_score * 100)}% match"
         return f"{self.level}{' - listed' if self.title_listed else ''}"
 
     @property
     def detail_label(self) -> str:
-        """Explain whether the live catalogue matched this exact title."""
+        """Explain whether the live catalogue reliably matched this title."""
 
         if self.level == "Not listed":
             return "Not listed by r36sgamelist.com"
-        qualifier = "title listed" if self.title_listed else "platform rating"
+        qualifier = (
+            f"title match {round(self.match_score * 100)}%"
+            if self.title_listed and self.match_score is not None
+            else "title listed"
+            if self.title_listed
+            else "platform rating"
+        )
         return f"{self.level} ({qualifier})"
 
 
@@ -231,8 +272,9 @@ class R36SCompatibilityClient:
         consoles = [self._result_console(result, platform) for result in results]
         should_load_index = any(console is not None for console in consoles)
         index = self._load_game_index() if should_load_index else frozenset()
+        match_indexes = _build_match_indexes(index)
         return [
-            self._lookup(result.title, console, index)
+            self._lookup(result.title, console, index, match_indexes.get(console, {}))
             for result, console in zip(results, consoles, strict=True)
         ]
 
@@ -255,11 +297,30 @@ class R36SCompatibilityClient:
         title: str,
         console: str | None,
         index: frozenset[GameKey],
+        candidate_index: TitleIndex,
     ) -> CompatibilityInfo:
         if console is None:
             return CompatibilityInfo("Not listed", False)
         level = _CONSOLE_LEVELS[console]
-        return CompatibilityInfo(level, (console, normalize_title(title)) in index)
+        normalized = normalize_title(title)
+        if (console, normalized) in index:
+            return CompatibilityInfo(level, True, 1.0)
+        candidates = {
+            candidate
+            for key in _title_match_keys(normalized)
+            for candidate in candidate_index.get(key, ())
+        }
+        ranked = sorted(
+            (title_match_score(normalized, candidate), candidate) for candidate in candidates
+        )
+        if not ranked:
+            return CompatibilityInfo(level, False)
+        best_score, _best_title = ranked[-1]
+        second_score = ranked[-2][0] if len(ranked) > 1 else 0.0
+        accepted = best_score >= _MATCH_THRESHOLD and (
+            best_score >= 0.97 or best_score - second_score >= _AMBIGUITY_MARGIN
+        )
+        return CompatibilityInfo(level, accepted, best_score if accepted else None)
 
     def _load_game_index(self) -> frozenset[GameKey]:
         if self._game_index is not None:
@@ -351,3 +412,73 @@ def parse_game_index(document: str) -> frozenset[GameKey]:
         if console is not None and normalized_title:
             games.add((console, normalized_title))
     return frozenset(games)
+
+
+def title_match_score(left: str, right: str) -> float:
+    """Score normalized titles while discounting common release metadata."""
+
+    left = normalize_title(left)
+    right = normalize_title(right)
+    if not left or not right:
+        return 0.0
+    if left == right:
+        return 1.0
+    left_tokens = left.split()
+    right_tokens = right.split()
+    left_core = _core_title_tokens(left_tokens, right_tokens)
+    right_core = _core_title_tokens(right_tokens, left_tokens)
+    if left_core and left_core == right_core:
+        return 0.98
+
+    left_value = " ".join(left_core or left_tokens)
+    right_value = " ".join(right_core or right_tokens)
+    sequence = SequenceMatcher(None, left_value, right_value, autojunk=False).ratio()
+    compact = SequenceMatcher(
+        None,
+        left_value.replace(" ", ""),
+        right_value.replace(" ", ""),
+        autojunk=False,
+    ).ratio()
+    left_set = set(left_core or left_tokens)
+    right_set = set(right_core or right_tokens)
+    token_score = 2 * len(left_set & right_set) / (len(left_set) + len(right_set))
+    return max(sequence * 0.7 + token_score * 0.3, compact * 0.85 + token_score * 0.15)
+
+
+def _core_title_tokens(tokens: Sequence[str], other_tokens: Sequence[str]) -> tuple[str, ...]:
+    core: list[str] = []
+    shared = set(other_tokens)
+    skip_revision_number = False
+    for token in tokens:
+        if token in ("rev", "revision"):
+            skip_revision_number = True
+            continue
+        if token in _TITLE_NOISE and token not in shared:
+            continue
+        if skip_revision_number and re.fullmatch(r"v?\d+(?:\.\d+)*", token):
+            skip_revision_number = False
+            continue
+        skip_revision_number = False
+        core.append(token)
+    return tuple(core)
+
+
+def _build_match_indexes(index: frozenset[GameKey]) -> dict[str, dict[str, tuple[str, ...]]]:
+    mutable: dict[str, dict[str, list[str]]] = {}
+    for console, title in index:
+        console_index = mutable.setdefault(console, {})
+        for key in _title_match_keys(title):
+            console_index.setdefault(key, []).append(title)
+    return {
+        console: {key: tuple(titles) for key, titles in title_index.items()}
+        for console, title_index in mutable.items()
+    }
+
+
+def _title_match_keys(title: str) -> frozenset[str]:
+    tokens = normalize_title(title).split()
+    meaningful = {token for token in tokens if len(token) >= 3 and token not in {"and", "the"}}
+    compact = "".join(tokens)
+    if len(compact) >= 4:
+        meaningful.add(f"#{compact[:4]}")
+    return frozenset(meaningful)

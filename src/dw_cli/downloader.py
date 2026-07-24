@@ -10,15 +10,20 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
-from dw_cli.bittorrent import BitTorrentError, download_torrent_file
+from dw_cli.bittorrent import BitTorrentCancelled, BitTorrentError, download_torrent_file
 from dw_cli.models import DownloadResult, MediaDownload
 from dw_cli.store import USER_AGENT
 
 type ProgressCallback = Callable[[str, int, int | None], None]
+type CancelCallback = Callable[[], bool]
 
 
 class DownloadError(RuntimeError):
     """A download could not be completed."""
+
+
+class DownloadCancelled(DownloadError):
+    """The user cancelled an in-progress download."""
 
 
 def _safe_filename(value: str) -> str:
@@ -41,6 +46,7 @@ def download_files(
     referer: str,
     timeout_seconds: float = 30.0,
     progress: ProgressCallback | None = None,
+    cancelled: CancelCallback | None = None,
 ) -> list[DownloadResult]:
     """Download direct URLs or selected torrent files without external tools."""
 
@@ -50,6 +56,7 @@ def download_files(
     resolved = [_as_media_download(download) for download in downloads]
     results: list[DownloadResult] = []
     for download in resolved:
+        _raise_if_cancelled(cancelled)
         if download.torrent_file_index is None:
             results.extend(
                 _download_with_urllib(
@@ -58,6 +65,7 @@ def download_files(
                     referer,
                     timeout_seconds,
                     progress,
+                    cancelled,
                 )
             )
             continue
@@ -73,7 +81,10 @@ def download_files(
                 referer,
                 timeout_seconds,
                 partial(progress, download.expected_filename) if progress is not None else None,
+                cancelled,
             )
+        except BitTorrentCancelled as error:
+            raise DownloadCancelled("Download cancelled.") from error
         except BitTorrentError as error:
             raise DownloadError(str(error)) from error
         results.append(DownloadResult(download.url, destination))
@@ -90,10 +101,12 @@ def _download_with_urllib(
     referer: str,
     timeout_seconds: float,
     progress: ProgressCallback | None,
+    cancelled: CancelCallback | None,
 ) -> list[DownloadResult]:
     results: list[DownloadResult] = []
     ssl_context = ssl.create_default_context()
     for url in urls:
+        _raise_if_cancelled(cancelled)
         request = Request(url, headers={"User-Agent": USER_AGENT, "Referer": referer})
         try:
             with urlopen(
@@ -110,6 +123,7 @@ def _download_with_urllib(
                 try:
                     with partial.open("wb") as output:
                         while True:
+                            _raise_if_cancelled(cancelled)
                             chunk = response.read(1024 * 256)
                             if not chunk:
                                 break
@@ -117,6 +131,7 @@ def _download_with_urllib(
                             downloaded += len(chunk)
                             if progress:
                                 progress(filename, downloaded, total)
+                        _raise_if_cancelled(cancelled)
                     os.replace(str(partial), str(destination))
                 except BaseException:
                     partial.unlink(missing_ok=True)
@@ -128,6 +143,11 @@ def _download_with_urllib(
             reason = getattr(error, "reason", error)
             raise DownloadError(f"Download failed: {reason}") from error
     return results
+
+
+def _raise_if_cancelled(cancelled: CancelCallback | None) -> None:
+    if cancelled is not None and cancelled():
+        raise DownloadCancelled("Download cancelled.")
 
 
 def _unique_download_path(destination: Path) -> Path:

@@ -31,6 +31,18 @@ uv run prek run --all-files
 uv run pytest
 ```
 
+Generate the same branch-coverage measurement used by GitHub:
+
+```sh
+uv run pytest --cov=dw_cli --cov-branch --cov-report=term-missing
+```
+
+Run only tests that do not open a local server or contact a live service:
+
+```sh
+uv run pytest -m "not e2e and not integration"
+```
+
 The full test suite includes offline unit/integration tests and real-service E2E contracts for
 Vimm, Minerva's browse and torrent endpoints, a complete verified tiny Arduboy download through
 real peers, and the R36S compatibility frontend. Use this to skip network tests:
@@ -38,6 +50,12 @@ real peers, and the R36S compatibility frontend. Use this to skip network tests:
 ```sh
 uv run pytest -m "not live"
 ```
+
+Python Semantic Release updates `pyproject.toml` during a release. Its configured build hook
+installs the pinned uv release tool inside the action container, runs every prek hook against the
+complete tree, stages the resulting release files with `git add .`, and builds the distributions
+before the version commit and tag are created. The prek `uv-lock` hook updates and verifies
+`uv.lock`, keeping the release commit usable with `uv sync --frozen`.
 
 ## Documentation
 
@@ -52,6 +70,11 @@ Build exactly what GitHub Pages publishes:
 ```sh
 uv run zensical build --clean --strict
 ```
+
+Pull-request and release workflows append the coverage table to the GitHub job summary and upload
+the XML, JSON, and browsable HTML reports as a `coverage-*` Actions artifact. The Pages workflow
+publishes the latest `main` HTML report under `/coverage/` and its JSON summary at
+`/coverage.json`; the README uses that GitHub-hosted value in a standard Shields.io badge.
 
 The generated `site/` directory is ignored. Pushing documentation changes to `main` invokes the
 Pages workflow and publishes the generated artifact.

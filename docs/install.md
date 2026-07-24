@@ -32,7 +32,8 @@ tools/
 !!! tip "Updating the tool"
 
     Repeat the copy steps with a newer release. The release is designed to replace the existing
-    files directly.
+    files directly. The default-store preference lives in the tool's `.downloads` directory and is
+    retained when the application files are replaced.
 
 ## ROM cards and folders
 

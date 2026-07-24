@@ -21,6 +21,7 @@ from dw_cli.store import USER_AGENT
 type BValue = bytes | int | list[BValue] | dict[bytes, BValue]
 type PeerAddress = tuple[str, int]
 type TorrentProgress = Callable[[int, int], None]
+type CancelCallback = Callable[[], bool]
 
 _PROTOCOL = b"BitTorrent protocol"
 _UDP_PROTOCOL_ID = 0x41727101980
@@ -36,6 +37,10 @@ _MAX_DISCOVERED_PEERS = 240
 
 class BitTorrentError(RuntimeError):
     """Torrent metadata, tracker discovery, or peer transfer failed."""
+
+
+class BitTorrentCancelled(BitTorrentError):
+    """The caller requested cancellation of a torrent transfer."""
 
 
 class _BDecoder:
@@ -222,15 +227,18 @@ def download_torrent_file(
     referer: str,
     timeout_seconds: float,
     progress: TorrentProgress | None = None,
+    cancelled: CancelCallback | None = None,
 ) -> None:
     """Download and verify only one one-based file from a v1 multi-file torrent."""
 
+    _raise_if_cancelled(cancelled)
     torrent_data = _read_url(
         torrent_url,
         referer,
         timeout_seconds,
         _MAX_TORRENT_BYTES,
     )
+    _raise_if_cancelled(cancelled)
     metadata = parse_torrent(torrent_data)
     if file_index < 1 or file_index > len(metadata.files):
         raise BitTorrentError("Selected torrent file index is out of range.")
@@ -244,12 +252,13 @@ def download_torrent_file(
         progress(0, selected.length)
 
     peer_id = b"-DW1000-" + secrets.token_bytes(12)
-    peers = discover_peers(metadata, peer_id, timeout_seconds)
+    peers = discover_peers(metadata, peer_id, timeout_seconds, cancelled)
     start_piece = selected.offset // metadata.piece_length
     end_piece = (selected.offset + selected.length - 1) // metadata.piece_length
     piece_indices = tuple(range(start_piece, end_piece + 1))
 
     def fetch_piece(piece_index: int) -> tuple[int, bytes]:
+        _raise_if_cancelled(cancelled)
         length = min(
             metadata.piece_length,
             metadata.total_length - piece_index * metadata.piece_length,
@@ -261,6 +270,7 @@ def download_torrent_file(
             piece_index,
             length,
             timeout_seconds,
+            cancelled,
         )
         return piece_index, data
 
@@ -278,6 +288,7 @@ def download_torrent_file(
                     piece_indices,
                     buffersize=4,
                 ):
+                    _raise_if_cancelled(cancelled)
                     piece_start = piece_index * metadata.piece_length
                     piece_end = piece_start + len(data)
                     copy_start = max(selected.offset, piece_start) - piece_start
@@ -299,6 +310,7 @@ def discover_peers(
     metadata: TorrentMetadata,
     peer_id: bytes,
     timeout_seconds: float,
+    cancelled: CancelCallback | None = None,
 ) -> tuple[PeerAddress, ...]:
     """Merge several tracker responses so one stale swarm view cannot block a download."""
 
@@ -306,12 +318,17 @@ def discover_peers(
     trackers = metadata.trackers[:_MAX_TRACKER_QUERIES]
 
     def announce(tracker: str) -> tuple[PeerAddress, ...]:
+        _raise_if_cancelled(cancelled)
         try:
-            return (
+            peers = (
                 _announce_udp(tracker, metadata, peer_id, per_tracker_timeout)
                 if tracker.startswith("udp://")
                 else _announce_http(tracker, metadata, peer_id, per_tracker_timeout)
             )
+            _raise_if_cancelled(cancelled)
+            return peers
+        except BitTorrentCancelled:
+            raise
         except BitTorrentError, OSError, TimeoutError, ValueError:
             return ()
 
@@ -321,6 +338,7 @@ def discover_peers(
         thread_name_prefix="torrent-tracker",
     ) as executor:
         for discovered in executor.map(announce, trackers):
+            _raise_if_cancelled(cancelled)
             peers.extend(discovered)
     peers = list(dict.fromkeys(peer for peer in peers if _is_usable_peer(peer)))
     if not peers:
@@ -454,6 +472,7 @@ def _download_piece_from_peers(
     piece_index: int,
     piece_length: int,
     timeout_seconds: float,
+    cancelled: CancelCallback | None = None,
 ) -> bytes:
     start = int.from_bytes(peer_id[-4:], "big") + piece_index
     attempts = min(_MAX_PEER_ATTEMPTS, len(peers))
@@ -462,6 +481,7 @@ def _download_piece_from_peers(
     completed = Event()
 
     def fetch(peer: PeerAddress) -> bytes | None:
+        _raise_if_cancelled(cancelled)
         if completed.is_set():
             return None
         try:
@@ -473,7 +493,10 @@ def _download_piece_from_peers(
                 piece_length,
                 peer_timeout,
                 completed,
+                cancelled,
             )
+        except BitTorrentCancelled:
+            raise
         except BitTorrentError, OSError, TimeoutError:
             return None
         digest = hashlib.sha1(data, usedforsecurity=False).digest()
@@ -489,17 +512,17 @@ def _download_piece_from_peers(
     futures = [executor.submit(fetch, peer) for peer in candidates]
     try:
         for future in as_completed(futures):
+            _raise_if_cancelled(cancelled)
             data = future.result()
             if data is None:
                 continue
             for pending in futures:
                 pending.cancel()
-            executor.shutdown(wait=False, cancel_futures=True)
             return data
     finally:
         for pending in futures:
             pending.cancel()
-    executor.shutdown(wait=True, cancel_futures=True)
+        executor.shutdown(wait=False, cancel_futures=True)
     raise BitTorrentError(f"Could not retrieve verified torrent piece {piece_index}.")
 
 
@@ -511,7 +534,9 @@ def _download_piece(
     piece_length: int,
     timeout_seconds: float,
     completed: Event | None = None,
+    cancelled: CancelCallback | None = None,
 ) -> bytes:
+    _raise_if_cancelled(cancelled)
     with socket.create_connection(peer, timeout=timeout_seconds) as connection:
         connection.settimeout(timeout_seconds)
         connection.sendall(bytes((len(_PROTOCOL),)) + _PROTOCOL + b"\0" * 8 + info_hash + peer_id)
@@ -524,6 +549,7 @@ def _download_piece(
         unchoked = False
         deadline = time.monotonic() + timeout_seconds
         while not unchoked and time.monotonic() < deadline:
+            _raise_if_cancelled(cancelled)
             if completed is not None and completed.is_set():
                 raise BitTorrentError("Another peer completed the requested piece.")
             message_id, payload = _read_peer_message(connection)
@@ -554,6 +580,7 @@ def _download_piece(
             _send_piece_request(connection, piece_index, begin, length)
             in_flight += 1
         while in_flight:
+            _raise_if_cancelled(cancelled)
             if completed is not None and completed.is_set():
                 raise BitTorrentError("Another peer completed the requested piece.")
             message_id, payload = _read_peer_message(connection)
@@ -682,3 +709,8 @@ def _is_usable_peer(peer: PeerAddress) -> bool:
     except ValueError:
         return bool(peer[0])
     return address.is_global
+
+
+def _raise_if_cancelled(cancelled: CancelCallback | None) -> None:
+    if cancelled is not None and cancelled():
+        raise BitTorrentCancelled("Torrent download cancelled.")

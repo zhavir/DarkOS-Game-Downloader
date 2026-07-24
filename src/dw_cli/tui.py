@@ -5,7 +5,9 @@ import curses
 import locale
 import textwrap
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event, Lock
 from typing import Any
 
 from dw_cli.compatibility import (
@@ -14,7 +16,7 @@ from dw_cli.compatibility import (
     filter_supported_results,
 )
 from dw_cli.config import Config
-from dw_cli.downloader import DownloadError, download_files
+from dw_cli.downloader import DownloadCancelled, DownloadError, download_files
 from dw_cli.frontend import request_emulationstation_refresh
 from dw_cli.gamepad import InputAction, LinuxJoystick
 from dw_cli.hardware import detect_hardware_profile
@@ -25,7 +27,7 @@ from dw_cli.library import (
     replace_game,
     scan_library,
 )
-from dw_cli.models import InstalledGame, Platform, SearchResult
+from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
 from dw_cli.organizer import (
     OrganizeError,
     detect_roms_directories,
@@ -33,6 +35,13 @@ from dw_cli.organizer import (
     move_to_arkos,
 )
 from dw_cli.platforms import discover_platforms, resolve_platform
+from dw_cli.preferences import (
+    Preferences,
+    PreferencesError,
+    load_preferences,
+    preference_path,
+    save_preferences,
+)
 from dw_cli.store import GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
 
@@ -77,6 +86,12 @@ class DownloaderTui:
         self.screen = screen
         self.config = config
         self.store_catalog = StoreCatalog.from_config(config)
+        self.preferences_path = preference_path(config.download_directory)
+        preferences = load_preferences(self.preferences_path)
+        self.selected_store = (
+            self.store_catalog.find(preferences.store_id) if preferences.store_id else None
+        )
+        self.exit_after_refresh = False
         self.compatibility_client = R36SCompatibilityClient(
             config.download_directory / ".r36s-game-list-cache.json",
             timeout_seconds=config.timeout_seconds,
@@ -108,10 +123,19 @@ class DownloaderTui:
 
     def run(self) -> None:
         try:
+            if not self.store_catalog.stores:
+                self._error("No download stores are enabled. Check DW_STORES.")
+                return
+            while self.selected_store is None:
+                if self._configure_store(first_run=True):
+                    break
+                if self._confirm_exit():
+                    return
             options = (
                 "Search the library",
                 "Download from a detail link",
                 "Manage installed games",
+                "Settings",
                 "dArkOS status and controls",
                 "Exit",
             )
@@ -121,8 +145,10 @@ class DownloaderTui:
                     options,
                     "D-pad/stick: move   A/Enter: select",
                 )
-                if choice is None or choice == 4:
-                    return
+                if choice is None or choice == 5:
+                    if self._confirm_exit():
+                        return
+                    continue
                 if choice == 0:
                     self._search_flow()
                 elif choice == 1:
@@ -130,13 +156,17 @@ class DownloaderTui:
                 elif choice == 2:
                     self._manage_library_flow()
                 elif choice == 3:
+                    self._settings_screen()
+                elif choice == 4:
                     self._status_screen()
+                if self.exit_after_refresh:
+                    return
         finally:
             if self.gamepad is not None:
                 self.gamepad.close()
 
     def _search_flow(self) -> None:
-        store = self._choose_store("CHOOSE A DOWNLOAD STORE")
+        store = self.selected_store
         if store is None:
             return
         platforms = tuple(
@@ -232,15 +262,19 @@ class DownloaderTui:
             action = self._menu("TITLE DETAILS", [*details, "Download", "Back"], "Select Download")
             if action == len(details):
                 self._download_detail(result.link, effective_platform, store)
+                if self.exit_after_refresh:
+                    return
             elif action is None or action == len(details) + 1:
                 continue
 
     def _direct_download_flow(self) -> None:
-        store = self._choose_store("CHOOSE A DOWNLOAD STORE")
+        store = self.selected_store
         if store is None:
             return
         platforms = tuple(
-            platform for platform in self.platforms if platform.arkos_folder is not None
+            platform
+            for platform in self.platforms
+            if platform.arkos_folder is not None and store.supports_platform(platform)
         )
         choice = self._menu(
             "DESTINATION PLATFORM",
@@ -271,12 +305,9 @@ class DownloaderTui:
         installed_bios: list[Path] = []
         try:
             media_url = store.download_request(detail_url)
-            downloads = download_files(
+            downloads = self._download_media(
                 [media_url],
-                self.config.download_directory,
-                store.download_referrer,
-                self.config.timeout_seconds,
-                self._progress,
+                store,
             )
             completed = move_to_arkos(
                 downloads,
@@ -284,6 +315,9 @@ class DownloaderTui:
                 roms_directory,
                 installed_bios.append,
             )
+        except DownloadCancelled:
+            self._draw_message("DOWNLOAD CANCELLED", "No game was installed.", 3)
+            return
         except (StoreError, DownloadError, OrganizeError) as error:
             self._error(str(error))
             return
@@ -293,7 +327,9 @@ class DownloaderTui:
             "\nInstalled %d bundled BIOS file(s)." % len(installed_bios) if installed_bios else ""
         )
         refresh_message = (
-            "\nThe game list will refresh after you exit this tool." if refresh_requested else ""
+            "\nThe downloader will now close and refresh the game list."
+            if refresh_requested
+            else ""
         )
         self._draw_message(
             "DOWNLOAD COMPLETE",
@@ -301,6 +337,7 @@ class DownloaderTui:
             4,
             wait=True,
         )
+        self.exit_after_refresh = refresh_requested
 
     def _manage_library_flow(self) -> None:
         if not self.roms_directories:
@@ -328,6 +365,8 @@ class DownloaderTui:
             if platform_choice is None:
                 continue
             self._manage_platform_library(root, platforms[platform_choice])
+            if self.exit_after_refresh:
+                return
 
     def _manage_platform_library(self, root: Path, platform: Platform) -> None:
         self._draw_message(
@@ -348,6 +387,8 @@ class DownloaderTui:
             if game_choice is None:
                 return
             if self._manage_game(games[game_choice]):
+                if self.exit_after_refresh:
+                    return
                 self._draw_message(
                     "REFRESHING",
                     f"Refreshing {platform.name} only...",
@@ -390,14 +431,23 @@ class DownloaderTui:
             return False
         refresh_requested = request_emulationstation_refresh()
         refresh_message = (
-            "\nThe game list will refresh after you exit this tool." if refresh_requested else ""
+            "\nThe downloader will now close and refresh the game list."
+            if refresh_requested
+            else ""
         )
         self._draw_message("GAME DELETED", game.title + refresh_message, 4, wait=True)
+        self.exit_after_refresh = refresh_requested
         return True
 
     def _update_game(self, game: InstalledGame) -> bool:
-        store = self._choose_store("CHOOSE AN UPDATE STORE", game.platform)
+        store = self.selected_store
         if store is None:
+            return False
+        if not store.supports_platform(game.platform):
+            self._error(
+                f"{store.display_name} does not support {game.platform.name}. "
+                "Choose another store in Settings."
+            )
             return False
         self._draw_message("SEARCHING FOR UPDATE", game.title, 1)
         try:
@@ -431,12 +481,9 @@ class DownloaderTui:
             return False
         try:
             media_url = store.download_request(selected.link)
-            downloads = download_files(
+            downloads = self._download_media(
                 [media_url],
-                self.config.download_directory,
-                store.download_referrer,
-                self.config.timeout_seconds,
-                self._progress,
+                store,
             )
             installed_bios = install_bundled_bios(
                 downloads[0].path,
@@ -444,12 +491,17 @@ class DownloaderTui:
                 game.roms_directory,
             )
             completed = replace_game(game, downloads[0])
+        except DownloadCancelled:
+            self._draw_message("UPDATE CANCELLED", "The installed game was not changed.", 3)
+            return False
         except (StoreError, DownloadError, LibraryError, OrganizeError) as error:
             self._error(str(error))
             return False
         refresh_requested = request_emulationstation_refresh()
         refresh_message = (
-            "\nThe game list will refresh after you exit this tool." if refresh_requested else ""
+            "\nThe downloader will now close and refresh the game list."
+            if refresh_requested
+            else ""
         )
         self._draw_message(
             "GAME UPDATED",
@@ -464,6 +516,7 @@ class DownloaderTui:
             4,
             wait=True,
         )
+        self.exit_after_refresh = refresh_requested
         return True
 
     def _choose_roms_directory(self) -> Path | None:
@@ -481,6 +534,44 @@ class DownloaderTui:
             "More download stores can be added without changing the TUI",
         )
         return stores[choice] if choice is not None else None
+
+    def _configure_store(self, *, first_run: bool = False) -> bool:
+        title = "FIRST-RUN DOWNLOAD STORE" if first_run else "CHOOSE DEFAULT STORE"
+        store = self._choose_store(title)
+        if store is None:
+            return False
+        try:
+            save_preferences(self.preferences_path, Preferences(store.store_id))
+        except PreferencesError as error:
+            self._error(str(error))
+            return False
+        self.selected_store = store
+        if not first_run:
+            self._draw_message(
+                "SETTINGS SAVED",
+                f"Searches, downloads, and updates will use {store.display_name}.",
+                4,
+                wait=True,
+            )
+        return True
+
+    def _settings_screen(self) -> None:
+        current = self.selected_store.display_name if self.selected_store is not None else "not set"
+        choice = self._menu(
+            "SETTINGS",
+            (f"Change download store  [current: {current}]", "Back"),
+            "The selected store is remembered for future launches",
+        )
+        if choice == 0:
+            self._configure_store()
+
+    def _confirm_exit(self) -> bool:
+        choice = self._menu(
+            "EXIT DARKOS DOWNLOADER?",
+            ("No - return to the downloader", "Yes - exit"),
+            "Confirm before returning to EmulationStation",
+        )
+        return choice == 1
 
     def _choose_from_roots(self, roots: Sequence[Path], title: str) -> Path | None:
         if not roots:
@@ -515,10 +606,61 @@ class DownloaderTui:
         else:
             message = "%s\n%d KiB downloaded" % (label, current // 1024)
         self._draw_message("DOWNLOADING", message, 1)
+        self._footer("B/Escape: cancel download")
+        self.screen.refresh()
+
+    def _download_media(
+        self,
+        downloads: Sequence[str | MediaDownload],
+        store: GameStore,
+    ) -> list[DownloadResult]:
+        """Run network work in the background while the main thread handles cancellation."""
+
+        cancelled = Event()
+        state_lock = Lock()
+        progress_state: list[str | int | None] = ["Connecting to the download service...", 0, None]
+
+        def report(label: str, current: int, total: int | None) -> None:
+            with state_lock:
+                progress_state[:] = [label, current, total]
+
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tui-download") as executor:
+            future = executor.submit(
+                download_files,
+                downloads,
+                self.config.download_directory,
+                store.download_referrer,
+                self.config.timeout_seconds,
+                report,
+                cancelled.is_set,
+            )
+            while not future.done():
+                with state_lock:
+                    label, current, total = progress_state
+                if cancelled.is_set():
+                    self._draw_message(
+                        "CANCELLING DOWNLOAD",
+                        "Closing active network connections and removing partial files...",
+                        3,
+                    )
+                else:
+                    assert isinstance(label, str)
+                    assert isinstance(current, int)
+                    assert total is None or isinstance(total, int)
+                    self._progress(label, current, total)
+                pressed = self._poll_input()
+                if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
+                    cancelled.set()
+            return future.result()
 
     def _status_screen(self) -> None:
         roms = ", ".join(str(path) for path in self.roms_directories) or "not detected"
         controller = str(self.gamepad.path) if self.gamepad is not None else "not detected"
+        selected_store = (
+            self.selected_store.display_name
+            if self.selected_store is not None
+            else "not configured"
+        )
         terminal_height, terminal_width = self.screen.getmaxyx()
         compatible = ", ".join(self.hardware.compatible[:2]) or "not detected"
         dt_inputs = ", ".join(item.node for item in self.hardware.input_nodes) or "not detected"
@@ -527,6 +669,7 @@ class DownloaderTui:
             f"{store.display_name} ({store.base_url})" for store in self.store_catalog.stores
         )
         lines = (
+            f"Default store: {selected_store}",
             f"Stores: {stores}",
             f"Staging: {self.config.download_directory}",
             f"ROM root: {roms}",
@@ -708,13 +851,22 @@ class DownloaderTui:
         """Wait for a keyboard key or a directly connected dArkOS controller action."""
 
         while True:
-            if self.gamepad is not None:
-                action = self.gamepad.poll()
-                if action is not None:
-                    return gamepad_keys[action]
-            pressed = self.screen.getch()
-            if pressed != -1:
-                return int(pressed)
+            pressed = self._poll_input(gamepad_keys)
+            if pressed is not None:
+                return pressed
+
+    def _poll_input(
+        self,
+        gamepad_keys: Mapping[InputAction, int] = GAMEPAD_KEYS,
+    ) -> int | None:
+        """Poll one controller or terminal event, respecting the screen timeout."""
+
+        if self.gamepad is not None:
+            action = self.gamepad.poll()
+            if action is not None:
+                return gamepad_keys[action]
+        pressed = self.screen.getch()
+        return int(pressed) if pressed != -1 else None
 
     def _error(self, message: str) -> None:
         self._draw_message("ERROR", message, 5, wait=True)

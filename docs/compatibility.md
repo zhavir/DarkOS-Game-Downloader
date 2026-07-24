@@ -14,15 +14,18 @@ The downloader uses these levels from [R36S Game List](https://r36sgamelist.com/
 | Limited | Only lighter titles are likely to be usable |
 | Not listed | The site does not currently publish a rating for that platform |
 
-`Perfect - listed`, `Playable - listed`, or `Limited - listed` means the normalized game title and
-console were found in the site's frontend catalogue. A plain platform rating means the console has
-a published RK3326 level but that exact title was not matched.
+`Perfect - 96% match`, `Playable - 91% match`, or a similar badge means the game title was matched
+to the site's frontend catalogue with that confidence. A plain platform rating means the console
+has a published RK3326 level but no sufficiently reliable title match was found.
 
 !!! info "How the integration works"
 
     r36sgamelist.com performs search in the browser. The downloader discovers its current Next.js
     JavaScript chunks, extracts title/console records, and caches the normalized index for seven
-    days. It does not depend on a private or nonexistent search API.
+    days. Matching uses a conservative score based on normalized character order and shared title
+    words. Region, language, revision, version, prototype, and similar release metadata are
+    discounted, so `Advance Wars (USA) (Rev 1)` can match `Advance Wars`; ambiguous low-score
+    candidates are left unlisted. It does not depend on a private or nonexistent search API.
 
 If the site or network is unavailable, searching and downloading continue normally with the known
 platform-level rating. Compatibility lookup never blocks a download permanently.

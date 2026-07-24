@@ -7,6 +7,7 @@ from dw_cli.compatibility import (
     is_unsupported_system,
     normalize_title,
     parse_game_index,
+    title_match_score,
 )
 from dw_cli.models import SearchResult
 from dw_cli.platforms import resolve_platform
@@ -70,6 +71,41 @@ def test_network_failure_keeps_platform_rating_without_blocking(tmp_path: Path) 
 
     assert info[0].level == "Playable"
     assert info[0].title_listed is False
+
+
+def test_compatibility_uses_scored_title_matching_for_release_metadata(tmp_path: Path) -> None:
+    client = R36SCompatibilityClient(tmp_path / "cache.json")
+    client._game_index = frozenset(
+        {
+            ("gameboy advance", "advance wars"),
+            ("gameboy advance", "pokemon firered"),
+            ("gameboy advance", "golden sun"),
+        }
+    )
+    platform = resolve_platform("GBA")
+    assert platform is not None
+
+    info = client.lookup_many(
+        [
+            SearchResult("Advance Wars USA Rev 1", "https://example.test/1"),
+            SearchResult("Pokemon Fire Red Version", "https://example.test/2"),
+            SearchResult("Golden Axe", "https://example.test/3"),
+        ],
+        platform,
+    )
+
+    assert info[0].title_listed is True
+    assert info[0].match_score is not None and info[0].match_score >= 0.9
+    assert info[1].title_listed is True
+    assert info[1].match_score is not None and info[1].match_score >= 0.82
+    assert info[2].title_listed is False
+    assert info[2].match_score is None
+
+
+def test_title_match_score_avoids_simple_substring_false_positives() -> None:
+    assert title_match_score("Super Mario", "Super Mario World") < 0.82
+    assert title_match_score("Mario", "Mario Kart") < 0.82
+    assert title_match_score("Metroid Fusion Rev 1 USA", "Metroid Fusion") >= 0.9
 
 
 def test_explicitly_unsupported_systems_are_filtered_from_all_platform_results() -> None:

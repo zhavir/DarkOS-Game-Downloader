@@ -44,9 +44,19 @@ jobs:
         run: uv python install 3.14
       - name: Install locked development environment
         run: uv sync --frozen
+      - name: Prepare coverage output
+        run: mkdir -p coverage-reports
       - name: Run offline, integration, and real-service E2E tests
         env:
           DW_LIVE_BASE_URL: https://vimm.net
           DW_LIVE_MINERVA_BASE_URL: https://minerva-archive.org
           DW_LIVE_MINERVA_TORRENT_BASE_URL: https://cdn.minerva-archive.org/torrents
-        run: uv run --frozen pytest -v
+        run: >-
+          uv run --frozen pytest -v --cov=dw_cli --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage-pr-${{ github.event.pull_request.number }}
+          path: coverage-reports/
+          if-no-files-found: error

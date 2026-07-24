@@ -19,12 +19,14 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
+optional-dependencies.release = [ "uv==0.11.32" ]
 scripts.dw = "dw_cli.app:main"
 
 [dependency-groups]
 dev = [
   "prek>=0.4.10",
   "pytest>=9.1.1",
+  "pytest-cov>=7.1,<8",
   "python-semantic-release>=10.6.1,<11",
   "ruff>=0.16",
   "ty>=0.0.63",
@@ -58,9 +60,21 @@ ini_options.markers = [
   "live: test requires internet access and contacts the configured real store URLs",
 ]
 
+[tool.coverage]
+run.branch = true
+run.source = [ "dw_cli" ]
+report.precision = 1
+report.show_missing = true
+
 [tool.semantic_release]
 tag_format = "v{version}"
 version_toml = [ "pyproject.toml:project.version" ]
+build_command = '''set -eu
+python -m pip install --disable-pip-version-check -e '.[release]'
+uv run prek --all-files
+git add .
+uv build
+'''
 commit_message = "chore(release): {version} [skip ci]"
 commit_parser = "conventional"
 branches.main.match = "main"

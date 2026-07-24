@@ -18,14 +18,17 @@ Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace,
 
 ## Search and download
 
-1. Choose **Search the library**.
-2. Select Vimm or Minerva Archive. Minerva is limited to its RetroAchievements collection and only
-   shows platforms it provides.
-3. Select a platform or **All platforms**.
+1. On first launch, select Vimm or Minerva Archive as the default store. The choice is saved; use
+   **Settings** from the main menu to change it later.
+2. Choose **Search the library**.
+3. Select a platform or **All platforms**. Minerva is limited to its RetroAchievements collection
+   and only shows platforms it provides.
 4. Enter a title prefix. Matching is case-insensitive and starts at the beginning of the title.
 5. Press **X** to search. Empty text is valid and lists the complete catalogue.
-6. Review the compatibility badge in the results list and the source detail on the title screen.
-7. Select **Download**, then choose SD1 or SD2 when both are available.
+6. Review the compatibility badge and match confidence in the results list, then the source detail
+   on the title screen.
+7. Select **Download**, then choose SD1 or SD2 when both are available. Press B/Escape during a
+   download to cancel it and remove the partial file.
 
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
@@ -38,14 +41,18 @@ IP address is still visible to peers and trackers while downloading.
 ## Update an installed game
 
 Open **Manage installed games**, choose the memory card and platform, then select the game. **Update
-from remote** first asks which store to search, then searches by the installed title and asks which
-remote result should replace it. The old copy remains untouched until the new download completes
-successfully.
+from remote** searches the configured default store by the installed title and asks which remote
+result should replace it. The old copy remains untouched until the new download completes
+successfully. If the configured store does not support that platform, change it through
+**Settings** first.
 
 ## Delete an installed game
 
 Choose **Delete from device** and confirm. Playlist and disc groups referenced by `.cue` and `.m3u`
 files are deleted together.
+
+After a successful install, update, or deletion, acknowledge the completion message. The TUI then
+closes so the Tools launcher can refresh EmulationStation; it does not reopen automatically.
 
 ## Bundled BIOS files
 

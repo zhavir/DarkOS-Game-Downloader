@@ -1,5 +1,8 @@
 # dArkOS Downloader
 
+[![Latest release](https://img.shields.io/github/v/release/zhavir/DarkOS-Game-Downloader?display_name=tag&sort=semver)](https://github.com/zhavir/DarkOS-Game-Downloader/releases/latest)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fzhavir.github.io%2FDarkOS-Game-Downloader%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage)](https://zhavir.github.io/DarkOS-Game-Downloader/coverage/)
+
 dArkOS Downloader is a controller-first game library manager for RK3326 R36S handhelds running
 dArkOS or dArkOSRE. It can also run locally with a keyboard, including in a completely offline demo
 environment that uses fake games and temporary SD-card folders.
@@ -10,11 +13,13 @@ environment that uses fake games and temporary SD-card folders.
 ## Features
 
 - Searches by a case-insensitive title prefix, including across all platforms.
-- Selects a download store before each TUI search and installed-game update. Vimm and Minerva
-  Archive's RetroAchievements collection are implemented behind the same store contract.
+- Saves a default download store during first-run setup and lets it be changed later in
+  **Settings**. Vimm and Minerva Archive's RetroAchievements collection are implemented behind the
+  same store contract.
 - Lists a selected platform's complete numeric and A-Z remote catalogue when search text is empty.
-- Matches results against the frontend-only [R36S Game List](https://r36sgamelist.com/) index,
-  caches it locally for seven days, and shows the RK3326 compatibility level before download.
+- Scores results against the frontend-only [R36S Game List](https://r36sgamelist.com/) index,
+  tolerating region, revision, and filename metadata; caches it locally for seven days and shows
+  the RK3326 compatibility level and match confidence before download.
 - Filters explicitly unsupported modern systems such as PS2, PS3, Xbox, Xbox 360, GameCube, Wii,
   Switch, 3DS, and PS Vita from detected folders and all-platform results.
 - Maps more than 100 R36S-compatible ROM destinations and discovers image-specific folders.
@@ -29,8 +34,9 @@ environment that uses fake games and temporary SD-card folders.
   skipping artwork, manuals, screenshots, and videos.
 - Deletes a selected game, including files referenced by `.cue` and `.m3u` playlists.
 - Updates a selected game by downloading first and replacing the old copy only after success.
-- Requests an EmulationStation game-list refresh after an install, update, or deletion; the
-  handheld does not need to be rebooted.
+- Requests an EmulationStation game-list refresh after an install, update, or deletion, then exits
+  the TUI so the launcher can apply it without reopening the application or rebooting the handheld.
+- Cancels an active direct or torrent download with B/Escape and removes its partial file.
 - Supports the R36S D-pad and both analog sticks directly through `/dev/input/js*`, and has an
   on-screen keyboard where every direction navigates and X submits the current text, including an
   empty search.
@@ -105,14 +111,15 @@ across multiple launches.
 
 Suggested manual end-to-end walkthrough:
 
-1. Open **Search the library**, select **Game Boy Advance**, and search for `ADV`.
-2. Confirm both Advance Wars versions appear; prefix matching is case-insensitive and does not
+1. Choose Vimm during the one-time first-run setup. Change it later through **Settings** if needed.
+2. Open **Search the library**, select **Game Boy Advance**, and search for `ADV`.
+3. Confirm both Advance Wars versions appear; prefix matching is case-insensitive and does not
    require the complete title.
-3. Search again, leave the text empty, and select **DONE** to list the complete demo catalogue.
-4. Download Advance Wars version `1.0` and select SD1 or SD2.
-5. Open **Manage installed games**, choose the same card and game, then use **Update from remote**.
-6. Choose `Rev 2` and confirm that the replacement appears on the same card.
-7. Return to game management and test **Delete from device**.
+4. Search again, leave the text empty, and select **DONE** to list the complete demo catalogue.
+5. Download Advance Wars version `1.0` and select SD1 or SD2.
+6. Open **Manage installed games**, choose the same card and game, then use **Update from remote**.
+7. Choose `Rev 2` and confirm that the replacement appears on the same card.
+8. Return to game management and test **Delete from device**.
 
 Keyboard controls are arrow keys, Enter to select, Escape to go back, Page Up/Page Down to page,
 Backspace to erase, and normal typing in the on-screen keyboard. In ordinary R36S menus, up/down
@@ -250,6 +257,12 @@ Run everything:
 uv run pytest
 ```
 
+Generate the same branch-coverage measurement used by GitHub:
+
+```sh
+uv run pytest --cov=dw_cli --cov-branch --cov-report=term-missing
+```
+
 Run the live search E2E test against the real service:
 
 ```sh
@@ -269,6 +282,12 @@ Run the offline localhost integration workflows:
 
 ```sh
 uv run pytest -m integration -v
+```
+
+Run only unit tests, without opening localhost listeners or contacting live services:
+
+```sh
+uv run pytest -m "not e2e and not integration"
 ```
 
 Run everything that does not need internet access:
@@ -361,6 +380,8 @@ tools/
 The Tools launcher detects a detached launch, opens the TUI on a real Linux virtual console, and
 switches back after exit. Startup and crash details are written to
 `tools/darkos-downloader/darkos-downloader.log`.
+The selected default store is saved under `tools/darkos-downloader/.downloads`, so replacing the
+application files with a newer release keeps the setting.
 The application reads the live device tree exposed by Linux; you do not need to find or decompile a
 `.dtb` file. Device-tree key labels and `linux,code` values are diagnostic clues. The active
 joystick ioctl mapping remains authoritative because a DTB does not reliably describe joydev button
@@ -387,8 +408,9 @@ To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` director
 ## Refresh the EmulationStation game list
 
 After a successful install, update, or delete, the device launcher records a refresh request. When
-you exit dArkOS Downloader it uses dArkOS's `systemctl restart emulationstation` mechanism, so the
-new game list is loaded without rebooting the R36S. If the image does not expose that service, use
+you acknowledge the completion message, the TUI closes and the launcher uses dArkOS's
+`systemctl restart emulationstation` mechanism. It does not reopen the TUI, and the new game list
+is loaded without rebooting the R36S. If the image does not expose that service, use
 EmulationStation's **Select → Update Games Lists** command; the launcher records the failed restart
 in `tools/darkos-downloader/darkos-downloader.log`.
 

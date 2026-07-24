@@ -10,18 +10,19 @@ so neither Python, uv, nor a package manager is required on the handheld.
 ## What it does
 
 - Searches the remote library by a case-insensitive title prefix.
-- Prompts for a download store before searches and updates. Vimm and Minerva Archive's
-  RetroAchievements collection share the same extensible store contract.
+- Remembers the download store selected during first-run setup. It can be changed later in
+  **Settings**; Vimm and Minerva Archive share the same extensible store contract.
 - Selectively downloads Minerva torrent pieces in native Python with no external torrent client.
 - Accepts an empty search to list the complete selected catalogue, including **All platforms**.
 - Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
 - Installs explicitly bundled BIOS files without overwriting existing firmware.
 - Updates and deletes installed games while preserving multi-file `.cue` and `.m3u` groups.
-- Requests an EmulationStation game-list refresh after every install, update, or deletion.
+- Requests an EmulationStation game-list refresh after every install, update, or deletion, then
+  closes instead of reopening the TUI.
 - Filters console families that cannot run on the R36S, including PS2, PS3, Xbox, Xbox 360,
   GameCube, Wii, Switch, Nintendo 3DS, and PS Vita.
-- Shows an RK3326 compatibility level before download and identifies titles matched in the live
-  [R36S Game List](https://r36sgamelist.com/) frontend catalogue.
+- Shows an RK3326 compatibility level and scored title-match confidence before download using the
+  live [R36S Game List](https://r36sgamelist.com/) frontend catalogue.
 
 ## Controller-first
 

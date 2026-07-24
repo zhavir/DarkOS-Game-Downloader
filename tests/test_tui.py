@@ -1,14 +1,18 @@
 import curses
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from dw_cli.compatibility import CompatibilityInfo
+from dw_cli.downloader import DownloadCancelled
 from dw_cli.gamepad import InputAction
 from dw_cli.models import InstalledGame, SearchResult
 from dw_cli.platforms import resolve_platform
+from dw_cli.preferences import Preferences, load_preferences
 from dw_cli.store_catalog import StoreCatalog
 from dw_cli.tui import (
     GAMEPAD_KEYS,
@@ -89,7 +93,7 @@ def test_store_picker_returns_registered_store() -> None:
     assert tui._choose_store("CHOOSE A STORE") is store
 
 
-def test_search_flow_selects_store_before_using_it(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_search_flow_uses_persisted_store_without_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
     tui = object.__new__(DownloaderTui)
     store = VimmStore("https://example.test")
     platform = resolve_platform("GBA")
@@ -102,8 +106,9 @@ def test_search_flow_selects_store_before_using_it(monkeypatch: pytest.MonkeyPat
         lambda system, query, _progress: calls.append((system, query)) or [result],
     )
     tui.store_catalog = StoreCatalog((store,))
+    tui.selected_store = store
     tui.platforms = (platform,)
-    choices = iter((0, 0))
+    choices = iter((0,))
     tui._menu = lambda _title, _options, _footer: next(choices)  # type: ignore[method-assign]
     tui._on_screen_keyboard = lambda *_args, **_kwargs: "ADV"  # type: ignore[method-assign]
     tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
@@ -119,7 +124,7 @@ def test_search_flow_selects_store_before_using_it(monkeypatch: pytest.MonkeyPat
     assert selected[-1] is store
 
 
-def test_update_selects_store_before_remote_search(
+def test_update_uses_persisted_store_without_prompt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,9 +143,74 @@ def test_update_selects_store_before_remote_search(
             or [SearchResult("Advance Wars", "https://example.test/vault/1")]
         ),
     )
-    tui._choose_store = lambda _title, _platform=None: store  # type: ignore[method-assign]
+    tui.selected_store = store
     tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
     tui._menu = lambda _title, _options, _footer: None  # type: ignore[method-assign]
 
     assert tui._update_game(game) is False
     assert calls == [(platform.code, game.title)]
+
+
+def test_configure_store_persists_selection(tmp_path: Path) -> None:
+    tui = object.__new__(DownloaderTui)
+    store = VimmStore("https://example.test")
+    tui.store_catalog = StoreCatalog((store,))
+    tui.preferences_path = tmp_path / ".downloads" / "settings.json"
+    tui.selected_store = None
+    tui._menu = lambda _title, _options, _footer: 0  # type: ignore[method-assign]
+    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    tui._error = lambda _message: None  # type: ignore[method-assign]
+
+    assert tui._configure_store(first_run=True) is True
+    assert tui.selected_store is store
+    assert load_preferences(tui.preferences_path) == Preferences("vimm")
+
+
+def test_exit_requires_explicit_yes() -> None:
+    tui = object.__new__(DownloaderTui)
+    choices = iter((None, 0, 1))
+    tui._menu = lambda _title, _options, _footer: next(choices)  # type: ignore[method-assign]
+
+    assert tui._confirm_exit() is False
+    assert tui._confirm_exit() is False
+    assert tui._confirm_exit() is True
+
+
+def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cancellation_seen = False
+
+    def fake_download_files(*args: object) -> list[object]:
+        nonlocal cancellation_seen
+        is_cancelled = cast(Callable[[], bool], args[-1])
+        while not is_cancelled():
+            time.sleep(0.001)
+        cancellation_seen = True
+        raise DownloadCancelled("Download cancelled.")
+
+    tui = object.__new__(DownloaderTui)
+    tui.config = SimpleNamespace(download_directory=tmp_path, timeout_seconds=1.0)
+    tui._poll_input = lambda: 27  # type: ignore[method-assign]
+    tui._progress = lambda *_args: None  # type: ignore[method-assign]
+    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    monkeypatch.setattr("dw_cli.tui.download_files", fake_download_files)
+
+    with pytest.raises(DownloadCancelled):
+        tui._download_media(["https://example.test/game.zip"], VimmStore("https://example.test"))
+
+    assert cancellation_seen is True
+
+
+def test_delete_refresh_request_closes_tui(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    platform = resolve_platform("GBA")
+    assert platform is not None
+    game_path = tmp_path / "gba" / "Advance Wars.zip"
+    game = InstalledGame("Advance Wars", platform, tmp_path, game_path, (game_path,))
+    tui = object.__new__(DownloaderTui)
+    tui.exit_after_refresh = False
+    tui._menu = lambda _title, _options, _footer: 1  # type: ignore[method-assign]
+    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    monkeypatch.setattr("dw_cli.tui.delete_game", lambda _game: None)
+    monkeypatch.setattr("dw_cli.tui.request_emulationstation_refresh", lambda: True)
+
+    assert tui._confirm_delete(game) is True
+    assert tui.exit_after_refresh is True
