@@ -35,6 +35,14 @@ store**.
 If transfers regularly time out, review **Settings → Minerva BitTorrent settings**. Use **Reset all
 to defaults** before changing individual limits.
 
+## Minerva says its torrent changed
+
+Minerva's web catalogue and torrent metadata can be updated at different times. The downloader
+automatically follows a uniquely matching filename even when its torrent position changed. If no
+unique match exists, it shows the catalogue filename and the closest torrent candidates. Compare
+the displayed path, size, and title-match score before confirming. Choose B/Escape if none of the
+candidates is clearly the intended game; no ROM is installed when you cancel.
+
 ## Search compatibility is unavailable
 
 Search and downloads continue when the R36S compatibility catalogue cannot be reached. Results then

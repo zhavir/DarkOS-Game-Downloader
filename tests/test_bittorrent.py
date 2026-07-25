@@ -7,10 +7,12 @@ import pytest
 from pytest_mock import MockerFixture
 
 from dw_cli.bittorrent import (
-    BitTorrentError,
     BValue,
+    TorrentFile,
     TorrentMetadata,
+    TorrentSelectionRequired,
     _download_piece_from_peers,
+    _select_torrent_file,
     bdecode,
     bencode,
     discover_peers,
@@ -55,9 +57,11 @@ def test_bencode_round_trip_and_torrent_file_offsets() -> None:
     assert len(metadata.piece_hashes) == 3
 
 
-def test_native_selective_download_verifies_pieces_and_extracts_only_file(
+@pytest.mark.parametrize("catalogue_index", (1, 99))
+def test_native_selective_download_recovers_from_changed_catalogue_order(
     tmp_path: Path,
     mocker: MockerFixture,
+    catalogue_index: int,
 ) -> None:
     payload = b"abcHELLOxyz"
     torrent = build_torrent(payload)
@@ -86,7 +90,7 @@ def test_native_selective_download_verifies_pieces_and_extracts_only_file(
 
     download_torrent_file(
         "https://example.test/game.torrent",
-        2,
+        catalogue_index,
         "Game.zip",
         destination,
         "https://example.test/",
@@ -102,13 +106,13 @@ def test_native_selective_download_verifies_pieces_and_extracts_only_file(
     assert not (tmp_path / "Game.zip.part").exists()
 
 
-def test_selective_download_rejects_changed_catalogue_order(
+def test_selective_download_requests_a_choice_when_game_is_missing(
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
     mocker.patch("dw_cli.bittorrent._read_url", lambda *_args: build_torrent())
 
-    with pytest.raises(BitTorrentError, match="no longer matches"):
+    with pytest.raises(TorrentSelectionRequired, match="unambiguous") as raised:
         download_torrent_file(
             "https://example.test/game.torrent",
             2,
@@ -117,6 +121,52 @@ def test_selective_download_rejects_changed_catalogue_order(
             "https://example.test/",
             10,
         )
+
+    assert raised.value.expected_filename == "Different.zip"
+    assert raised.value.candidates
+
+
+def test_selective_download_rejects_ambiguous_normalized_filenames() -> None:
+    original = parse_torrent(build_torrent())
+    metadata = TorrentMetadata(
+        info_hash=original.info_hash,
+        piece_length=original.piece_length,
+        piece_hashes=original.piece_hashes,
+        files=(
+            TorrentFile(("first", "Game.zip"), 5, 0),
+            TorrentFile(("second", "game.ZIP"), 5, 5),
+        ),
+        trackers=original.trackers,
+        total_length=10,
+    )
+
+    with pytest.raises(TorrentSelectionRequired, match="unambiguous") as raised:
+        _select_torrent_file(metadata, 1, "GAME.zip")
+
+    assert [candidate.index for candidate in raised.value.candidates] == [1, 2]
+
+
+def test_explicit_torrent_path_is_validated_after_user_selection() -> None:
+    metadata = parse_torrent(build_torrent())
+
+    assert _select_torrent_file(metadata, 2, "Game.zip") == metadata.files[1]
+    assert (
+        _select_torrent_file(
+            metadata,
+            99,
+            "Game.zip",
+            selected_path=("Game.zip",),
+        )
+        == metadata.files[1]
+    )
+    with pytest.raises(TorrentSelectionRequired) as raised:
+        _select_torrent_file(
+            metadata,
+            99,
+            "Game.zip",
+            selected_path=("removed", "Game.zip"),
+        )
+    assert raised.value.candidates[0].filename == "Game.zip"
 
 
 def test_peer_attempts_are_bounded_and_raced(mocker: MockerFixture) -> None:

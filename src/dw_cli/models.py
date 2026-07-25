@@ -52,6 +52,7 @@ class MediaDownload:
     url: str
     torrent_file_index: int | None = None
     expected_filename: str | None = None
+    torrent_file_path: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

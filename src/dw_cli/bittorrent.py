@@ -2,14 +2,18 @@
 
 import hashlib
 import ipaddress
+import logging
+import re
 import secrets
 import socket
 import ssl
 import struct
 import time
+import unicodedata
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from math import isfinite
 from pathlib import Path
 from threading import Event
@@ -18,6 +22,8 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from dw_cli.store import USER_AGENT
+
+LOGGER = logging.getLogger(__name__)
 
 type BValue = bytes | int | list[BValue] | dict[bytes, BValue]
 type PeerAddress = tuple[str, int]
@@ -42,6 +48,44 @@ class BitTorrentError(RuntimeError):
 
 class BitTorrentCancelled(BitTorrentError):
     """The caller requested cancellation of a torrent transfer."""
+
+
+@dataclass(frozen=True, slots=True)
+class TorrentFileChoice:
+    """One torrent entry that a user can explicitly approve."""
+
+    index: int
+    path: tuple[str, ...]
+    length: int
+    match_score: float
+
+    @property
+    def filename(self) -> str:
+        return self.path[-1]
+
+
+class TorrentSelectionRequired(BitTorrentError):
+    """Minerva changed its torrent and needs an explicit safe file choice."""
+
+    def __init__(
+        self,
+        torrent_url: str,
+        expected_filename: str,
+        catalogue_index: int,
+        candidates: tuple[TorrentFileChoice, ...],
+        total_files: int,
+    ) -> None:
+        self.torrent_url = torrent_url
+        self.expected_filename = expected_filename
+        self.catalogue_index = catalogue_index
+        self.candidates = candidates
+        self.total_files = total_files
+        names = ", ".join(choice.filename for choice in candidates[:3])
+        super().__init__(
+            "Minerva's torrent no longer has one unambiguous match for "
+            f"{expected_filename!r} at catalogue position {catalogue_index}. "
+            f"Closest candidates: {names}. Use the TUI to choose a file or cancel."
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,8 +307,9 @@ def download_torrent_file(
     progress: TorrentProgress | None = None,
     cancelled: CancelCallback | None = None,
     settings: BitTorrentSettings | None = None,
+    selected_path: tuple[str, ...] | None = None,
 ) -> None:
-    """Download and verify only one one-based file from a v1 multi-file torrent."""
+    """Download one expected file, treating its catalogue position only as a hint."""
 
     effective_settings = settings or BitTorrentSettings()
     _raise_if_cancelled(cancelled)
@@ -276,11 +321,13 @@ def download_torrent_file(
     )
     _raise_if_cancelled(cancelled)
     metadata = parse_torrent(torrent_data)
-    if file_index < 1 or file_index > len(metadata.files):
-        raise BitTorrentError("Selected torrent file index is out of range.")
-    selected = metadata.files[file_index - 1]
-    if selected.path[-1] != expected_filename:
-        raise BitTorrentError("The selected torrent file no longer matches the catalogue.")
+    selected = _select_torrent_file(
+        metadata,
+        file_index,
+        expected_filename,
+        torrent_url=torrent_url,
+        selected_path=selected_path,
+    )
     if selected.length == 0:
         destination.write_bytes(b"")
         return
@@ -341,6 +388,98 @@ def download_torrent_file(
     except BaseException:
         partial.unlink(missing_ok=True)
         raise
+
+
+def _select_torrent_file(
+    metadata: TorrentMetadata,
+    catalogue_index: int,
+    expected_filename: str,
+    *,
+    torrent_url: str = "",
+    selected_path: tuple[str, ...] | None = None,
+) -> TorrentFile:
+    """Find one unambiguous filename even when Minerva reordered its torrent."""
+
+    if selected_path is not None:
+        approved = [item for item in metadata.files if item.path == selected_path]
+        if len(approved) == 1:
+            return approved[0]
+        raise TorrentSelectionRequired(
+            torrent_url=torrent_url,
+            expected_filename=expected_filename,
+            catalogue_index=catalogue_index,
+            candidates=_torrent_file_candidates(metadata, expected_filename, catalogue_index, []),
+            total_files=len(metadata.files),
+        )
+
+    normalized_expected = _normalized_filename(expected_filename)
+    matches = [
+        (index, item)
+        for index, item in enumerate(metadata.files, start=1)
+        if _normalized_filename(item.path[-1]) == normalized_expected
+    ]
+    if len(matches) != 1:
+        raise TorrentSelectionRequired(
+            torrent_url=torrent_url,
+            expected_filename=expected_filename,
+            catalogue_index=catalogue_index,
+            candidates=_torrent_file_candidates(
+                metadata,
+                expected_filename,
+                catalogue_index,
+                matches,
+            ),
+            total_files=len(metadata.files),
+        )
+    resolved_index, selected = matches[0]
+    if resolved_index != catalogue_index:
+        LOGGER.warning(
+            "Minerva torrent order changed for file=%r catalogue_index=%d torrent_index=%d",
+            expected_filename,
+            catalogue_index,
+            resolved_index,
+        )
+    return selected
+
+
+def _normalized_filename(value: str) -> str:
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+def _torrent_file_candidates(
+    metadata: TorrentMetadata,
+    expected_filename: str,
+    catalogue_index: int,
+    filename_matches: list[tuple[int, TorrentFile]],
+) -> tuple[TorrentFileChoice, ...]:
+    expected_title = _normalized_title(expected_filename)
+
+    def choice(index: int, item: TorrentFile) -> TorrentFileChoice:
+        score = SequenceMatcher(None, expected_title, _normalized_title(item.path[-1])).ratio()
+        return TorrentFileChoice(index, item.path, item.length, score)
+
+    if filename_matches:
+        return tuple(choice(index, item) for index, item in filename_matches)
+
+    ranked = sorted(
+        (choice(index, item) for index, item in enumerate(metadata.files, start=1)),
+        key=lambda item: (
+            -item.match_score,
+            abs(item.index - catalogue_index),
+            "/".join(item.path).casefold(),
+        ),
+    )
+    closest = ranked[:10]
+    hinted = next((item for item in ranked if item.index == catalogue_index), None)
+    if hinted is not None and hinted not in closest:
+        closest.append(hinted)
+    return tuple(closest)
+
+
+def _normalized_title(filename: str) -> str:
+    title = Path(filename).stem
+    normalized = unicodedata.normalize("NFKD", title).casefold()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", normalized).split())
 
 
 def discover_peers(

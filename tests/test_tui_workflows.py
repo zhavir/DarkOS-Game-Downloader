@@ -8,10 +8,10 @@ import pytest
 from pytest_mock import MockerFixture
 
 from dw_cli import tui as tui_module
-from dw_cli.bittorrent import BitTorrentSettings
+from dw_cli.bittorrent import BitTorrentSettings, TorrentFileChoice, TorrentSelectionRequired
 from dw_cli.compatibility import CompatibilityInfo
 from dw_cli.config import Config
-from dw_cli.downloader import DownloadCancelled, DownloadError
+from dw_cli.downloader import DownloadCancelled, DownloadError, DownloadSelectionRequired
 from dw_cli.gamepad import InputAction, LinuxJoystick
 from dw_cli.hardware import DeviceTreeInput, DeviceTreeKey, HardwareProfile
 from dw_cli.library import LibraryError
@@ -722,6 +722,95 @@ def test_stage_update_and_download_background_workers(
     mocker.patch.object(tui_module, "download_files", downloaded)
     store = FakeStore()
     assert instance._download_media(["url"], store) == [result]
+
+
+def test_changed_minerva_torrent_prompts_and_retries_selected_file(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.config = Config("url", tmp_path, (), timeout_seconds=1.0)
+    instance.preferences = Preferences("minerva")
+    mocker.patch.object(instance, "_poll_input", return_value=None)
+    mocker.patch.object(instance, "_progress")
+    choice = TorrentFileChoice(8, ("renamed", "Game Rev 2.zip"), 2048, 0.88)
+    selection = DownloadSelectionRequired(
+        TorrentSelectionRequired("torrent", "Game.zip", 3, (choice,), 100)
+    )
+    result = DownloadResult("torrent", tmp_path / choice.filename)
+    attempts: list[tuple[str | MediaDownload, ...]] = []
+
+    def downloaded(
+        downloads: tuple[str | MediaDownload, ...],
+        *_args: object,
+        **_kwargs: object,
+    ) -> list[DownloadResult]:
+        attempts.append(downloads)
+        if len(attempts) == 1:
+            raise selection
+        return [result]
+
+    mocker.patch.object(tui_module, "download_files", downloaded)
+    mocker.patch.object(instance, "_choose_torrent_file", return_value=choice)
+    request = MediaDownload("torrent", 3, "Game.zip")
+
+    assert instance._download_media([request], FakeStore()) == [result]
+    retried = attempts[1][0]
+    assert isinstance(retried, MediaDownload)
+    assert retried.torrent_file_index == 8
+    assert retried.expected_filename == "Game Rev 2.zip"
+    assert retried.torrent_file_path == ("renamed", "Game Rev 2.zip")
+
+
+def test_torrent_file_choice_shows_context_and_requires_confirmation(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    candidate = TorrentFileChoice(4, ("folder", "Game Rev 2.zip"), 2 * 1024**2, 0.91)
+    error = DownloadSelectionRequired(
+        TorrentSelectionRequired("torrent", "Game.zip", 2, (candidate,), 50)
+    )
+    messages: list[str] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        new=lambda _title, message, *_args, **_kwargs: messages.append(message),
+    )
+    choices = iter((0, 1))
+    mocker.patch.object(instance, "_menu", side_effect=lambda *_args: next(choices))
+
+    assert instance._choose_torrent_file(error) == candidate
+    context = "\n".join(messages)
+    assert "Game.zip" in context
+    assert "folder/Game Rev 2.zip" in context
+    assert "#2" in context and "#4" in context
+    assert "2.0 MiB" in context and "91%" in context
+
+    mocker.patch.object(instance, "_menu", return_value=None)
+    assert instance._choose_torrent_file(error) is None
+    assert instance._format_file_size(500) == "500 B"
+    assert instance._format_file_size(2 * 1024) == "2.0 KiB"
+    assert instance._format_file_size(2 * 1024**3) == "2.0 GiB"
+
+
+def test_changed_minerva_torrent_can_be_cancelled(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.config = Config("url", tmp_path, ())
+    instance.preferences = Preferences("minerva")
+    choice = TorrentFileChoice(2, ("candidate.zip",), 10, 0.5)
+    error = DownloadSelectionRequired(
+        TorrentSelectionRequired("torrent", "expected.zip", 1, (choice,), 3)
+    )
+    mocker.patch.object(tui_module, "download_files", side_effect=error)
+    mocker.patch.object(instance, "_poll_input", return_value=None)
+    mocker.patch.object(instance, "_progress")
+    mocker.patch.object(instance, "_choose_torrent_file", return_value=None)
+
+    with pytest.raises(DownloadCancelled):
+        instance._download_media([MediaDownload("torrent", 1, "expected.zip")], FakeStore())
 
 
 def test_progress_status_rendering_and_input_helpers(mocker: MockerFixture) -> None:

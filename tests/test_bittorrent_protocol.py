@@ -187,7 +187,7 @@ def test_download_torrent_covers_selection_empty_truncation_and_cleanup(
     mocker: MockerFixture,
 ) -> None:
     mocker.patch.object(bittorrent, "_read_url", lambda *_args: build_torrent())
-    with pytest.raises(BitTorrentError, match="out of range"):
+    with pytest.raises(BitTorrentError, match="unambiguous"):
         download_torrent_file("torrent", 99, "file", tmp_path / "file", "", 1)
 
     empty_info = {

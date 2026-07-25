@@ -7,10 +7,17 @@ from urllib.error import HTTPError, URLError
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import BitTorrentCancelled, BitTorrentError, BitTorrentSettings
+from dw_cli.bittorrent import (
+    BitTorrentCancelled,
+    BitTorrentError,
+    BitTorrentSettings,
+    TorrentFileChoice,
+    TorrentSelectionRequired,
+)
 from dw_cli.downloader import (
     DownloadCancelled,
     DownloadError,
+    DownloadSelectionRequired,
     _download_with_urllib,
     _filename_from_headers,
     _safe_filename,
@@ -72,7 +79,8 @@ def test_torrent_download_uses_native_python_client(
     assert result[0].path == tmp_path / "Game.zip"
     assert result[0].path.read_bytes() == b"game"
     assert calls[0][:3] == ("https://example.test/games.torrent", 7, "Game.zip")
-    assert calls[0][-1] == settings
+    assert calls[0][-2] == settings
+    assert calls[0][-1] is None
 
 
 def test_cancelled_download_stops_before_network_or_partial_file(tmp_path: Path) -> None:
@@ -138,6 +146,18 @@ def test_download_validates_empty_and_torrent_requests(
     native.side_effect = BitTorrentError("bad metadata")
     with pytest.raises(DownloadError, match="bad metadata"):
         download_files([MediaDownload("torrent", 1, "game.zip")], tmp_path, "")
+
+    selection = TorrentSelectionRequired(
+        "torrent",
+        "game.zip",
+        1,
+        (TorrentFileChoice(2, ("renamed.zip",), 1024, 0.8),),
+        10,
+    )
+    native.side_effect = selection
+    with pytest.raises(DownloadSelectionRequired) as raised:
+        download_files([MediaDownload("torrent", 1, "game.zip")], tmp_path, "")
+    assert raised.value.candidates == selection.candidates
 
 
 @pytest.mark.parametrize(

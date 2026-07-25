@@ -15,6 +15,8 @@ from dw_cli.bittorrent import (
     BitTorrentCancelled,
     BitTorrentError,
     BitTorrentSettings,
+    TorrentFileChoice,
+    TorrentSelectionRequired,
     download_torrent_file,
 )
 from dw_cli.models import DownloadResult, MediaDownload
@@ -32,6 +34,18 @@ class DownloadError(RuntimeError):
 
 class DownloadCancelled(DownloadError):
     """The user cancelled an in-progress download."""
+
+
+class DownloadSelectionRequired(DownloadError):
+    """A changed torrent needs an explicit file choice from the user."""
+
+    def __init__(self, error: TorrentSelectionRequired) -> None:
+        super().__init__(str(error))
+        self.torrent_url = error.torrent_url
+        self.expected_filename = error.expected_filename
+        self.catalogue_index = error.catalogue_index
+        self.candidates: tuple[TorrentFileChoice, ...] = error.candidates
+        self.total_files = error.total_files
 
 
 def _safe_filename(value: str) -> str:
@@ -100,10 +114,14 @@ def download_files(
                 partial(progress, download.expected_filename) if progress is not None else None,
                 cancelled,
                 bittorrent_settings,
+                download.torrent_file_path,
             )
         except BitTorrentCancelled as error:
             LOGGER.info("Torrent download cancelled")
             raise DownloadCancelled("Download cancelled.") from error
+        except TorrentSelectionRequired as error:
+            LOGGER.warning("Torrent file selection requires user confirmation: %s", error)
+            raise DownloadSelectionRequired(error) from error
         except BitTorrentError as error:
             LOGGER.error("Torrent download failed: %s", error)
             raise DownloadError(str(error)) from error

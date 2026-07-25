@@ -12,14 +12,19 @@ from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
-from dw_cli.bittorrent import BitTorrentSettings
+from dw_cli.bittorrent import BitTorrentSettings, TorrentFileChoice
 from dw_cli.compatibility import (
     CompatibilityInfo,
     R36SCompatibilityClient,
     filter_supported_results,
 )
 from dw_cli.config import Config
-from dw_cli.downloader import DownloadCancelled, DownloadError, download_files
+from dw_cli.downloader import (
+    DownloadCancelled,
+    DownloadError,
+    DownloadSelectionRequired,
+    download_files,
+)
 from dw_cli.frontend import request_emulationstation_refresh
 from dw_cli.gamepad import InputAction, LinuxJoystick
 from dw_cli.hardware import detect_hardware_profile
@@ -844,46 +849,154 @@ class DownloaderTui:
     ) -> list[DownloadResult]:
         """Run network work in the background while the main thread handles cancellation."""
 
-        cancelled = Event()
-        state_lock = Lock()
-        progress_state: list[str | int | None] = ["Connecting to the download service...", 0, None]
+        pending_downloads = tuple(downloads)
+        while True:
+            cancelled = Event()
+            state_lock = Lock()
+            progress_state: list[str | int | None] = [
+                "Connecting to the download service...",
+                0,
+                None,
+            ]
 
-        def report(label: str, current: int, total: int | None) -> None:
-            with state_lock:
-                progress_state[:] = [label, current, total]
+            def report(
+                label: str,
+                current: int,
+                total: int | None,
+                state: list[str | int | None] = progress_state,
+                lock: Lock = state_lock,
+            ) -> None:
+                with lock:
+                    state[:] = [label, current, total]
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tui-download") as executor:
-            bittorrent_settings = (
-                self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
-            )
-            future = executor.submit(
-                download_files,
-                downloads,
-                self.config.download_directory,
-                store.download_referrer,
-                self.config.timeout_seconds,
-                report,
-                cancelled.is_set,
-                bittorrent_settings=bittorrent_settings,
-            )
-            while not future.done():
-                with state_lock:
-                    label, current, total = progress_state
-                if cancelled.is_set():
-                    self._draw_message(
-                        "CANCELLING DOWNLOAD",
-                        "Closing active network connections and removing partial files...",
-                        3,
+            selection_error: DownloadSelectionRequired | None = None
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tui-download") as executor:
+                bittorrent_settings = (
+                    self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
+                )
+                future = executor.submit(
+                    download_files,
+                    pending_downloads,
+                    self.config.download_directory,
+                    store.download_referrer,
+                    self.config.timeout_seconds,
+                    report,
+                    cancelled.is_set,
+                    bittorrent_settings=bittorrent_settings,
+                )
+                while not future.done():
+                    with state_lock:
+                        label, current, total = progress_state
+                    if cancelled.is_set():
+                        self._draw_message(
+                            "CANCELLING DOWNLOAD",
+                            "Closing active network connections and removing partial files...",
+                            3,
+                        )
+                    else:
+                        assert isinstance(label, str)
+                        assert isinstance(current, int)
+                        assert total is None or isinstance(total, int)
+                        self._progress(label, current, total)
+                    pressed = self._poll_input()
+                    if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
+                        cancelled.set()
+                try:
+                    return future.result()
+                except DownloadSelectionRequired as error:
+                    selection_error = error
+
+            assert selection_error is not None
+            choice = self._choose_torrent_file(selection_error)
+            if choice is None:
+                raise DownloadCancelled("Download cancelled.")
+            updated: list[str | MediaDownload] = []
+            selection_applied = False
+            for download in pending_downloads:
+                if (
+                    isinstance(download, MediaDownload)
+                    and download.url == selection_error.torrent_url
+                ):
+                    updated.append(
+                        replace(
+                            download,
+                            torrent_file_index=choice.index,
+                            expected_filename=choice.filename,
+                            torrent_file_path=choice.path,
+                        )
                     )
+                    selection_applied = True
                 else:
-                    assert isinstance(label, str)
-                    assert isinstance(current, int)
-                    assert total is None or isinstance(total, int)
-                    self._progress(label, current, total)
-                pressed = self._poll_input()
-                if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
-                    cancelled.set()
-            return future.result()
+                    updated.append(download)
+            if not selection_applied:
+                raise DownloadError("Could not apply the selected Minerva torrent file.")
+            pending_downloads = tuple(updated)
+            LOGGER.info(
+                "User selected changed Minerva torrent file index=%d path=%s",
+                choice.index,
+                "/".join(choice.path),
+            )
+
+    def _choose_torrent_file(
+        self,
+        error: DownloadSelectionRequired,
+    ) -> TorrentFileChoice | None:
+        """Explain a changed Minerva torrent and ask the user for a safe choice."""
+
+        self._draw_message(
+            "MINERVA TORRENT CHANGED",
+            f"Catalogue file:\n{error.expected_filename}\n"
+            f"Catalogue position: #{error.catalogue_index}\n\n"
+            f"The torrent now contains {error.total_files} files and no longer has one "
+            "unambiguous match. Review the closest candidates or cancel; no game has been "
+            "installed yet.",
+            3,
+            wait=True,
+        )
+        labels = [
+            "#{}  {}  | {} | {}% title match | {}".format(
+                candidate.index,
+                candidate.filename,
+                self._format_file_size(candidate.length),
+                round(candidate.match_score * 100),
+                "/".join(candidate.path),
+            )
+            for candidate in error.candidates
+        ]
+        selected_index = self._menu(
+            "CHOOSE MINERVA TORRENT FILE",
+            labels,
+            "These are the closest safe candidates; B/Escape cancels",
+        )
+        if selected_index is None:
+            return None
+        selected = error.candidates[selected_index]
+        self._draw_message(
+            "REVIEW MINERVA FILE",
+            f"Catalogue expected:\n{error.expected_filename}\n\n"
+            f"Selected torrent file:\n{'/'.join(selected.path)}\n"
+            f"Torrent position: #{selected.index}\n"
+            f"Size: {self._format_file_size(selected.length)}\n"
+            f"Title similarity: {round(selected.match_score * 100)}%",
+            3,
+            wait=True,
+        )
+        confirmation = self._menu(
+            "CONFIRM MINERVA FILE",
+            ("Cancel download", f"Download {selected.filename}"),
+            "Only the explicitly selected torrent file will be downloaded",
+        )
+        return selected if confirmation == 1 else None
+
+    @staticmethod
+    def _format_file_size(length: int) -> str:
+        size = float(length)
+        units = ("B", "KiB", "MiB", "GiB")
+        for unit in units[:-1]:
+            if size < 1024:
+                return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} {units[-1]}"
 
     def _status_screen(self) -> None:
         roms = ", ".join(str(path) for path in self.roms_directories) or "not detected"

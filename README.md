@@ -90,6 +90,10 @@ overwritten.
   selected file's verified torrent pieces. Availability depends on public trackers and seeders,
   and the public IP address of the handheld is visible to the swarm while downloading.
 
+If Minerva reorders a torrent, the downloader finds a unique filename automatically. When a game
+was renamed or is ambiguous, the TUI shows the closest torrent files with their position, path,
+size, and title similarity so you can explicitly choose one or safely cancel.
+
 The preferred store applies to searches, direct downloads, and installed-game updates. Change it
 through **Settings → Change download store**.
 

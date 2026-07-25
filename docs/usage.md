@@ -38,6 +38,12 @@ BitTorrent client and retrieves only the chosen file's verified pieces. No exter
 is installed or invoked. The client does not seed or accept incoming peer connections; your public
 IP address is still visible to peers and trackers while downloading.
 
+If Minerva changes the order of files in a torrent, the catalogue position is treated only as a
+hint. A unique filename match is found automatically. If the filename was renamed or appears more
+than once, the TUI explains the mismatch and shows the closest candidates with their torrent path,
+position, size, and title-match score. Review and explicitly confirm one file, or press B/Escape to
+cancel without installing anything.
+
 When Minerva is the selected store, open **Settings → Minerva BitTorrent settings** to edit the
 native client's advanced values. They are saved in `.darkos-downloader.json` beside the staging
 downloads and used by the next Minerva download. **Reset all to defaults** restores this table:
