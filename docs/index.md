@@ -17,8 +17,8 @@ so neither Python, uv, nor a package manager is required on the handheld.
 - Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
 - Installs explicitly bundled BIOS files without overwriting existing firmware.
 - Updates and deletes installed games while preserving multi-file `.cue` and `.m3u` groups.
-- Requests an EmulationStation game-list refresh after every install, update, or deletion, then
-  closes instead of reopening the TUI.
+- Queues an EmulationStation game-list refresh after every install, update, or deletion, keeps the
+  TUI open, and applies one refresh when the user exits.
 - Filters console families that cannot run on the R36S, including PS2, PS3, Xbox, Xbox 360,
   GameCube, Wii, Switch, Nintendo 3DS, and PS Vita.
 - Shows an RK3326 compatibility level and scored title-match confidence before download using the

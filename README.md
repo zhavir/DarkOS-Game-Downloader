@@ -27,6 +27,8 @@ environment that uses fake games and temporary SD-card folders.
 - Downloads to a staging directory and then moves the completed file into the selected ROM folder.
 - Downloads only the selected file from Minerva's platform torrent with a native Python
   BitTorrent client; no aria2, torrent application, daemon, or external component is required.
+- Exposes all native BitTorrent limits under **Settings → Minerva BitTorrent settings** when
+  Minerva is selected, and persists customized values locally.
 - Installs BIOS files explicitly bundled under a `bios/` directory in a downloaded ZIP, without
   overwriting existing firmware or unpacking ordinary arcade/merged ROM archives.
 - Scans installed games on both cards.
@@ -36,8 +38,8 @@ environment that uses fake games and temporary SD-card folders.
 - Updates a selected game by downloading first and replacing the old copy only after success.
 - Checks GitHub Releases from **Settings** and installs the exact newer R36S ARM64 bundle without
   Python, uv, or another updater; preferences and cached data are preserved.
-- Requests an EmulationStation game-list refresh after an install, update, or deletion, then exits
-  the TUI so the launcher can apply it without reopening the application or rebooting the handheld.
+- Queues an EmulationStation game-list refresh after an install, update, or deletion and applies it
+  once when the user exits the TUI, without reopening the application or rebooting the handheld.
 - Cancels an active direct or torrent download with B/Escape and removes its partial file.
 - Supports the R36S D-pad and both analog sticks directly through `/dev/input/js*`, and has an
   on-screen keyboard where every direction navigates and X submits the current text, including an
@@ -355,7 +357,9 @@ Configure the repository once:
 
 For a private repository, the GitHub plan must support Pages for private repositories. The Coverage
 Badge action creates and maintains `gh-pages`; the documentation site itself still uses the GitHub
-Actions Pages source. No deploy key, custom token, or repository secret is required.
+Actions Pages source. The initial checkout deliberately does not persist Git credentials because the
+badge action performs its own authenticated `gh-pages` checkout. No deploy key, custom token, or
+repository secret is required.
 
 Pull requests targeting `main` run a pre-commit job and one all-tests job containing unit tests,
 localhost integration tests, and offline E2E workflows. Tests marked `live` are excluded on GitHub.
@@ -419,10 +423,11 @@ To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` director
 
 ## Refresh the EmulationStation game list
 
-After a successful install, update, or delete, the device launcher records a refresh request. When
-you acknowledge the completion message, the TUI closes and the launcher uses dArkOS's
-`systemctl restart emulationstation` mechanism. It does not reopen the TUI, and the new game list
-is loaded without rebooting the R36S. If the image does not expose that service, use
+After a successful install, update, or delete, the TUI queues a game-list refresh but remains open,
+so you can perform more operations. When you later choose **Exit** and confirm, the TUI records one
+refresh request and closes. The launcher then uses dArkOS's `systemctl restart emulationstation`
+mechanism. It does not reopen the TUI, and the new game list is loaded without rebooting the R36S.
+If the image does not expose that service, use
 EmulationStation's **Select → Update Games Lists** command; the launcher records the failed restart
 in `tools/darkos-downloader/darkos-downloader.log`.
 

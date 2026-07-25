@@ -38,6 +38,26 @@ BitTorrent client and retrieves only the chosen file's verified pieces. No exter
 is installed or invoked. The client does not seed or accept incoming peer connections; your public
 IP address is still visible to peers and trackers while downloading.
 
+When Minerva is the selected store, open **Settings → Minerva BitTorrent settings** to edit the
+native client's advanced values. They are saved in `.darkos-downloader.json` beside the staging
+downloads and used by the next Minerva download. **Reset all to defaults** restores this table:
+
+| Setting | Default |
+| --- | ---: |
+| UDP protocol ID | `0x41727101980` |
+| Block size | 16,384 bytes |
+| Maximum torrent metadata | 16,777,216 bytes |
+| Maximum tracker response | 2,097,152 bytes |
+| Maximum peer attempts | 240 |
+| Peer race workers | 8 |
+| Maximum peer timeout | 8.0 seconds |
+| Maximum tracker queries | 16 |
+| Maximum discovered peers | 240 |
+
+All integer limits must be greater than zero, and the protocol ID must fit in an unsigned 64-bit
+integer. The peer timeout must be a positive finite number and is also capped by the application's
+overall network timeout.
+
 ## Update an installed game
 
 Open **Manage installed games**, choose the memory card and platform, then select the game. **Update
@@ -51,8 +71,9 @@ successfully. If the configured store does not support that platform, change it 
 Choose **Delete from device** and confirm. Playlist and disc groups referenced by `.cue` and `.m3u`
 files are deleted together.
 
-After a successful install, update, or deletion, acknowledge the completion message. The TUI then
-closes so the Tools launcher can refresh EmulationStation; it does not reopen automatically.
+After a successful install, update, or deletion, acknowledge the completion message and continue
+using the TUI if desired. The game-list refresh remains queued until you choose **Exit** and confirm.
+The Tools launcher refreshes EmulationStation after the TUI closes and does not reopen it.
 
 ## Update dArkOS Downloader
 

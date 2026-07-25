@@ -22,6 +22,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
         with:
+          # The coverage badge action performs its own authenticated gh-pages
+          # checkout. Do not leave a second Authorization header behind.
+          persist-credentials: false
           ref: main
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6.0.0

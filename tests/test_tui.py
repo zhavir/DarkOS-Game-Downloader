@@ -7,10 +7,11 @@ from typing import cast
 
 import pytest
 
+from dw_cli.bittorrent import BitTorrentSettings
 from dw_cli.compatibility import CompatibilityInfo
 from dw_cli.downloader import DownloadCancelled
 from dw_cli.gamepad import InputAction
-from dw_cli.models import InstalledGame, SearchResult
+from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, SearchResult
 from dw_cli.platforms import resolve_platform
 from dw_cli.preferences import Preferences, load_preferences
 from dw_cli.store_catalog import StoreCatalog
@@ -167,6 +168,62 @@ def test_configure_store_persists_selection(tmp_path: Path) -> None:
     assert load_preferences(tui.preferences_path) == Preferences("vimm")
 
 
+def test_minerva_settings_menu_edits_and_persists_value(tmp_path: Path) -> None:
+    tui = object.__new__(DownloaderTui)
+    tui.preferences_path = tmp_path / ".downloads" / "settings.json"
+    tui.preferences = Preferences("minerva")
+    choices = iter((1, None))
+    shown_options: list[tuple[str, ...]] = []
+
+    def menu(_title: str, options: tuple[str, ...], _footer: str) -> int | None:
+        shown_options.append(tuple(options))
+        return next(choices)
+
+    tui._menu = menu  # type: ignore[method-assign]
+    tui._on_screen_keyboard = lambda *_args, **_kwargs: "32768"  # type: ignore[method-assign]
+    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    tui._error = lambda message: pytest.fail(message)  # type: ignore[method-assign]
+
+    tui._minerva_bittorrent_settings_screen()
+
+    expected = BitTorrentSettings(block_size=32768)
+    assert tui.preferences == Preferences("minerva", expected)
+    assert load_preferences(tui.preferences_path) == Preferences("minerva", expected)
+    labels = " ".join(shown_options[0])
+    assert all(
+        label in labels
+        for label in (
+            "UDP protocol ID",
+            "Block size",
+            "Max torrent metadata",
+            "Max tracker response",
+            "Max peer attempts",
+            "Peer race workers",
+            "Max peer timeout",
+            "Max tracker queries",
+            "Max discovered peers",
+        )
+    )
+
+
+def test_minerva_advanced_settings_only_appear_for_minerva() -> None:
+    tui = object.__new__(DownloaderTui)
+    shown_options: list[tuple[str, ...]] = []
+    tui._menu = (  # type: ignore[method-assign]
+        lambda _title, options, _footer: shown_options.append(tuple(options)) or None
+    )
+    tui.selected_store = VimmStore("https://example.test")
+
+    tui._settings_screen()
+
+    assert not any("Minerva BitTorrent" in option for option in shown_options[-1])
+    tui.selected_store = SimpleNamespace(store_id="minerva", display_name="Minerva Archive")
+
+    tui._settings_screen()
+
+    assert any("Minerva BitTorrent" in option for option in shown_options[-1])
+
+
 def test_exit_requires_explicit_yes() -> None:
     tui = object.__new__(DownloaderTui)
     choices = iter((None, 0, 1))
@@ -215,7 +272,7 @@ def test_application_update_is_staged_and_closes_tui(
 def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     cancellation_seen = False
 
-    def fake_download_files(*args: object) -> list[object]:
+    def fake_download_files(*args: object, **_kwargs: object) -> list[object]:
         nonlocal cancellation_seen
         is_cancelled = cast(Callable[[], bool], args[-1])
         while not is_cancelled():
@@ -236,17 +293,109 @@ def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert cancellation_seen is True
 
 
-def test_delete_refresh_request_closes_tui(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_minerva_download_uses_persisted_bittorrent_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    settings = BitTorrentSettings(block_size=32 * 1024, max_peer_attempts=100)
+    tui = object.__new__(DownloaderTui)
+    tui.config = SimpleNamespace(download_directory=tmp_path, timeout_seconds=1.0)
+    tui.preferences = Preferences("minerva", settings)
+    tui._poll_input = lambda: None  # type: ignore[method-assign]
+    tui._progress = lambda *_args: None  # type: ignore[method-assign]
+    captured: list[BitTorrentSettings | None] = []
+
+    def fake_download_files(*_args: object, **kwargs: object) -> list[DownloadResult]:
+        value = kwargs.get("bittorrent_settings")
+        assert value is None or isinstance(value, BitTorrentSettings)
+        captured.append(value)
+        return []
+
+    monkeypatch.setattr("dw_cli.tui.download_files", fake_download_files)
+    store = SimpleNamespace(store_id="minerva", download_referrer="https://example.test/")
+
+    assert tui._download_media([], store) == []  # type: ignore[arg-type]
+    assert captured == [settings]
+
+
+def test_completed_download_defers_refresh_until_tui_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    platform = resolve_platform("GBA")
+    assert platform is not None
+    downloaded = tmp_path / "download" / "Advance Wars.zip"
+    downloaded.parent.mkdir()
+    downloaded.write_bytes(b"game")
+    store = VimmStore("https://example.test")
+    tui = object.__new__(DownloaderTui)
+    tui.refresh_on_exit = False
+    tui._choose_roms_directory = lambda: tmp_path / "roms"  # type: ignore[method-assign]
+    tui._download_media = lambda *_args: [  # type: ignore[method-assign]
+        DownloadResult("https://example.test/game.zip", downloaded)
+    ]
+    messages: list[str] = []
+    tui._draw_message = (  # type: ignore[method-assign]
+        lambda _title, message, *_args, **_kwargs: messages.append(message)
+    )
+    monkeypatch.setattr(
+        store,
+        "download_request",
+        lambda _url: MediaDownload("https://example.test/game.zip"),
+    )
+    refresh_requests: list[bool] = []
+    monkeypatch.setattr(
+        "dw_cli.tui.request_emulationstation_refresh",
+        lambda: refresh_requests.append(True) or True,
+    )
+
+    tui._download_detail("https://example.test/game", platform, store)
+
+    assert (tmp_path / "roms" / "gba" / "Advance Wars.zip").is_file()
+    assert tui.refresh_on_exit is True
+    assert refresh_requests == []
+    assert "refresh when you exit" in messages[-1]
+
+
+def test_pending_refresh_is_requested_when_tui_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    tui = object.__new__(DownloaderTui)
+    tui.store_catalog = SimpleNamespace(stores=(object(),))
+    tui.selected_store = object()
+    tui.refresh_on_exit = True
+    tui.exit_after_update = False
+    tui.gamepad = None
+    choices = iter((5, 1))
+    tui._menu = lambda *_args: next(choices)  # type: ignore[method-assign]
+    refresh_requests: list[bool] = []
+    monkeypatch.setattr(
+        "dw_cli.tui.request_emulationstation_refresh",
+        lambda: refresh_requests.append(True) or True,
+    )
+
+    tui.run()
+
+    assert refresh_requests == [True]
+
+
+def test_delete_defers_refresh_until_tui_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     platform = resolve_platform("GBA")
     assert platform is not None
     game_path = tmp_path / "gba" / "Advance Wars.zip"
     game = InstalledGame("Advance Wars", platform, tmp_path, game_path, (game_path,))
     tui = object.__new__(DownloaderTui)
-    tui.exit_after_refresh = False
+    tui.refresh_on_exit = False
     tui._menu = lambda _title, _options, _footer: 1  # type: ignore[method-assign]
     tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
     monkeypatch.setattr("dw_cli.tui.delete_game", lambda _game: None)
-    monkeypatch.setattr("dw_cli.tui.request_emulationstation_refresh", lambda: True)
+    refresh_requests: list[bool] = []
+    monkeypatch.setattr(
+        "dw_cli.tui.request_emulationstation_refresh",
+        lambda: refresh_requests.append(True) or True,
+    )
 
     assert tui._confirm_delete(game) is True
-    assert tui.exit_after_refresh is True
+    assert tui.refresh_on_exit is True
+    assert refresh_requests == []

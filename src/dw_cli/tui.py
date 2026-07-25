@@ -6,10 +6,12 @@ import locale
 import textwrap
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
+from dw_cli.bittorrent import BitTorrentSettings
 from dw_cli.compatibility import (
     CompatibilityInfo,
     R36SCompatibilityClient,
@@ -36,7 +38,6 @@ from dw_cli.organizer import (
 )
 from dw_cli.platforms import discover_platforms, resolve_platform
 from dw_cli.preferences import (
-    Preferences,
     PreferencesError,
     load_preferences,
     preference_path,
@@ -96,10 +97,11 @@ class DownloaderTui:
         self.store_catalog = StoreCatalog.from_config(config)
         self.preferences_path = preference_path(config.download_directory)
         preferences = load_preferences(self.preferences_path)
+        self.preferences = preferences
         self.selected_store = (
             self.store_catalog.find(preferences.store_id) if preferences.store_id else None
         )
-        self.exit_after_refresh = False
+        self.refresh_on_exit = False
         self.exit_after_update = False
         self.compatibility_client = R36SCompatibilityClient(
             config.download_directory / ".r36s-game-list-cache.json",
@@ -168,9 +170,11 @@ class DownloaderTui:
                     self._settings_screen()
                 elif choice == 4:
                     self._status_screen()
-                if self.exit_after_refresh or self.exit_after_update:
+                if self.exit_after_update:
                     return
         finally:
+            if self.refresh_on_exit:
+                request_emulationstation_refresh()
             if self.gamepad is not None:
                 self.gamepad.close()
 
@@ -271,8 +275,6 @@ class DownloaderTui:
             action = self._menu("TITLE DETAILS", [*details, "Download", "Back"], "Select Download")
             if action == len(details):
                 self._download_detail(result.link, effective_platform, store)
-                if self.exit_after_refresh:
-                    return
             elif action is None or action == len(details) + 1:
                 continue
 
@@ -331,22 +333,17 @@ class DownloaderTui:
             self._error(str(error))
             return
         final_path = completed[0].path
-        refresh_requested = request_emulationstation_refresh()
+        self.refresh_on_exit = True
         bios_message = (
             "\nInstalled %d bundled BIOS file(s)." % len(installed_bios) if installed_bios else ""
         )
-        refresh_message = (
-            "\nThe downloader will now close and refresh the game list."
-            if refresh_requested
-            else ""
-        )
         self._draw_message(
             "DOWNLOAD COMPLETE",
-            f"{final_path.name}\nMoved to {final_path.parent}{bios_message}{refresh_message}",
+            f"{final_path.name}\nMoved to {final_path.parent}{bios_message}"
+            "\nThe game list will refresh when you exit the downloader.",
             4,
             wait=True,
         )
-        self.exit_after_refresh = refresh_requested
 
     def _manage_library_flow(self) -> None:
         if not self.roms_directories:
@@ -374,8 +371,6 @@ class DownloaderTui:
             if platform_choice is None:
                 continue
             self._manage_platform_library(root, platforms[platform_choice])
-            if self.exit_after_refresh:
-                return
 
     def _manage_platform_library(self, root: Path, platform: Platform) -> None:
         self._draw_message(
@@ -396,8 +391,6 @@ class DownloaderTui:
             if game_choice is None:
                 return
             if self._manage_game(games[game_choice]):
-                if self.exit_after_refresh:
-                    return
                 self._draw_message(
                     "REFRESHING",
                     f"Refreshing {platform.name} only...",
@@ -438,14 +431,13 @@ class DownloaderTui:
         except LibraryError as error:
             self._error(str(error))
             return False
-        refresh_requested = request_emulationstation_refresh()
-        refresh_message = (
-            "\nThe downloader will now close and refresh the game list."
-            if refresh_requested
-            else ""
+        self.refresh_on_exit = True
+        self._draw_message(
+            "GAME DELETED",
+            game.title + "\nThe game list will refresh when you exit the downloader.",
+            4,
+            wait=True,
         )
-        self._draw_message("GAME DELETED", game.title + refresh_message, 4, wait=True)
-        self.exit_after_refresh = refresh_requested
         return True
 
     def _update_game(self, game: InstalledGame) -> bool:
@@ -506,12 +498,7 @@ class DownloaderTui:
         except (StoreError, DownloadError, LibraryError, OrganizeError) as error:
             self._error(str(error))
             return False
-        refresh_requested = request_emulationstation_refresh()
-        refresh_message = (
-            "\nThe downloader will now close and refresh the game list."
-            if refresh_requested
-            else ""
-        )
+        self.refresh_on_exit = True
         self._draw_message(
             "GAME UPDATED",
             "{}\nInstalled on {}{}".format(
@@ -521,11 +508,10 @@ class DownloaderTui:
                 if installed_bios
                 else "",
             )
-            + refresh_message,
+            + "\nThe game list will refresh when you exit the downloader.",
             4,
             wait=True,
         )
-        self.exit_after_refresh = refresh_requested
         return True
 
     def _choose_roms_directory(self) -> Path | None:
@@ -549,11 +535,14 @@ class DownloaderTui:
         store = self._choose_store(title)
         if store is None:
             return False
+        preferences = load_preferences(self.preferences_path)
+        updated_preferences = replace(preferences, store_id=store.store_id)
         try:
-            save_preferences(self.preferences_path, Preferences(store.store_id))
+            save_preferences(self.preferences_path, updated_preferences)
         except PreferencesError as error:
             self._error(str(error))
             return False
+        self.preferences = updated_preferences
         self.selected_store = store
         if not first_run:
             self._draw_message(
@@ -566,19 +555,108 @@ class DownloaderTui:
 
     def _settings_screen(self) -> None:
         current = self.selected_store.display_name if self.selected_store is not None else "not set"
-        choice = self._menu(
-            "SETTINGS",
+        options = [f"Change download store  [current: {current}]"]
+        actions = ["store"]
+        if self.selected_store is not None and self.selected_store.store_id == "minerva":
+            options.append("Minerva BitTorrent settings")
+            actions.append("minerva")
+        options.extend(
             (
-                f"Change download store  [current: {current}]",
                 f"Check for application update  [installed: v{installed_version()}]",
                 "Back",
-            ),
+            )
+        )
+        actions.extend(("update", "back"))
+        choice = self._menu(
+            "SETTINGS",
+            options,
             "Store settings and self-contained R36S updates",
         )
-        if choice == 0:
+        if choice is None:
+            return
+        action = actions[choice]
+        if action == "store":
             self._configure_store()
-        elif choice == 1:
+        elif action == "minerva":
+            self._minerva_bittorrent_settings_screen()
+        elif action == "update":
             self._application_update_flow()
+
+    def _minerva_bittorrent_settings_screen(self) -> None:
+        fields = (
+            ("UDP protocol ID", "udp_protocol_id"),
+            ("Block size (bytes)", "block_size"),
+            ("Max torrent metadata (bytes)", "max_torrent_bytes"),
+            ("Max tracker response (bytes)", "max_tracker_bytes"),
+            ("Max peer attempts", "max_peer_attempts"),
+            ("Peer race workers", "peer_race_workers"),
+            ("Max peer timeout (seconds)", "max_peer_timeout_seconds"),
+            ("Max tracker queries", "max_tracker_queries"),
+            ("Max discovered peers", "max_discovered_peers"),
+        )
+        while True:
+            settings = self.preferences.minerva_bittorrent
+            values = [
+                f"{label}  [{self._format_bittorrent_setting(field_name, settings)}]"
+                for label, field_name in fields
+            ]
+            choice = self._menu(
+                "MINERVA BITTORRENT SETTINGS",
+                (*values, "Reset all to defaults", "Back"),
+                "Advanced values are saved locally",
+            )
+            if choice is None or choice == len(fields) + 1:
+                return
+            if choice == len(fields):
+                confirmation = self._menu(
+                    "RESET MINERVA SETTINGS?",
+                    ("No - keep current values", "Yes - restore defaults"),
+                    "This changes all nine BitTorrent values",
+                )
+                if confirmation == 1:
+                    self._save_minerva_bittorrent_settings(BitTorrentSettings())
+                continue
+            label, field_name = fields[choice]
+            current = self._format_bittorrent_setting(field_name, settings)
+            raw_value = self._on_screen_keyboard(
+                label.upper(),
+                allow_lowercase=True,
+                empty_hint=f"Current: {current}",
+            )
+            if raw_value is None:
+                continue
+            try:
+                value: int | float
+                if field_name == "max_peer_timeout_seconds":
+                    value = float(raw_value)
+                else:
+                    value = int(raw_value, 0)
+                updated = replace(settings, **{field_name: value})
+            except (TypeError, ValueError) as error:
+                self._error(f"Invalid {label.lower()}: {error}")
+                continue
+            self._save_minerva_bittorrent_settings(updated)
+
+    def _save_minerva_bittorrent_settings(self, settings: BitTorrentSettings) -> bool:
+        updated = replace(self.preferences, minerva_bittorrent=settings)
+        try:
+            save_preferences(self.preferences_path, updated)
+        except PreferencesError as error:
+            self._error(str(error))
+            return False
+        self.preferences = updated
+        self._draw_message(
+            "MINERVA SETTINGS SAVED",
+            "The new values will be used by the next Minerva download.",
+            4,
+            wait=True,
+        )
+        return True
+
+    @staticmethod
+    def _format_bittorrent_setting(field_name: str, settings: BitTorrentSettings) -> str:
+        value = getattr(settings, field_name)
+        return hex(value) if field_name == "udp_protocol_id" else str(value)
 
     def _application_update_flow(self) -> None:
         install_directory = self.config.install_directory
@@ -743,6 +821,9 @@ class DownloaderTui:
                 progress_state[:] = [label, current, total]
 
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tui-download") as executor:
+            bittorrent_settings = (
+                self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
+            )
             future = executor.submit(
                 download_files,
                 downloads,
@@ -751,6 +832,7 @@ class DownloaderTui:
                 self.config.timeout_seconds,
                 report,
                 cancelled.is_set,
+                bittorrent_settings=bittorrent_settings,
             )
             while not future.done():
                 with state_lock:

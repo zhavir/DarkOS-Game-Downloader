@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from threading import Event
 from urllib.error import HTTPError, URLError
@@ -41,6 +42,39 @@ class BitTorrentError(RuntimeError):
 
 class BitTorrentCancelled(BitTorrentError):
     """The caller requested cancellation of a torrent transfer."""
+
+
+@dataclass(frozen=True, slots=True)
+class BitTorrentSettings:
+    """User-configurable limits for Minerva's native BitTorrent downloads."""
+
+    udp_protocol_id: int = _UDP_PROTOCOL_ID
+    block_size: int = _BLOCK_SIZE
+    max_torrent_bytes: int = _MAX_TORRENT_BYTES
+    max_tracker_bytes: int = _MAX_TRACKER_BYTES
+    max_peer_attempts: int = _MAX_PEER_ATTEMPTS
+    peer_race_workers: int = _PEER_RACE_WORKERS
+    max_peer_timeout_seconds: float = _MAX_PEER_TIMEOUT_SECONDS
+    max_tracker_queries: int = _MAX_TRACKER_QUERIES
+    max_discovered_peers: int = _MAX_DISCOVERED_PEERS
+
+    def __post_init__(self) -> None:
+        if not 0 < self.udp_protocol_id <= 0xFFFFFFFFFFFFFFFF:
+            raise ValueError("UDP protocol ID must be a positive 64-bit integer.")
+        positive_values = {
+            "Block size": self.block_size,
+            "Maximum torrent bytes": self.max_torrent_bytes,
+            "Maximum tracker bytes": self.max_tracker_bytes,
+            "Maximum peer attempts": self.max_peer_attempts,
+            "Peer race workers": self.peer_race_workers,
+            "Maximum tracker queries": self.max_tracker_queries,
+            "Maximum discovered peers": self.max_discovered_peers,
+        }
+        invalid = next((label for label, value in positive_values.items() if value <= 0), None)
+        if invalid is not None:
+            raise ValueError(f"{invalid} must be greater than zero.")
+        if not isfinite(self.max_peer_timeout_seconds) or self.max_peer_timeout_seconds <= 0:
+            raise ValueError("Maximum peer timeout must be a positive finite number.")
 
 
 class _BDecoder:
@@ -228,15 +262,17 @@ def download_torrent_file(
     timeout_seconds: float,
     progress: TorrentProgress | None = None,
     cancelled: CancelCallback | None = None,
+    settings: BitTorrentSettings | None = None,
 ) -> None:
     """Download and verify only one one-based file from a v1 multi-file torrent."""
 
+    effective_settings = settings or BitTorrentSettings()
     _raise_if_cancelled(cancelled)
     torrent_data = _read_url(
         torrent_url,
         referer,
         timeout_seconds,
-        _MAX_TORRENT_BYTES,
+        effective_settings.max_torrent_bytes,
     )
     _raise_if_cancelled(cancelled)
     metadata = parse_torrent(torrent_data)
@@ -252,7 +288,7 @@ def download_torrent_file(
         progress(0, selected.length)
 
     peer_id = b"-DW1000-" + secrets.token_bytes(12)
-    peers = discover_peers(metadata, peer_id, timeout_seconds, cancelled)
+    peers = discover_peers(metadata, peer_id, timeout_seconds, cancelled, effective_settings)
     start_piece = selected.offset // metadata.piece_length
     end_piece = (selected.offset + selected.length - 1) // metadata.piece_length
     piece_indices = tuple(range(start_piece, end_piece + 1))
@@ -271,6 +307,7 @@ def download_torrent_file(
             length,
             timeout_seconds,
             cancelled,
+            effective_settings,
         )
         return piece_index, data
 
@@ -311,19 +348,33 @@ def discover_peers(
     peer_id: bytes,
     timeout_seconds: float,
     cancelled: CancelCallback | None = None,
+    settings: BitTorrentSettings | None = None,
 ) -> tuple[PeerAddress, ...]:
     """Merge several tracker responses so one stale swarm view cannot block a download."""
 
+    effective_settings = settings or BitTorrentSettings()
     per_tracker_timeout = max(3.0, min(10.0, timeout_seconds / 3))
-    trackers = metadata.trackers[:_MAX_TRACKER_QUERIES]
+    trackers = metadata.trackers[: effective_settings.max_tracker_queries]
 
     def announce(tracker: str) -> tuple[PeerAddress, ...]:
         _raise_if_cancelled(cancelled)
         try:
             peers = (
-                _announce_udp(tracker, metadata, peer_id, per_tracker_timeout)
+                _announce_udp(
+                    tracker,
+                    metadata,
+                    peer_id,
+                    per_tracker_timeout,
+                    effective_settings,
+                )
                 if tracker.startswith("udp://")
-                else _announce_http(tracker, metadata, peer_id, per_tracker_timeout)
+                else _announce_http(
+                    tracker,
+                    metadata,
+                    peer_id,
+                    per_tracker_timeout,
+                    effective_settings,
+                )
             )
             _raise_if_cancelled(cancelled)
             return peers
@@ -348,7 +399,7 @@ def discover_peers(
             peer_id + f"{peer[0]}:{peer[1]}".encode(),
         ).digest()
     )
-    return tuple(peers[:_MAX_DISCOVERED_PEERS])
+    return tuple(peers[: effective_settings.max_discovered_peers])
 
 
 def _announce_http(
@@ -356,6 +407,7 @@ def _announce_http(
     metadata: TorrentMetadata,
     peer_id: bytes,
     timeout_seconds: float,
+    settings: BitTorrentSettings,
 ) -> tuple[PeerAddress, ...]:
     parameters = urlencode(
         {
@@ -374,7 +426,7 @@ def _announce_http(
         f"{tracker}{separator}{parameters}",
         "",
         timeout_seconds,
-        _MAX_TRACKER_BYTES,
+        settings.max_tracker_bytes,
     )
     payload = _as_dictionary(bdecode(response), "tracker response")
     failure = payload.get(b"failure reason")
@@ -388,6 +440,7 @@ def _announce_udp(
     metadata: TorrentMetadata,
     peer_id: bytes,
     timeout_seconds: float,
+    settings: BitTorrentSettings,
 ) -> tuple[PeerAddress, ...]:
     parsed = urlparse(tracker)
     if not parsed.hostname or not parsed.port:
@@ -402,7 +455,7 @@ def _announce_udp(
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
         client.settimeout(timeout_seconds)
         client.connect(address)
-        client.send(struct.pack(">QII", _UDP_PROTOCOL_ID, 0, transaction))
+        client.send(struct.pack(">QII", settings.udp_protocol_id, 0, transaction))
         response = client.recv(2048)
         if len(response) < 16:
             raise BitTorrentError("UDP tracker returned a short connect response.")
@@ -473,11 +526,13 @@ def _download_piece_from_peers(
     piece_length: int,
     timeout_seconds: float,
     cancelled: CancelCallback | None = None,
+    settings: BitTorrentSettings | None = None,
 ) -> bytes:
+    effective_settings = settings or BitTorrentSettings()
     start = int.from_bytes(peer_id[-4:], "big") + piece_index
-    attempts = min(_MAX_PEER_ATTEMPTS, len(peers))
+    attempts = min(effective_settings.max_peer_attempts, len(peers))
     candidates = tuple(peers[(start + attempt) % len(peers)] for attempt in range(attempts))
-    peer_timeout = max(3.0, min(_MAX_PEER_TIMEOUT_SECONDS, timeout_seconds))
+    peer_timeout = max(0.1, min(effective_settings.max_peer_timeout_seconds, timeout_seconds))
     completed = Event()
 
     def fetch(peer: PeerAddress) -> bytes | None:
@@ -494,6 +549,7 @@ def _download_piece_from_peers(
                 peer_timeout,
                 completed,
                 cancelled,
+                effective_settings,
             )
         except BitTorrentCancelled:
             raise
@@ -506,7 +562,7 @@ def _download_piece_from_peers(
         return None
 
     executor = ThreadPoolExecutor(
-        max_workers=min(_PEER_RACE_WORKERS, len(candidates)),
+        max_workers=min(effective_settings.peer_race_workers, len(candidates)),
         thread_name_prefix="torrent-peer",
     )
     futures = [executor.submit(fetch, peer) for peer in candidates]
@@ -535,7 +591,9 @@ def _download_piece(
     timeout_seconds: float,
     completed: Event | None = None,
     cancelled: CancelCallback | None = None,
+    settings: BitTorrentSettings | None = None,
 ) -> bytes:
+    effective_settings = settings or BitTorrentSettings()
     _raise_if_cancelled(cancelled)
     with socket.create_connection(peer, timeout=timeout_seconds) as connection:
         connection.settimeout(timeout_seconds)
@@ -552,7 +610,7 @@ def _download_piece(
             _raise_if_cancelled(cancelled)
             if completed is not None and completed.is_set():
                 raise BitTorrentError("Another peer completed the requested piece.")
-            message_id, payload = _read_peer_message(connection)
+            message_id, payload = _read_peer_message(connection, effective_settings.block_size)
             if message_id == 1:
                 unchoked = True
             elif message_id == 5:
@@ -569,8 +627,8 @@ def _download_piece(
                 raise BitTorrentError("Peer does not have the requested piece.")
 
         requests = [
-            (begin, min(_BLOCK_SIZE, piece_length - begin))
-            for begin in range(0, piece_length, _BLOCK_SIZE)
+            (begin, min(effective_settings.block_size, piece_length - begin))
+            for begin in range(0, piece_length, effective_settings.block_size)
         ]
         pending = iter(requests)
         received: dict[int, bytes] = {}
@@ -583,7 +641,7 @@ def _download_piece(
             _raise_if_cancelled(cancelled)
             if completed is not None and completed.is_set():
                 raise BitTorrentError("Another peer completed the requested piece.")
-            message_id, payload = _read_peer_message(connection)
+            message_id, payload = _read_peer_message(connection, effective_settings.block_size)
             if message_id == 0:
                 raise BitTorrentError("Peer choked the download.")
             if message_id != 7 or len(payload) < 8:
@@ -615,11 +673,14 @@ def _send_piece_request(
     connection.sendall(struct.pack(">IBIII", 13, 6, piece_index, begin, length))
 
 
-def _read_peer_message(connection: socket.socket) -> tuple[int | None, bytes]:
+def _read_peer_message(
+    connection: socket.socket,
+    block_size: int = _BLOCK_SIZE,
+) -> tuple[int | None, bytes]:
     length = struct.unpack(">I", _read_exact(connection, 4))[0]
     if length == 0:
         return None, b""
-    if length > _BLOCK_SIZE + 64:
+    if length > block_size + 64:
         raise BitTorrentError("Peer message is unexpectedly large.")
     message = _read_exact(connection, length)
     return message[0], message[1:]
