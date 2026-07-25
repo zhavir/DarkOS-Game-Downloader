@@ -94,7 +94,9 @@ the XML, JSON, and browsable HTML reports as a `coverage-*` Actions artifact. Af
 Release and every release artifact succeed, the release workflow dispatches the Pages workflow.
 It reuses that run's coverage artifact, publishes the latest `main` HTML report under `/coverage/`
 and its JSON summary at `/coverage.json`, then updates `badges/coverage.svg` on `gh-pages` through
-the Marketplace Coverage Badge action.
+the Marketplace Coverage Badge action. The initial repository checkout uses
+`persist-credentials: false` so its token cannot conflict with the badge action's authenticated
+`gh-pages` checkout.
 
 The generated `site/` directory is ignored. Documentation-only changes are published with the next
 successful semantic release rather than directly on every push to `main`.

@@ -44,9 +44,10 @@ alternate folder—such as `famicom`—when appropriate.
 
 ## Game-list refresh
 
-After an install, update, or deletion, the launcher requests an EmulationStation restart when the
-tool exits. A full device reboot is not required. If the image does not expose the service, use
-**Select → Update Games Lists** in EmulationStation.
+Installs, updates, and deletions queue a refresh without closing the TUI. When the user exits, the
+tool sends one refresh request and the launcher restarts EmulationStation. A full device reboot is
+not required. If the image does not expose the service, use **Select → Update Games Lists** in
+EmulationStation.
 
 ## Logs and removal
 

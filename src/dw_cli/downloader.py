@@ -10,7 +10,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
-from dw_cli.bittorrent import BitTorrentCancelled, BitTorrentError, download_torrent_file
+from dw_cli.bittorrent import (
+    BitTorrentCancelled,
+    BitTorrentError,
+    BitTorrentSettings,
+    download_torrent_file,
+)
 from dw_cli.models import DownloadResult, MediaDownload
 from dw_cli.store import USER_AGENT
 
@@ -47,6 +52,7 @@ def download_files(
     timeout_seconds: float = 30.0,
     progress: ProgressCallback | None = None,
     cancelled: CancelCallback | None = None,
+    bittorrent_settings: BitTorrentSettings | None = None,
 ) -> list[DownloadResult]:
     """Download direct URLs or selected torrent files without external tools."""
 
@@ -82,6 +88,7 @@ def download_files(
                 timeout_seconds,
                 partial(progress, download.expected_filename) if progress is not None else None,
                 cancelled,
+                bittorrent_settings,
             )
         except BitTorrentCancelled as error:
             raise DownloadCancelled("Download cancelled.") from error

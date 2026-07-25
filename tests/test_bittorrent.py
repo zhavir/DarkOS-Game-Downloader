@@ -75,6 +75,7 @@ def test_native_selective_download_verifies_pieces_and_extracts_only_file(
         piece_length: int,
         _timeout: float,
         _cancelled: object,
+        _settings: object,
     ) -> bytes:
         start = piece_index * metadata.piece_length
         return payload[start : start + piece_length]
@@ -134,6 +135,7 @@ def test_peer_attempts_are_bounded_and_raced(monkeypatch: pytest.MonkeyPatch) ->
         _timeout_seconds: float,
         _completed: object,
         _cancelled: object,
+        _settings: object,
     ) -> bytes:
         nonlocal active, maximum_active
         attempts.append(peer)
