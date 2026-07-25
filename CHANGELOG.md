@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-07-25)
+
+### Features
+
+- Add bios downloader
+  ([`a487771`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/a4877711af343edc9254e19deb2626ee474cdd83))
+
+
 ## v1.5.1 (2026-07-25)
 
 ### Bug Fixes
