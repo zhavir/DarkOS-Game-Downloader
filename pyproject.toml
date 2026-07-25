@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.11.32,<0.12" ]
 
 [project]
 name = "darkos-downloader"
-version = "1.1.0"
+version = "1.2.0"
 description = "Controller-friendly dArkOS R36S game library manager"
 readme = "README.md"
 license = "MIT"
