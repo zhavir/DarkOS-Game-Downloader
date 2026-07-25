@@ -296,52 +296,61 @@ class DownloaderTui:
             platform for platform in self.platforms if store.supports_platform(platform)
         )
         labels = [f"{item.name}  [{item.alias}]" for item in platforms]
-        choice = self._menu("CHOOSE A PLATFORM", labels, "B/Esc: back")
-        if choice is None:
-            return
-        platform = platforms[choice]
-        query = self._on_screen_keyboard(
-            f"SEARCH {platform.alias}",
-            empty_hint="DONE with no text: list all games",
-        )
-        if query is None:
-            return
-        description = (
-            f"Looking for {query}..." if query else f"Loading all {platform.name} games..."
-        )
-        self._draw_message("SEARCHING", description, 1)
-        try:
-            LOGGER.info(
-                "Searching store=%s platform=%s query=%r", store.store_id, platform.alias, query
+        while True:
+            choice = self._menu("CHOOSE A PLATFORM", labels, "B/Esc: back")
+            if choice is None:
+                return
+            self._search_platform_flow(store, platforms[choice])
+
+    def _search_platform_flow(self, store: GameStore, platform: Platform) -> None:
+        """Keep search navigation within one platform until the user goes back one level."""
+
+        while True:
+            query = self._on_screen_keyboard(
+                f"SEARCH {platform.alias}",
+                empty_hint="DONE with no text: list all games",
             )
-            results = store.search(store.platform_code(platform), query, self._catalog_progress)
-        except StoreError as error:
-            LOGGER.warning("Search failed: %s", error)
-            self._error(str(error))
-            return
-        results = filter_supported_results(results)
-        if not results:
-            message = f"Nothing matched {query}." if query else "The catalogue is empty."
-            self._draw_message("NO RESULTS", message, 3, wait=True)
-            return
-        self._draw_message(
-            "CHECKING R36S SUPPORT",
-            "Matching results against the cached R36S game list...",
-            1,
-        )
-        compatibility = self.compatibility_client.lookup_many(results, platform)
-        supported_pairs = [
-            (result, info)
-            for result, info in zip(results, compatibility, strict=True)
-            if info.level != "Unsupported"
-        ]
-        self._results_flow(
-            [result for result, _info in supported_pairs],
-            platform,
-            [info for _result, info in supported_pairs],
-            store,
-        )
-        LOGGER.info("Search produced %d supported result(s)", len(supported_pairs))
+            if query is None:
+                return
+            description = (
+                f"Looking for {query}..." if query else f"Loading all {platform.name} games..."
+            )
+            self._draw_message("SEARCHING", description, 1)
+            try:
+                LOGGER.info(
+                    "Searching store=%s platform=%s query=%r",
+                    store.store_id,
+                    platform.alias,
+                    query,
+                )
+                results = store.search(store.platform_code(platform), query, self._catalog_progress)
+            except StoreError as error:
+                LOGGER.warning("Search failed: %s", error)
+                self._error(str(error))
+                continue
+            results = filter_supported_results(results)
+            if not results:
+                message = f"Nothing matched {query}." if query else "The catalogue is empty."
+                self._draw_message("NO RESULTS", message, 3, wait=True)
+                continue
+            self._draw_message(
+                "CHECKING R36S SUPPORT",
+                "Matching results against the cached R36S game list...",
+                1,
+            )
+            compatibility = self.compatibility_client.lookup_many(results, platform)
+            supported_pairs = [
+                (result, info)
+                for result, info in zip(results, compatibility, strict=True)
+                if info.level != "Unsupported"
+            ]
+            self._results_flow(
+                [result for result, _info in supported_pairs],
+                platform,
+                [info for _result, info in supported_pairs],
+                store,
+            )
+            LOGGER.info("Search produced %d supported result(s)", len(supported_pairs))
 
     def _catalog_progress(self, current: int, total: int) -> None:
         percent = int(current * 100 / total)
@@ -700,66 +709,71 @@ class DownloaderTui:
         return True
 
     def _settings_screen(self) -> None:
-        current = self.selected_store.display_name if self.selected_store is not None else "not set"
-        retrobios_status = self._retrobios_cache_label()
-        compatibility_status = self._compatibility_cache_label()
-        game_catalogue_count = sum(
-            store.catalogue_cache_file_count() for store in self.store_catalog.stores
-        )
-        options = [
-            f"Change download store  [current: {current}]",
-            f"Refresh store game catalogue  [{game_catalogue_count} cached]",
-            f"Update RetroBIOS catalogue  [{retrobios_status}]",
-            f"Update R36S Game List  [{compatibility_status}]",
-            f"Catalogue cache lifetime  [{self.preferences.catalogue_ttl_days} days]",
-            f"Application log level  [{self.preferences.log_level or self.config.log_level}]",
-            f"Write logs to file  [{'on' if self._file_logging_enabled() else 'off'}]",
-        ]
-        actions = [
-            "store",
-            "store_catalogue",
-            "retrobios_update",
-            "compatibility_update",
-            "catalogue_ttl",
-            "log_level",
-            "log_file",
-        ]
-        if self.selected_store is not None and self.selected_store.store_id == "minerva":
-            options.append("Minerva BitTorrent settings")
-            actions.append("minerva")
-        options.extend(
-            (
-                f"Check for application update  [installed: v{installed_version()}]",
-                "Back",
+        while True:
+            current = (
+                self.selected_store.display_name if self.selected_store is not None else "not set"
             )
-        )
-        actions.extend(("update", "back"))
-        choice = self._menu(
-            "SETTINGS",
-            options,
-            "Store settings and self-contained R36S updates",
-        )
-        if choice is None:
-            return
-        action = actions[choice]
-        if action == "store":
-            self._configure_store()
-        elif action == "store_catalogue":
-            self._refresh_store_catalogue()
-        elif action == "retrobios_update":
-            self._update_retrobios_catalogue()
-        elif action == "compatibility_update":
-            self._update_compatibility_catalogue()
-        elif action == "catalogue_ttl":
-            self._configure_catalogue_ttl()
-        elif action == "log_level":
-            self._configure_log_level()
-        elif action == "log_file":
-            self._configure_file_logging()
-        elif action == "minerva":
-            self._minerva_bittorrent_settings_screen()
-        elif action == "update":
-            self._application_update_flow()
+            retrobios_status = self._retrobios_cache_label()
+            compatibility_status = self._compatibility_cache_label()
+            game_catalogue_count = sum(
+                store.catalogue_cache_file_count() for store in self.store_catalog.stores
+            )
+            options = [
+                f"Change download store  [current: {current}]",
+                f"Refresh store game catalogue  [{game_catalogue_count} cached]",
+                f"Update RetroBIOS catalogue  [{retrobios_status}]",
+                f"Update R36S Game List  [{compatibility_status}]",
+                f"Catalogue cache lifetime  [{self.preferences.catalogue_ttl_days} days]",
+                f"Application log level  [{self.preferences.log_level or self.config.log_level}]",
+                f"Write logs to file  [{'on' if self._file_logging_enabled() else 'off'}]",
+            ]
+            actions = [
+                "store",
+                "store_catalogue",
+                "retrobios_update",
+                "compatibility_update",
+                "catalogue_ttl",
+                "log_level",
+                "log_file",
+            ]
+            if self.selected_store is not None and self.selected_store.store_id == "minerva":
+                options.append("Minerva BitTorrent settings")
+                actions.append("minerva")
+            options.extend(
+                (
+                    f"Check for application update  [installed: v{installed_version()}]",
+                    "Back",
+                )
+            )
+            actions.extend(("update", "back"))
+            choice = self._menu(
+                "SETTINGS",
+                options,
+                "Store settings and self-contained R36S updates",
+            )
+            if choice is None or actions[choice] == "back":
+                return
+            action = actions[choice]
+            if action == "store":
+                self._configure_store()
+            elif action == "store_catalogue":
+                self._refresh_store_catalogue()
+            elif action == "retrobios_update":
+                self._update_retrobios_catalogue()
+            elif action == "compatibility_update":
+                self._update_compatibility_catalogue()
+            elif action == "catalogue_ttl":
+                self._configure_catalogue_ttl()
+            elif action == "log_level":
+                self._configure_log_level()
+            elif action == "log_file":
+                self._configure_file_logging()
+            elif action == "minerva":
+                self._minerva_bittorrent_settings_screen()
+            elif action == "update":
+                self._application_update_flow()
+            if self.exit_after_update:
+                return
 
     def _configure_catalogue_ttl(self) -> None:
         raw_value = self._on_screen_keyboard(
@@ -853,54 +867,56 @@ class DownloaderTui:
 
     def _refresh_store_catalogue(self) -> None:
         stores = self.store_catalog.stores
-        store_choice = self._menu(
-            "CHOOSE STORE CATALOGUE",
-            [
-                f"{store.display_name}  [{store.catalogue_cache_file_count()} cached]"
-                for store in stores
-            ],
-            "Select a store; B/Escape returns",
-        )
-        if store_choice is None:
-            return
-        store = stores[store_choice]
-        choices: list[tuple[Platform, str, StoreCacheStatus | None]] = []
-        seen_codes: set[str] = set()
-        for platform in self.platforms:
-            if not store.supports_platform(platform):
+        while True:
+            store_choice = self._menu(
+                "CHOOSE STORE CATALOGUE",
+                [
+                    f"{store.display_name}  [{store.catalogue_cache_file_count()} cached]"
+                    for store in stores
+                ],
+                "Select a store; B/Escape returns",
+            )
+            if store_choice is None:
+                return
+            store = stores[store_choice]
+            choices: list[tuple[Platform, str, StoreCacheStatus | None]] = []
+            seen_codes: set[str] = set()
+            for platform in self.platforms:
+                if not store.supports_platform(platform):
+                    continue
+                system_code = store.platform_code(platform)
+                if system_code in seen_codes:
+                    continue
+                seen_codes.add(system_code)
+                choices.append((platform, system_code, store.catalogue_cache_status(system_code)))
+            platform_choice = self._menu(
+                f"REFRESH {store.display_name.upper()}",
+                [
+                    f"{platform.name}  [{self._store_cache_status_label(status)}]"
+                    for platform, _system_code, status in choices
+                ],
+                "This replaces the selected cache even before its configured lifetime expires",
+            )
+            if platform_choice is None:
                 continue
-            system_code = store.platform_code(platform)
-            if system_code in seen_codes:
-                continue
-            seen_codes.add(system_code)
-            choices.append((platform, system_code, store.catalogue_cache_status(system_code)))
-        platform_choice = self._menu(
-            f"REFRESH {store.display_name.upper()}",
-            [
-                f"{platform.name}  [{self._store_cache_status_label(status)}]"
-                for platform, _system_code, status in choices
-            ],
-            "This replaces the selected cache even before its configured lifetime expires",
-        )
-        if platform_choice is None:
+            platform, system_code, _status = choices[platform_choice]
+            self._draw_message(
+                "REFRESHING GAME CATALOGUE",
+                f"Downloading the complete {store.display_name} catalogue for {platform.name}...",
+                1,
+            )
+            try:
+                results = store.refresh_catalogue(system_code, self._catalog_progress)
+            except (CatalogueCacheError, StoreError) as error:
+                self._error(str(error))
+                return
+            self._draw_message(
+                "GAME CATALOGUE UPDATED",
+                f"Cached {len(results)} {store.display_name} result(s) for {platform.name}.",
+                4,
+                wait=True,
+            )
             return
-        platform, system_code, _status = choices[platform_choice]
-        self._draw_message(
-            "REFRESHING GAME CATALOGUE",
-            f"Downloading the complete {store.display_name} catalogue for {platform.name}...",
-            1,
-        )
-        try:
-            results = store.refresh_catalogue(system_code, self._catalog_progress)
-        except (CatalogueCacheError, StoreError) as error:
-            self._error(str(error))
-            return
-        self._draw_message(
-            "GAME CATALOGUE UPDATED",
-            f"Cached {len(results)} {store.display_name} result(s) for {platform.name}.",
-            4,
-            wait=True,
-        )
 
     @staticmethod
     def _store_cache_status_label(status: StoreCacheStatus | None) -> str:

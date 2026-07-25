@@ -291,26 +291,32 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
     instance.selected_store = store
     instance._search_flow()
 
-    mocker.patch.object(instance, "_menu", new=lambda *_args: 0)
-    mocker.patch.object(instance, "_on_screen_keyboard", new=lambda *_args, **_kwargs: None)
+    menu_choices = iter((0, None))
+    menu_titles: list[str] = []
+
+    def layered_menu(title: str, *_args: object) -> int | None:
+        menu_titles.append(title)
+        return next(menu_choices)
+
+    mocker.patch.object(instance, "_menu", new=layered_menu)
+    keyboard = mocker.patch.object(instance, "_on_screen_keyboard", return_value=None)
     instance._search_flow()
+    assert menu_titles == ["CHOOSE A PLATFORM", "CHOOSE A PLATFORM"]
     messages: list[tuple[Any, ...]] = []
     mocker.patch.object(
         instance, "_draw_message", new=lambda *args, **_kwargs: messages.append(args)
     )
     errors: list[str] = []
     mocker.patch.object(instance, "_error", new=errors.append)
-    mocker.patch.object(instance, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "game")
-    mocker.patch.object(
-        store, "search", new=lambda *_args: (_ for _ in ()).throw(StoreError("offline"))
-    )
-    instance._search_flow()
+    search = mocker.patch.object(store, "search", side_effect=StoreError("offline"))
+    keyboard.side_effect = iter(("game", None))
+    instance._search_platform_flow(store, platform)
     assert errors == ["offline"]
 
-    mocker.patch.object(store, "search", new=lambda *_args: [])
-    instance._search_flow()
-    mocker.patch.object(instance, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "")
-    instance._search_flow()
+    search.side_effect = None
+    search.return_value = []
+    keyboard.side_effect = iter(("game", "", None))
+    instance._search_platform_flow(store, platform)
     assert any("Nothing matched" in args[1] for args in messages)
     assert any("catalogue is empty" in args[1] for args in messages)
 
@@ -318,14 +324,15 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
         SearchResult("Good", "good"),
         SearchResult("Bad", "bad", system="PS2"),
     ]
-    mocker.patch.object(store, "search", new=lambda *_args: results)
+    search.return_value = results
     instance.compatibility_client = mocker.Mock()
     instance.compatibility_client.lookup_many.return_value = [
         CompatibilityInfo("Perfect", True),
     ]
     received: list[tuple[Any, ...]] = []
     mocker.patch.object(instance, "_results_flow", new=lambda *args: received.append(args))
-    instance._search_flow()
+    keyboard.side_effect = iter(("game", None))
+    instance._search_platform_flow(store, platform)
     assert [item.title for item in received[0][0]] == ["Good"]
 
 
@@ -673,7 +680,12 @@ def test_settings_and_minerva_settings_actions(
         new=lambda: actions.append("log_file"),
     )
     for choice in (None, *range(10)):
-        mocker.patch.object(instance, "_menu", new=lambda *_args, value=choice: value)
+        menu_choices = iter((choice,) if choice in (None, 9) else (choice, None))
+        mocker.patch.object(
+            instance,
+            "_menu",
+            new=lambda *_args, values=menu_choices: next(values),
+        )
         instance._settings_screen()
     assert actions == [
         "store",
@@ -703,6 +715,26 @@ def test_settings_and_minerva_settings_actions(
     mocker.patch.object(instance, "_error", new=errors.append)
     DownloaderTui._minerva_bittorrent_settings_screen(instance)
     assert errors and saved[-1].max_peer_timeout_seconds == 2.5
+
+
+def test_settings_submenu_back_returns_to_settings_before_main_menu(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.selected_store = FakeStore()
+    choices = iter((5, None))
+    titles: list[str] = []
+
+    def menu(title: str, *_args: object) -> int | None:
+        titles.append(title)
+        return next(choices)
+
+    mocker.patch.object(instance, "_menu", new=menu)
+    mocker.patch.object(instance, "_configure_log_level")
+
+    instance._settings_screen()
+
+    assert titles == ["SETTINGS", "SETTINGS"]
 
 
 def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
@@ -834,6 +866,27 @@ def test_store_catalogue_refresh_can_cancel_or_report_failure(
     mocker.patch.object(instance, "_error", new=errors.append)
     instance._refresh_store_catalogue()
     assert errors == ["offline"]
+
+
+def test_store_catalogue_back_returns_from_platform_to_store_picker(
+    mocker: MockerFixture,
+) -> None:
+    gba = resolve_platform("GBA")
+    assert gba is not None
+    instance = bare_tui()
+    instance.platforms = (gba,)
+    instance.store_catalog = StoreCatalog((FakeStore(),))
+    choices = iter((0, None, None))
+    titles: list[str] = []
+
+    def menu(title: str, *_args: object) -> int | None:
+        titles.append(title)
+        return next(choices)
+
+    mocker.patch.object(instance, "_menu", new=menu)
+    instance._refresh_store_catalogue()
+
+    assert titles == ["CHOOSE STORE CATALOGUE", "REFRESH FAKE STORE", "CHOOSE STORE CATALOGUE"]
 
 
 def test_save_minerva_settings_handles_error_and_formats_values(

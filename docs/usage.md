@@ -8,13 +8,16 @@
 | D-pad/stick left | Back (B) |
 | D-pad/stick right | Select (A) |
 | A | Select |
-| B or Select | Back |
+| B or Select | Go back one screen |
 | L1 / R1 | Previous / next page |
 | X | Submit the on-screen keyboard search, including empty text |
 | Y | Delete the last character on the on-screen keyboard |
 | Start | Select in ordinary menus; ignored by the on-screen keyboard |
 
 Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace, and normal typing.
+Back navigation is layered: results return to the search keyboard, the keyboard returns to the
+platform picker, and the platform picker returns to the main menu. Settings submenus return to
+Settings before Settings returns to the main menu.
 
 The on-screen keyboard has four fixed rows of equally sized character keys and one action row. Use
 `aA` for upper/lowercase, `#+=` for punctuation and symbols, and `ÁÉ` for accented characters.

@@ -112,9 +112,10 @@ def test_search_flow_uses_persisted_store_without_prompt(mocker: MockerFixture) 
     tui.store_catalog = StoreCatalog((store,))
     tui.selected_store = store
     tui.platforms = (platform,)
-    choices = iter((0,))
+    choices = iter((0, None))
     mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: next(choices))
-    mocker.patch.object(tui, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "ADV")
+    queries = iter(("ADV", None))
+    mocker.patch.object(tui, "_on_screen_keyboard", new=lambda *_args, **_kwargs: next(queries))
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
     tui.compatibility_client = SimpleNamespace(
         lookup_many=lambda _results, _platform: [CompatibilityInfo("Perfect", True)]

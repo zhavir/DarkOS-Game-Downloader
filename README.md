@@ -63,7 +63,7 @@ preferred store, Minerva settings, and cached data.
 | D-pad or stick left | Back |
 | D-pad or stick right | Select |
 | A | Select |
-| B or Select | Back or cancel an active download |
+| B or Select | Go back one screen, or cancel an active download |
 | L1 / R1 | Previous / next page |
 | X | Submit the on-screen keyboard, including an empty search |
 | Y | Delete the last character |
