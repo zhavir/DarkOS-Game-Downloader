@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-07-25)
+
+### Features
+
+- Refactoring code, tests and docs
+  ([`0b7723f`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/0b7723f432cf58727b5f210163729d171dea4c65))
+
+
 ## v1.4.1 (2026-07-25)
 
 ### Bug Fixes
