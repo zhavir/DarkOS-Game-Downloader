@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-07-25)
+
+### Bug Fixes
+
+- Update docs to push for a new release
+  ([`5ae00a0`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/5ae00a075678933dc8259354e5c8c2b1f244f40b))
+
+
 ## v1.4.0 (2026-07-25)
 
 ### Bug Fixes
