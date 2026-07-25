@@ -176,6 +176,7 @@ mkdir -p "$APP_DIR/.downloads"
 export DW_DOWNLOAD_DIR="${DW_DOWNLOAD_DIR:-$APP_DIR/.downloads}"
 export DW_INSTALL_DIR="$APP_DIR"
 export DW_ES_REFRESH_FILE="$REFRESH_FILE"
+export DW_LOG_FILE="$LOG_FILE"
 export TERM="${TERM:-xterm-256color}"
 if [ -f "$CA_BUNDLE" ]; then
     export SSL_CERT_FILE="$CA_BUNDLE"

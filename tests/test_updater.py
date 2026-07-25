@@ -10,6 +10,7 @@ from types import TracebackType
 from urllib.request import Request
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.updater import (
     PENDING_UPDATE_DIRECTORY,
@@ -41,7 +42,7 @@ class FakeResponse(io.BytesIO):
         self.close()
 
 
-def test_find_update_selects_exact_r36s_release_asset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_find_update_selects_exact_r36s_release_asset(mocker: MockerFixture) -> None:
     payload = json.dumps(
         {
             "tag_name": "v1.2.0",
@@ -54,7 +55,7 @@ def test_find_update_selects_exact_r36s_release_asset(monkeypatch: pytest.Monkey
             ],
         }
     ).encode()
-    monkeypatch.setattr("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
+    mocker.patch("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
     release = find_update("1.0.1", "https://api.example.test/releases/latest")
 
@@ -68,19 +69,19 @@ def test_find_update_selects_exact_r36s_release_asset(monkeypatch: pytest.Monkey
 
 
 def test_find_update_returns_none_for_same_or_older_release(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     payload = json.dumps({"tag_name": "v1.0.1", "assets": []}).encode()
-    monkeypatch.setattr("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
+    mocker.patch("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
     assert find_update("1.0.1", "https://api.example.test/releases/latest") is None
 
 
 def test_find_update_requires_the_versioned_device_bundle(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     payload = json.dumps({"tag_name": "v2.0.0", "assets": []}).encode()
-    monkeypatch.setattr("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
+    mocker.patch("dw_cli.updater.urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
     with pytest.raises(UpdateError, match=r"r36s-arm64\.zip"):
         find_update("1.0.1", "https://api.example.test/releases/latest")
@@ -88,7 +89,7 @@ def test_find_update_requires_the_versioned_device_bundle(
 
 def test_stage_update_validates_bundle_and_leaves_current_install_untouched(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     install_directory = tmp_path / "tools" / "darkos-downloader"
     install_directory.mkdir(parents=True)
@@ -101,7 +102,7 @@ def test_stage_update_validates_bundle_and_leaves_current_install_untouched(
         requested.append(request.full_url)
         return FakeResponse(archive)
 
-    monkeypatch.setattr("dw_cli.updater.urlopen", fake_urlopen)
+    mocker.patch("dw_cli.updater.urlopen", fake_urlopen)
     release = ReleaseUpdate(
         "1.2.0",
         "v1.2.0",
@@ -125,7 +126,7 @@ def test_stage_update_validates_bundle_and_leaves_current_install_untouched(
 
 def test_stage_update_rejects_path_traversal_and_removes_partial_state(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     install_directory = tmp_path / "tools" / "darkos-downloader"
     install_directory.mkdir(parents=True)
@@ -133,7 +134,7 @@ def test_stage_update_rejects_path_traversal_and_removes_partial_state(
     archive_buffer = io.BytesIO()
     with zipfile.ZipFile(archive_buffer, "w") as archive:
         archive.writestr("tools/../escaped", b"unsafe")
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.updater.urlopen",
         lambda *_args, **_kwargs: FakeResponse(archive_buffer.getvalue()),
     )

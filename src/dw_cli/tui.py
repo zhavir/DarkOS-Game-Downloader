@@ -3,6 +3,7 @@
 import contextlib
 import curses
 import locale
+import logging
 import textwrap
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -55,6 +56,8 @@ from dw_cli.updater import (
 )
 
 type Window = Any
+
+LOGGER = logging.getLogger(__name__)
 
 GAMEPAD_START_KEY = 0x110000
 GAMEPAD_SEARCH_KEY = 0x110001
@@ -111,6 +114,14 @@ class DownloaderTui:
         self.platforms = discover_platforms(self.roms_directories)
         self.hardware = detect_hardware_profile()
         self.gamepad = LinuxJoystick.open_first()
+        LOGGER.debug(
+            "Runtime detected model=%r display=%s roms=%s platforms=%d gamepad=%s",
+            self.hardware.model,
+            self.hardware.display_resolution,
+            self.roms_directories,
+            len(self.platforms),
+            self.gamepad.path if self.gamepad is not None else "not detected",
+        )
         self._setup_screen()
 
     def _setup_screen(self) -> None:
@@ -133,6 +144,7 @@ class DownloaderTui:
                 curses.init_pair(5, curses.COLOR_RED, -1)
 
     def run(self) -> None:
+        LOGGER.info("TUI session started")
         try:
             if not self.store_catalog.stores:
                 self._error("No download stores are enabled. Check DW_STORES.")
@@ -174,9 +186,11 @@ class DownloaderTui:
                     return
         finally:
             if self.refresh_on_exit:
+                LOGGER.info("Requesting EmulationStation refresh on TUI exit")
                 request_emulationstation_refresh()
             if self.gamepad is not None:
                 self.gamepad.close()
+            LOGGER.info("TUI session finished")
 
     def _search_flow(self) -> None:
         store = self.selected_store
@@ -201,8 +215,12 @@ class DownloaderTui:
         )
         self._draw_message("SEARCHING", description, 1)
         try:
+            LOGGER.info(
+                "Searching store=%s platform=%s query=%r", store.store_id, platform.alias, query
+            )
             results = store.search(store.platform_code(platform), query, self._catalog_progress)
         except StoreError as error:
+            LOGGER.warning("Search failed: %s", error)
             self._error(str(error))
             return
         results = filter_supported_results(results)
@@ -227,6 +245,7 @@ class DownloaderTui:
             [info for _result, info in supported_pairs],
             store,
         )
+        LOGGER.info("Search produced %d supported result(s)", len(supported_pairs))
 
     def _catalog_progress(self, current: int, total: int) -> None:
         percent = int(current * 100 / total)
@@ -327,13 +346,16 @@ class DownloaderTui:
                 installed_bios.append,
             )
         except DownloadCancelled:
+            LOGGER.info("Game download cancelled")
             self._draw_message("DOWNLOAD CANCELLED", "No game was installed.", 3)
             return
         except (StoreError, DownloadError, OrganizeError) as error:
+            LOGGER.error("Game download failed: %s", error)
             self._error(str(error))
             return
         final_path = completed[0].path
         self.refresh_on_exit = True
+        LOGGER.info("Game installed path=%s bios_files=%d", final_path, len(installed_bios))
         bios_message = (
             "\nInstalled %d bundled BIOS file(s)." % len(installed_bios) if installed_bios else ""
         )
@@ -429,9 +451,11 @@ class DownloaderTui:
         try:
             delete_game(game)
         except LibraryError as error:
+            LOGGER.error("Could not delete game title=%r: %s", game.title, error)
             self._error(str(error))
             return False
         self.refresh_on_exit = True
+        LOGGER.info("Deleted game title=%r files=%d", game.title, len(game.files))
         self._draw_message(
             "GAME DELETED",
             game.title + "\nThe game list will refresh when you exit the downloader.",
@@ -493,12 +517,15 @@ class DownloaderTui:
             )
             completed = replace_game(game, downloads[0])
         except DownloadCancelled:
+            LOGGER.info("Game update cancelled title=%r", game.title)
             self._draw_message("UPDATE CANCELLED", "The installed game was not changed.", 3)
             return False
         except (StoreError, DownloadError, LibraryError, OrganizeError) as error:
+            LOGGER.error("Game update failed title=%r: %s", game.title, error)
             self._error(str(error))
             return False
         self.refresh_on_exit = True
+        LOGGER.info("Game updated title=%r path=%s", game.title, completed.path)
         self._draw_message(
             "GAME UPDATED",
             "{}\nInstalled on {}{}".format(
@@ -544,6 +571,7 @@ class DownloaderTui:
             return False
         self.preferences = updated_preferences
         self.selected_store = store
+        LOGGER.info("Default store changed to %s", store.store_id)
         if not first_run:
             self._draw_message(
                 "SETTINGS SAVED",
@@ -645,6 +673,7 @@ class DownloaderTui:
             self._error(str(error))
             return False
         self.preferences = updated
+        LOGGER.info("Minerva BitTorrent settings saved")
         self._draw_message(
             "MINERVA SETTINGS SAVED",
             "The new values will be used by the next Minerva download.",
@@ -699,6 +728,7 @@ class DownloaderTui:
         try:
             self._stage_application_update(release, install_directory)
         except UpdateCancelled:
+            LOGGER.info("Application update cancelled")
             self._draw_message(
                 "UPDATE CANCELLED",
                 "The installed application was not changed.",
@@ -707,6 +737,7 @@ class DownloaderTui:
             )
             return
         except UpdateError as error:
+            LOGGER.error("Application update failed: %s", error)
             self._error(str(error))
             return
         self._draw_message(
@@ -717,6 +748,7 @@ class DownloaderTui:
             wait=True,
         )
         self.exit_after_update = True
+        LOGGER.info("Application update staged; closing TUI")
 
     def _stage_application_update(
         self,

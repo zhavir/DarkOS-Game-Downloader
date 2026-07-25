@@ -1,5 +1,6 @@
 """Native HTTP and selective BitTorrent download engine."""
 
+import logging
 import os
 import re
 import ssl
@@ -18,6 +19,8 @@ from dw_cli.bittorrent import (
 )
 from dw_cli.models import DownloadResult, MediaDownload
 from dw_cli.store import USER_AGENT
+
+LOGGER = logging.getLogger(__name__)
 
 type ProgressCallback = Callable[[str, int, int | None], None]
 type CancelCallback = Callable[[], bool]
@@ -57,13 +60,16 @@ def download_files(
     """Download direct URLs or selected torrent files without external tools."""
 
     if not downloads:
+        LOGGER.warning("Download requested with an empty media list")
         raise DownloadError("The download list is empty.")
+    LOGGER.info("Downloading %d media item(s) into %s", len(downloads), directory)
     directory.mkdir(parents=True, exist_ok=True)
     resolved = [_as_media_download(download) for download in downloads]
     results: list[DownloadResult] = []
     for download in resolved:
         _raise_if_cancelled(cancelled)
         if download.torrent_file_index is None:
+            LOGGER.debug("Starting direct media download")
             results.extend(
                 _download_with_urllib(
                     [download.url],
@@ -78,6 +84,11 @@ def download_files(
         if not download.expected_filename:
             raise DownloadError("The torrent download is missing its expected filename.")
         destination = _unique_download_path(directory / download.expected_filename)
+        LOGGER.debug(
+            "Starting torrent media download file=%r index=%d",
+            download.expected_filename,
+            download.torrent_file_index,
+        )
         try:
             download_torrent_file(
                 download.url,
@@ -91,10 +102,13 @@ def download_files(
                 bittorrent_settings,
             )
         except BitTorrentCancelled as error:
+            LOGGER.info("Torrent download cancelled")
             raise DownloadCancelled("Download cancelled.") from error
         except BitTorrentError as error:
+            LOGGER.error("Torrent download failed: %s", error)
             raise DownloadError(str(error)) from error
         results.append(DownloadResult(download.url, destination))
+    LOGGER.info("Completed %d media download(s)", len(results))
     return results
 
 
@@ -145,9 +159,11 @@ def _download_with_urllib(
                     raise
                 results.append(DownloadResult(url=url, path=destination))
         except HTTPError as error:
+            LOGGER.error("HTTP download returned status=%d", error.code)
             raise DownloadError("Download returned HTTP %d." % error.code) from error
         except (URLError, TimeoutError, OSError) as error:
             reason = getattr(error, "reason", error)
+            LOGGER.error("HTTP download failed: %s", reason)
             raise DownloadError(f"Download failed: {reason}") from error
     return results
 

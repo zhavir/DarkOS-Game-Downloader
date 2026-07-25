@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.bittorrent import parse_torrent
 from dw_cli.config import DEFAULT_MINERVA_BASE_URL, DEFAULT_MINERVA_TORRENT_BASE_URL
@@ -39,7 +40,7 @@ def _torrent_request(client: MinervaStore, url: str) -> Request:
 @pytest.mark.live
 def test_real_minerva_search_catalogue_all_platform_and_resolution(
     live_minerva: MinervaStore,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     """Exercise Minerva's official browse pages and torrent endpoint without ROM data."""
 
@@ -54,7 +55,7 @@ def test_real_minerva_search_catalogue_all_platform_and_resolution(
     # The production all-platform search covers every directory. Two real directories are enough
     # to verify aggregation and filtering here without downloading tens of megabytes from Minerva
     # on every CI run and provoking its shared-IP connection protection.
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.minerva_store.RA_DIRECTORIES",
         (GBA_DIRECTORY, ARDUBOY_DIRECTORY),
     )

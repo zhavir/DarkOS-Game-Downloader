@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 import dw_cli.gamepad as gamepad_module
 from dw_cli.gamepad import (
@@ -68,7 +69,7 @@ def test_kernel_button_map_overrides_raw_indices_for_dpad_and_face_buttons() -> 
         device.close()
 
 
-def test_kernel_button_map_is_read_from_joydev_ioctl(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_kernel_button_map_is_read_from_joydev_ioctl(mocker: MockerFixture) -> None:
     expected = (BTN_DPAD_UP, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT)
 
     def fake_ioctl(
@@ -84,7 +85,7 @@ def test_kernel_button_map_is_read_from_joydev_ioctl(monkeypatch: pytest.MonkeyP
                 buffer[index * 2 : index * 2 + 2] = code.to_bytes(2, byteorder="little")
         return 0
 
-    monkeypatch.setattr(gamepad_module.fcntl, "ioctl", fake_ioctl)
+    mocker.patch.object(gamepad_module.fcntl, "ioctl", fake_ioctl)
 
     assert LinuxJoystick._read_button_codes(42) == expected
 
@@ -149,12 +150,12 @@ def test_initialization_events_are_ignored() -> None:
     ((JS_EVENT_BUTTON, 15), (JS_EVENT_AXIS, 7)),
 )
 def test_holding_down_repeats_until_release(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
     event_type: int,
     number: int,
 ) -> None:
     clock = [10.0]
-    monkeypatch.setattr(gamepad_module, "monotonic", lambda: clock[0])
+    mocker.patch.object(gamepad_module, "monotonic", lambda: clock[0])
     device = joystick()
     pressed_value = 1 if event_type == JS_EVENT_BUTTON else 32_767
     released_value = 0

@@ -1,5 +1,6 @@
 """Move completed downloads into the appropriate dArkOS ROM directory."""
 
+import logging
 import os
 import shutil
 import stat
@@ -8,6 +9,8 @@ from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path, PurePosixPath
 
 from dw_cli.models import DownloadResult, Platform
+
+LOGGER = logging.getLogger(__name__)
 
 
 class OrganizeError(RuntimeError):
@@ -76,6 +79,11 @@ def move_to_arkos(
         platform.arkos_folder,
     )
     destination_directory = roms_directory / existing_folder
+    LOGGER.debug(
+        "Installing downloads platform=%s destination=%s",
+        platform.alias,
+        destination_directory,
+    )
     try:
         destination_directory.mkdir(parents=True, exist_ok=True)
     except OSError as error:
@@ -95,6 +103,7 @@ def move_to_arkos(
         except OSError as error:
             raise OrganizeError(f"Could not move {source.name}: {error}") from error
         moved.append(DownloadResult(url=download.url, path=final_path))
+        LOGGER.info("Installed ROM platform=%s path=%s", platform.alias, final_path)
     return moved
 
 
@@ -127,6 +136,7 @@ def install_bundled_bios(
                             f"Could not install bundled BIOS {relative_path}: {error}"
                         ) from error
                     installed.append(destination)
+                    LOGGER.info("Installed bundled BIOS path=%s", destination)
             return tuple(installed)
     except zipfile.BadZipFile as error:
         raise OrganizeError(f"Could not inspect bundled BIOS files: {error}") from error

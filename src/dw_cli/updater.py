@@ -1,6 +1,7 @@
 """Discover and safely stage self-contained dArkOS release updates."""
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -15,6 +16,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from dw_cli.store import USER_AGENT
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_UPDATE_API_URL = (
     "https://api.github.com/repos/zhavir/DarkOS-Game-Downloader/releases/latest"
@@ -66,6 +69,7 @@ def find_update(
     """Return a newer stable device release, if GitHub publishes one."""
 
     current = _parse_version(current_version, "installed application version")
+    LOGGER.info("Checking for an application update from version=%s", current_version)
     request = Request(
         api_url,
         headers={
@@ -87,9 +91,11 @@ def find_update(
                 raise UpdateError("GitHub returned unexpectedly large release metadata.")
             payload_bytes = response.read(MAX_RELEASE_METADATA_BYTES + 1)
     except HTTPError as error:
+        LOGGER.error("GitHub release check returned status=%d", error.code)
         raise UpdateError(f"GitHub release check returned HTTP {error.code}.") from error
     except (URLError, TimeoutError, OSError) as error:
         reason = getattr(error, "reason", error)
+        LOGGER.warning("Could not check GitHub for updates: %s", reason)
         raise UpdateError(f"Could not check GitHub for updates: {reason}") from error
     if len(payload_bytes) > MAX_RELEASE_METADATA_BYTES:
         raise UpdateError("GitHub returned unexpectedly large release metadata.")
@@ -104,6 +110,7 @@ def find_update(
         raise UpdateError("The latest GitHub release has no semantic version tag.")
     remote = _parse_version(tag, "latest GitHub release tag")
     if remote <= current:
+        LOGGER.info("No newer application release is available")
         return None
     version = ".".join(str(part) for part in remote)
     asset_name = f"darkos-downloader-{version}-r36s-arm64.zip"
@@ -121,6 +128,7 @@ def find_update(
             asset_size = None
         if asset_size is not None and asset_size > MAX_UPDATE_ARCHIVE_BYTES:
             raise UpdateError("The dArkOS update bundle is unexpectedly large.")
+        LOGGER.info("Application update available version=%s size=%s", version, asset_size)
         return ReleaseUpdate(version, tag, asset_name, asset_url, asset_size)
     raise UpdateError(f"The latest release does not contain {asset_name}.")
 
@@ -135,6 +143,7 @@ def stage_update(
     """Download and validate a bundle for the launcher to install after exit."""
 
     install_directory = install_directory.expanduser().resolve()
+    LOGGER.info("Staging application update version=%s", release.version)
     executable = install_directory / "darkos-downloader"
     if install_directory.name != "darkos-downloader" or not executable.is_file():
         raise UpdateError(
@@ -157,15 +166,18 @@ def stage_update(
         os.replace(incomplete, pending)
     except UpdateCancelled, UpdateError:
         _remove_staging_path(incomplete)
+        LOGGER.info("Application update staging stopped")
         raise
     except OSError as error:
         _remove_staging_path(incomplete)
+        LOGGER.error("Could not stage application update: %s", error)
         raise UpdateError(f"Could not stage the application update: {error}") from error
     except BaseException:
         _remove_staging_path(incomplete)
         raise
     finally:
         archive.unlink(missing_ok=True)
+    LOGGER.info("Application update staged successfully version=%s", release.version)
     return pending
 
 
@@ -213,9 +225,11 @@ def _download_release(
                 destination.unlink(missing_ok=True)
                 raise
     except HTTPError as error:
+        LOGGER.error("Update download returned status=%d", error.code)
         raise UpdateError(f"Update download returned HTTP {error.code}.") from error
     except (URLError, TimeoutError, OSError) as error:
         reason = getattr(error, "reason", error)
+        LOGGER.warning("Could not download application update: %s", reason)
         raise UpdateError(f"Could not download the update: {reason}") from error
 
 

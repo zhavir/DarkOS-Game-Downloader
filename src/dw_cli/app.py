@@ -3,6 +3,7 @@
 import argparse
 import curses
 import locale
+import logging
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
@@ -13,12 +14,15 @@ from dw_cli.compatibility import filter_supported_results
 from dw_cli.config import Config
 from dw_cli.downloader import DownloadError, download_files
 from dw_cli.frontend import request_emulationstation_refresh
+from dw_cli.logging_config import configure_logging
 from dw_cli.models import SearchResult
 from dw_cli.organizer import OrganizeError, detect_roms_directory, move_to_arkos
 from dw_cli.platforms import resolve_platform
 from dw_cli.store import GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
 from dw_cli.tui import TerminalTooSmall, run_tui
+
+LOGGER = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,28 +72,49 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, runtime_config: Config | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
-    config = Config.from_environment()
+    config = runtime_config or Config.from_environment()
+    configure_logging(config.log_file, config.log_level)
+    LOGGER.info("Starting dArkOS Downloader command=%s", arguments.command or "tui")
+    LOGGER.debug(
+        "Runtime configuration stores=%s download_directory=%s roms_directories=%s timeout=%s",
+        config.enabled_stores,
+        config.download_directory,
+        config.roms_directories,
+        config.timeout_seconds,
+    )
     if arguments.base_url:
         config = replace(config, base_url=arguments.base_url.rstrip("/"))
     store_catalog = StoreCatalog.from_config(config)
 
     if arguments.command in (None, "tui"):
         if not store_catalog.stores:
+            LOGGER.error("No download stores are enabled")
             parser.error("no download stores are enabled; check DW_STORES")
         if not sys.stdin.isatty() or not sys.stdout.isatty():
+            LOGGER.error("TUI requested without an interactive terminal")
             parser.error("the TUI needs an interactive terminal; use a subcommand for automation")
         try:
             run_tui(config)
         except (TerminalTooSmall, StoreError, curses.error, locale.Error, ValueError) as error:
+            LOGGER.error("TUI stopped: %s", error)
             print(f"dw: {error}", file=sys.stderr)
             return 2
+        except Exception:
+            LOGGER.exception("TUI stopped because of an unexpected error")
+            print(
+                "dw: An unexpected error stopped the TUI. Check the diagnostic log.",
+                file=sys.stderr,
+            )
+            return 2
+        LOGGER.info("TUI closed normally")
         return 0
     store = store_catalog.find(arguments.store)
     if store is None:
         available = ", ".join(item.store_id for item in store_catalog.stores) or "none"
+        LOGGER.error("Unknown store requested: %s", arguments.store)
         parser.error(f"unknown store {arguments.store!r}; available stores: {available}")
     if arguments.command == "search":
         return _run_search(store, arguments.console, " ".join(arguments.query))
@@ -116,11 +141,20 @@ def _run_search(store: GameStore, console: str, query: str) -> int:
         print(f"{store.display_name} does not provide {platform.name}.", file=sys.stderr)
         return 2
     try:
+        LOGGER.info(
+            "Searching store=%s platform=%s query=%r", store.store_id, platform.alias, query
+        )
         results = filter_supported_results(store.search(store.platform_code(platform), query))
     except (StoreError, ValueError) as error:
+        LOGGER.warning(
+            "Search failed store=%s platform=%s: %s", store.store_id, platform.alias, error
+        )
         print(f"Search failed: {error}", file=sys.stderr)
         return 1
     if not results:
+        LOGGER.info(
+            "Search returned no results store=%s platform=%s", store.store_id, platform.alias
+        )
         if query.strip():
             print(f"No results found for {query!r} on {platform.name}.")
         else:
@@ -140,6 +174,11 @@ def _run_download(
 ) -> int:
     installed_bios: list[Path] = []
     try:
+        LOGGER.info(
+            "Starting download count=%d platform=%s",
+            len(detail_urls),
+            platform_name or "staging-only",
+        )
         media_urls = [store.download_request(url) for url in detail_urls]
         downloads = download_files(
             media_urls,
@@ -158,6 +197,7 @@ def _run_download(
                 raise OrganizeError("No dArkOS ROM root found; pass --roms-directory.")
             downloads = move_to_arkos(downloads, platform, root, installed_bios.append)
     except (StoreError, DownloadError, OrganizeError, ValueError) as error:
+        LOGGER.error("Download failed: %s", error)
         print(f"Download failed: {error}", file=sys.stderr)
         return 1
     for result in downloads:
@@ -168,6 +208,7 @@ def _run_download(
         print("Tip: use --platform to move completed files into the matching dArkOS ROM folder.")
     else:
         request_emulationstation_refresh()
+    LOGGER.info("Download completed files=%d bios=%d", len(downloads), len(installed_bios))
     return 0
 
 

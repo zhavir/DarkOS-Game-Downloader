@@ -4,6 +4,7 @@ from threading import Lock
 from time import sleep
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.bittorrent import (
     BitTorrentError,
@@ -56,13 +57,13 @@ def test_bencode_round_trip_and_torrent_file_offsets() -> None:
 
 def test_native_selective_download_verifies_pieces_and_extracts_only_file(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     payload = b"abcHELLOxyz"
     torrent = build_torrent(payload)
     progress: list[tuple[int, int]] = []
-    monkeypatch.setattr("dw_cli.bittorrent._read_url", lambda *_args: torrent)
-    monkeypatch.setattr(
+    mocker.patch("dw_cli.bittorrent._read_url", lambda *_args: torrent)
+    mocker.patch(
         "dw_cli.bittorrent.discover_peers",
         lambda *_args: (("127.0.0.1", 6881),),
     )
@@ -80,7 +81,7 @@ def test_native_selective_download_verifies_pieces_and_extracts_only_file(
         start = piece_index * metadata.piece_length
         return payload[start : start + piece_length]
 
-    monkeypatch.setattr("dw_cli.bittorrent._download_piece_from_peers", piece)
+    mocker.patch("dw_cli.bittorrent._download_piece_from_peers", piece)
     destination = tmp_path / "Game.zip"
 
     download_torrent_file(
@@ -103,9 +104,9 @@ def test_native_selective_download_verifies_pieces_and_extracts_only_file(
 
 def test_selective_download_rejects_changed_catalogue_order(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
-    monkeypatch.setattr("dw_cli.bittorrent._read_url", lambda *_args: build_torrent())
+    mocker.patch("dw_cli.bittorrent._read_url", lambda *_args: build_torrent())
 
     with pytest.raises(BitTorrentError, match="no longer matches"):
         download_torrent_file(
@@ -118,7 +119,7 @@ def test_selective_download_rejects_changed_catalogue_order(
         )
 
 
-def test_peer_attempts_are_bounded_and_raced(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_peer_attempts_are_bounded_and_raced(mocker: MockerFixture) -> None:
     metadata = parse_torrent(build_torrent())
     peers = tuple((f"192.0.2.{index}", 6881) for index in range(1, 31))
     attempts: list[tuple[str, int]] = []
@@ -147,7 +148,7 @@ def test_peer_attempts_are_bounded_and_raced(monkeypatch: pytest.MonkeyPatch) ->
             active -= 1
         return b"abcH"
 
-    monkeypatch.setattr("dw_cli.bittorrent._download_piece", peer_download)
+    mocker.patch("dw_cli.bittorrent._download_piece", peer_download)
 
     data = _download_piece_from_peers(
         metadata,
@@ -163,7 +164,7 @@ def test_peer_attempts_are_bounded_and_raced(monkeypatch: pytest.MonkeyPatch) ->
     assert maximum_active == 8
 
 
-def test_peer_discovery_merges_multiple_trackers(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_peer_discovery_merges_multiple_trackers(mocker: MockerFixture) -> None:
     original = parse_torrent(build_torrent())
     metadata = TorrentMetadata(
         info_hash=original.info_hash,
@@ -182,7 +183,7 @@ def test_peer_discovery_merges_multiple_trackers(monkeypatch: pytest.MonkeyPatch
         "http://two.example/announce": (("8.8.8.8", 6881),),
         "http://three.example/announce": (("1.1.1.1", 6881), ("9.9.9.9", 6881)),
     }
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.bittorrent._announce_http",
         lambda tracker, *_args: responses[tracker],
     )

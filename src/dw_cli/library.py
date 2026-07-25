@@ -1,5 +1,6 @@
 """Installed dArkOS game discovery, deletion, and transactional replacement."""
 
+import logging
 import os
 import re
 from collections.abc import Iterable, Iterator, Sequence
@@ -7,6 +8,8 @@ from pathlib import Path
 
 from dw_cli.models import DownloadResult, InstalledGame, Platform
 from dw_cli.organizer import OrganizeError, unique_destination
+
+LOGGER = logging.getLogger(__name__)
 
 IGNORED_SUFFIXES = {
     ".cfg",
@@ -37,8 +40,10 @@ def scan_library(
 ) -> list[InstalledGame]:
     """Scan known platform folders on every mounted dArkOS ROM partition."""
 
+    roots = tuple(roms_directories)
+    LOGGER.debug("Scanning ROM library roots=%s platforms=%d", roots, len(platforms))
     games: list[InstalledGame] = []
-    for root in roms_directories:
+    for root in roots:
         root = root.resolve()
         for platform in platforms:
             for folder_name in platform.arkos_folders:
@@ -66,7 +71,9 @@ def scan_library(
                             files=members,
                         )
                     )
-    return sorted(games, key=lambda game: (game.platform.name.casefold(), game.title.casefold()))
+    result = sorted(games, key=lambda game: (game.platform.name.casefold(), game.title.casefold()))
+    LOGGER.info("ROM library scan completed games=%d roots=%d", len(result), len(roots))
+    return result
 
 
 def platforms_with_installed_games(
@@ -107,7 +114,9 @@ def delete_game(game: InstalledGame) -> None:
         except OSError as error:
             errors.append(f"{path.name}: {error}")
     if errors:
+        LOGGER.error("Could not completely delete game title=%r errors=%s", game.title, errors)
         raise LibraryError("Some game files could not be deleted: {}".format("; ".join(errors)))
+    LOGGER.info("Deleted installed game title=%r files=%d", game.title, len(game.files))
 
 
 def replace_game(game: InstalledGame, download: DownloadResult) -> DownloadResult:
@@ -140,11 +149,17 @@ def replace_game(game: InstalledGame, download: DownloadResult) -> DownloadResul
         except OSError as error:
             delete_errors.append(f"{old_file.name}: {error}")
     if delete_errors:
+        LOGGER.warning(
+            "Replacement installed but old files remain title=%r errors=%s",
+            game.title,
+            delete_errors,
+        )
         raise LibraryError(
             "The new game was installed at {}, but old files remain: {}".format(
                 destination, "; ".join(delete_errors)
             )
         )
+    LOGGER.info("Replaced installed game title=%r path=%s", game.title, destination)
     return DownloadResult(url=download.url, path=destination)
 
 

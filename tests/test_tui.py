@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.bittorrent import BitTorrentSettings
 from dw_cli.compatibility import CompatibilityInfo
@@ -38,30 +39,30 @@ class FakeScreen:
 
 
 def keyboard_with_inputs(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
     inputs: tuple[int, ...],
 ) -> DownloaderTui:
     tui = object.__new__(DownloaderTui)
     tui.screen = FakeScreen()
     tui.gamepad = None
-    tui._header = lambda _title: None  # type: ignore[method-assign]
-    tui._footer = lambda _text: None  # type: ignore[method-assign]
-    tui._safe_add = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_header", new=lambda _title: None)
+    mocker.patch.object(tui, "_footer", new=lambda _text: None)
+    mocker.patch.object(tui, "_safe_add", new=lambda *_args, **_kwargs: None)
     pending: Iterator[int] = iter(inputs)
-    tui._get_input = lambda *_args: next(pending)  # type: ignore[method-assign]
-    monkeypatch.setattr(curses, "color_pair", lambda _number: 0)
+    mocker.patch.object(tui, "_get_input", new=lambda *_args: next(pending))
+    mocker.patch.object(curses, "color_pair", lambda _number: 0)
     return tui
 
 
-def test_x_submits_empty_search(monkeypatch: pytest.MonkeyPatch) -> None:
-    tui = keyboard_with_inputs(monkeypatch, (GAMEPAD_SEARCH_KEY,))
+def test_x_submits_empty_search(mocker: MockerFixture) -> None:
+    tui = keyboard_with_inputs(mocker, (GAMEPAD_SEARCH_KEY,))
 
     assert tui._on_screen_keyboard("SEARCH") == ""
 
 
-def test_x_submits_current_search_and_start_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_x_submits_current_search_and_start_is_ignored(mocker: MockerFixture) -> None:
     tui = keyboard_with_inputs(
-        monkeypatch,
+        mocker,
         (ord("a"), GAMEPAD_NOOP_KEY, ord("D"), ord("v"), GAMEPAD_SEARCH_KEY),
     )
 
@@ -77,32 +78,32 @@ def test_gamepad_mapping_is_context_aware_for_keyboard_navigation() -> None:
     assert KEYBOARD_GAMEPAD_KEYS[InputAction.START] == GAMEPAD_NOOP_KEY
 
 
-def test_keyboard_dpad_right_moves_to_next_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_keyboard_dpad_right_moves_to_next_key(mocker: MockerFixture) -> None:
     tui = keyboard_with_inputs(
-        monkeypatch,
+        mocker,
         (curses.KEY_RIGHT, 10, GAMEPAD_SEARCH_KEY),
     )
 
     assert tui._on_screen_keyboard("SEARCH") == "2"
 
 
-def test_store_picker_returns_registered_store() -> None:
+def test_store_picker_returns_registered_store(mocker: MockerFixture) -> None:
     tui = object.__new__(DownloaderTui)
     store = VimmStore("https://example.test")
     tui.store_catalog = StoreCatalog((store,))
-    tui._menu = lambda _title, _options, _footer: 0  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: 0)
 
     assert tui._choose_store("CHOOSE A STORE") is store
 
 
-def test_search_flow_uses_persisted_store_without_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_search_flow_uses_persisted_store_without_prompt(mocker: MockerFixture) -> None:
     tui = object.__new__(DownloaderTui)
     store = VimmStore("https://example.test")
     platform = resolve_platform("GBA")
     assert platform is not None
     result = SearchResult("Advance Wars", "https://example.test/vault/1")
     calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(
+    mocker.patch.object(
         store,
         "search",
         lambda system, query, _progress: calls.append((system, query)) or [result],
@@ -111,14 +112,14 @@ def test_search_flow_uses_persisted_store_without_prompt(monkeypatch: pytest.Mon
     tui.selected_store = store
     tui.platforms = (platform,)
     choices = iter((0,))
-    tui._menu = lambda _title, _options, _footer: next(choices)  # type: ignore[method-assign]
-    tui._on_screen_keyboard = lambda *_args, **_kwargs: "ADV"  # type: ignore[method-assign]
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: next(choices))
+    mocker.patch.object(tui, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "ADV")
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
     tui.compatibility_client = SimpleNamespace(
         lookup_many=lambda _results, _platform: [CompatibilityInfo("Perfect", True)]
     )
     selected: list[object] = []
-    tui._results_flow = lambda *args: selected.extend(args)  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_results_flow", new=lambda *args: selected.extend(args))
 
     tui._search_flow()
 
@@ -128,7 +129,7 @@ def test_search_flow_uses_persisted_store_without_prompt(monkeypatch: pytest.Mon
 
 def test_update_uses_persisted_store_without_prompt(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     tui = object.__new__(DownloaderTui)
     store = VimmStore("https://example.test")
@@ -137,7 +138,7 @@ def test_update_uses_persisted_store_without_prompt(
     game_path = tmp_path / "gba" / "Advance Wars.zip"
     game = InstalledGame("Advance Wars", platform, tmp_path, game_path, (game_path,))
     calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(
+    mocker.patch.object(
         store,
         "search",
         lambda system, query: (
@@ -146,29 +147,35 @@ def test_update_uses_persisted_store_without_prompt(
         ),
     )
     tui.selected_store = store
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    tui._menu = lambda _title, _options, _footer: None  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: None)
 
     assert tui._update_game(game) is False
     assert calls == [(platform.code, game.title)]
 
 
-def test_configure_store_persists_selection(tmp_path: Path) -> None:
+def test_configure_store_persists_selection(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
     tui = object.__new__(DownloaderTui)
     store = VimmStore("https://example.test")
     tui.store_catalog = StoreCatalog((store,))
     tui.preferences_path = tmp_path / ".downloads" / "settings.json"
     tui.selected_store = None
-    tui._menu = lambda _title, _options, _footer: 0  # type: ignore[method-assign]
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    tui._error = lambda _message: None  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: 0)
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch.object(tui, "_error", new=lambda _message: None)
 
     assert tui._configure_store(first_run=True) is True
     assert tui.selected_store is store
     assert load_preferences(tui.preferences_path) == Preferences("vimm")
 
 
-def test_minerva_settings_menu_edits_and_persists_value(tmp_path: Path) -> None:
+def test_minerva_settings_menu_edits_and_persists_value(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
     tui = object.__new__(DownloaderTui)
     tui.preferences_path = tmp_path / ".downloads" / "settings.json"
     tui.preferences = Preferences("minerva")
@@ -179,10 +186,10 @@ def test_minerva_settings_menu_edits_and_persists_value(tmp_path: Path) -> None:
         shown_options.append(tuple(options))
         return next(choices)
 
-    tui._menu = menu  # type: ignore[method-assign]
-    tui._on_screen_keyboard = lambda *_args, **_kwargs: "32768"  # type: ignore[method-assign]
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    tui._error = lambda message: pytest.fail(message)  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=menu)
+    mocker.patch.object(tui, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "32768")
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch.object(tui, "_error", new=lambda message: pytest.fail(message))
 
     tui._minerva_bittorrent_settings_screen()
 
@@ -206,11 +213,15 @@ def test_minerva_settings_menu_edits_and_persists_value(tmp_path: Path) -> None:
     )
 
 
-def test_minerva_advanced_settings_only_appear_for_minerva() -> None:
+def test_minerva_advanced_settings_only_appear_for_minerva(
+    mocker: MockerFixture,
+) -> None:
     tui = object.__new__(DownloaderTui)
     shown_options: list[tuple[str, ...]] = []
-    tui._menu = (  # type: ignore[method-assign]
-        lambda _title, options, _footer: shown_options.append(tuple(options)) or None
+    mocker.patch.object(
+        tui,
+        "_menu",
+        new=lambda _title, options, _footer: shown_options.append(tuple(options)) or None,
     )
     tui.selected_store = VimmStore("https://example.test")
 
@@ -224,10 +235,10 @@ def test_minerva_advanced_settings_only_appear_for_minerva() -> None:
     assert any("Minerva BitTorrent" in option for option in shown_options[-1])
 
 
-def test_exit_requires_explicit_yes() -> None:
+def test_exit_requires_explicit_yes(mocker: MockerFixture) -> None:
     tui = object.__new__(DownloaderTui)
     choices = iter((None, 0, 1))
-    tui._menu = lambda _title, _options, _footer: next(choices)  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: next(choices))
 
     assert tui._confirm_exit() is False
     assert tui._confirm_exit() is False
@@ -236,7 +247,7 @@ def test_exit_requires_explicit_yes() -> None:
 
 def test_application_update_is_staged_and_closes_tui(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
 ) -> None:
     install_directory = tmp_path / "tools" / "darkos-downloader"
     release = ReleaseUpdate(
@@ -253,15 +264,17 @@ def test_application_update_is_staged_and_closes_tui(
         timeout_seconds=1.0,
     )
     tui.exit_after_update = False
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    tui._error = lambda message: pytest.fail(message)  # type: ignore[method-assign]
-    tui._menu = lambda *_args: 0  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch.object(tui, "_error", new=lambda message: pytest.fail(message))
+    mocker.patch.object(tui, "_menu", new=lambda *_args: 0)
     staged: list[tuple[ReleaseUpdate, Path]] = []
-    tui._stage_application_update = (  # type: ignore[method-assign]
-        lambda update, directory: staged.append((update, directory)) or directory.parent
+    mocker.patch.object(
+        tui,
+        "_stage_application_update",
+        new=lambda update, directory: staged.append((update, directory)) or directory.parent,
     )
-    monkeypatch.setattr("dw_cli.tui.installed_version", lambda: "1.0.1")
-    monkeypatch.setattr("dw_cli.tui.find_update", lambda *_args: release)
+    mocker.patch("dw_cli.tui.installed_version", lambda: "1.0.1")
+    mocker.patch("dw_cli.tui.find_update", lambda *_args: release)
 
     tui._application_update_flow()
 
@@ -269,7 +282,7 @@ def test_application_update_is_staged_and_closes_tui(
     assert tui.exit_after_update is True
 
 
-def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_back_cancels_active_download(mocker: MockerFixture, tmp_path: Path) -> None:
     cancellation_seen = False
 
     def fake_download_files(*args: object, **_kwargs: object) -> list[object]:
@@ -282,10 +295,10 @@ def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     tui = object.__new__(DownloaderTui)
     tui.config = SimpleNamespace(download_directory=tmp_path, timeout_seconds=1.0)
-    tui._poll_input = lambda: 27  # type: ignore[method-assign]
-    tui._progress = lambda *_args: None  # type: ignore[method-assign]
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    monkeypatch.setattr("dw_cli.tui.download_files", fake_download_files)
+    mocker.patch.object(tui, "_poll_input", new=lambda: 27)
+    mocker.patch.object(tui, "_progress", new=lambda *_args: None)
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch("dw_cli.tui.download_files", fake_download_files)
 
     with pytest.raises(DownloadCancelled):
         tui._download_media(["https://example.test/game.zip"], VimmStore("https://example.test"))
@@ -294,15 +307,15 @@ def test_back_cancels_active_download(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
 
 def test_minerva_download_uses_persisted_bittorrent_settings(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
     tmp_path: Path,
 ) -> None:
     settings = BitTorrentSettings(block_size=32 * 1024, max_peer_attempts=100)
     tui = object.__new__(DownloaderTui)
     tui.config = SimpleNamespace(download_directory=tmp_path, timeout_seconds=1.0)
     tui.preferences = Preferences("minerva", settings)
-    tui._poll_input = lambda: None  # type: ignore[method-assign]
-    tui._progress = lambda *_args: None  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_poll_input", new=lambda: None)
+    mocker.patch.object(tui, "_progress", new=lambda *_args: None)
     captured: list[BitTorrentSettings | None] = []
 
     def fake_download_files(*_args: object, **kwargs: object) -> list[DownloadResult]:
@@ -311,7 +324,7 @@ def test_minerva_download_uses_persisted_bittorrent_settings(
         captured.append(value)
         return []
 
-    monkeypatch.setattr("dw_cli.tui.download_files", fake_download_files)
+    mocker.patch("dw_cli.tui.download_files", fake_download_files)
     store = SimpleNamespace(store_id="minerva", download_referrer="https://example.test/")
 
     assert tui._download_media([], store) == []  # type: ignore[arg-type]
@@ -319,7 +332,7 @@ def test_minerva_download_uses_persisted_bittorrent_settings(
 
 
 def test_completed_download_defers_refresh_until_tui_exit(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
     tmp_path: Path,
 ) -> None:
     platform = resolve_platform("GBA")
@@ -330,21 +343,25 @@ def test_completed_download_defers_refresh_until_tui_exit(
     store = VimmStore("https://example.test")
     tui = object.__new__(DownloaderTui)
     tui.refresh_on_exit = False
-    tui._choose_roms_directory = lambda: tmp_path / "roms"  # type: ignore[method-assign]
-    tui._download_media = lambda *_args: [  # type: ignore[method-assign]
-        DownloadResult("https://example.test/game.zip", downloaded)
-    ]
-    messages: list[str] = []
-    tui._draw_message = (  # type: ignore[method-assign]
-        lambda _title, message, *_args, **_kwargs: messages.append(message)
+    mocker.patch.object(tui, "_choose_roms_directory", new=lambda: tmp_path / "roms")
+    mocker.patch.object(
+        tui,
+        "_download_media",
+        new=lambda *_args: [DownloadResult("https://example.test/game.zip", downloaded)],
     )
-    monkeypatch.setattr(
+    messages: list[str] = []
+    mocker.patch.object(
+        tui,
+        "_draw_message",
+        new=lambda _title, message, *_args, **_kwargs: messages.append(message),
+    )
+    mocker.patch.object(
         store,
         "download_request",
         lambda _url: MediaDownload("https://example.test/game.zip"),
     )
     refresh_requests: list[bool] = []
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.tui.request_emulationstation_refresh",
         lambda: refresh_requests.append(True) or True,
     )
@@ -357,7 +374,7 @@ def test_completed_download_defers_refresh_until_tui_exit(
     assert "refresh when you exit" in messages[-1]
 
 
-def test_pending_refresh_is_requested_when_tui_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> None:
     tui = object.__new__(DownloaderTui)
     tui.store_catalog = SimpleNamespace(stores=(object(),))
     tui.selected_store = object()
@@ -365,9 +382,9 @@ def test_pending_refresh_is_requested_when_tui_exits(monkeypatch: pytest.MonkeyP
     tui.exit_after_update = False
     tui.gamepad = None
     choices = iter((5, 1))
-    tui._menu = lambda *_args: next(choices)  # type: ignore[method-assign]
+    mocker.patch.object(tui, "_menu", new=lambda *_args: next(choices))
     refresh_requests: list[bool] = []
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.tui.request_emulationstation_refresh",
         lambda: refresh_requests.append(True) or True,
     )
@@ -378,7 +395,7 @@ def test_pending_refresh_is_requested_when_tui_exits(monkeypatch: pytest.MonkeyP
 
 
 def test_delete_defers_refresh_until_tui_exit(
-    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
     tmp_path: Path,
 ) -> None:
     platform = resolve_platform("GBA")
@@ -387,11 +404,11 @@ def test_delete_defers_refresh_until_tui_exit(
     game = InstalledGame("Advance Wars", platform, tmp_path, game_path, (game_path,))
     tui = object.__new__(DownloaderTui)
     tui.refresh_on_exit = False
-    tui._menu = lambda _title, _options, _footer: 1  # type: ignore[method-assign]
-    tui._draw_message = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
-    monkeypatch.setattr("dw_cli.tui.delete_game", lambda _game: None)
+    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: 1)
+    mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
+    mocker.patch("dw_cli.tui.delete_game", lambda _game: None)
     refresh_requests: list[bool] = []
-    monkeypatch.setattr(
+    mocker.patch(
         "dw_cli.tui.request_emulationstation_refresh",
         lambda: refresh_requests.append(True) or True,
     )

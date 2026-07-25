@@ -1,10 +1,17 @@
+import io
 import json
 from pathlib import Path
+from types import TracebackType
+
+import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.compatibility import (
+    CompatibilityInfo,
     R36SCompatibilityClient,
     filter_supported_results,
     is_unsupported_system,
+    normalize_console,
     normalize_title,
     parse_game_index,
     title_match_score,
@@ -117,3 +124,107 @@ def test_explicitly_unsupported_systems_are_filtered_from_all_platform_results()
 
     assert is_unsupported_system("Sony PlayStation 3")
     assert [result.title for result in filter_supported_results(results)] == ["Retro Game"]
+
+
+def test_compatibility_labels_cover_platform_and_title_states() -> None:
+    assert CompatibilityInfo("Not listed", False).short_label == "Not listed"
+    assert CompatibilityInfo("Not listed", False).detail_label == "Not listed by r36sgamelist.com"
+    assert CompatibilityInfo("Perfect", True).short_label == "Perfect - listed"
+    assert CompatibilityInfo("Perfect", True).detail_label == "Perfect (title listed)"
+    assert CompatibilityInfo("Playable", False).detail_label == "Playable (platform rating)"
+    assert CompatibilityInfo("Perfect", True, 0.956).short_label == "Perfect - 96% match"
+
+
+def test_unknown_console_does_not_load_remote_index(tmp_path: Path) -> None:
+    client = R36SCompatibilityClient(
+        tmp_path / "cache.json",
+        fetch_text=lambda _url: pytest.fail("network should not be used"),
+    )
+    platform = resolve_platform("ports")
+    assert platform is not None
+
+    info = client.lookup_many([SearchResult("Port", "detail")], platform)
+
+    assert info == [CompatibilityInfo("Not listed", False)]
+    assert normalize_console("unknown") is None
+
+
+def test_client_uses_fresh_cache_and_ignores_stale_or_malformed_cache(tmp_path: Path) -> None:
+    platform = resolve_platform("GBA")
+    assert platform is not None
+    cache = tmp_path / "cache.json"
+    cache.write_text(
+        json.dumps({"fetched_at": 9_999_999_999, "games": [["gameboy advance", "cached game"]]}),
+        encoding="utf-8",
+    )
+    client = R36SCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
+    assert client.lookup_many([SearchResult("Cached Game", "detail")], platform)[0].title_listed
+    assert client._load_game_index() == frozenset({("gameboy advance", "cached game")})
+
+    for payload in (
+        '{"fetched_at": 0, "games": []}',
+        '{"fetched_at": 9999999999, "games": "bad"}',
+        '{"fetched_at": 9999999999, "games": [["only-one"]]}',
+        "not json",
+    ):
+        cache.write_text(payload, encoding="utf-8")
+        assert R36SCompatibilityClient(cache)._read_cache() is None
+
+
+def test_small_or_partially_unavailable_frontend_index_is_rejected(tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def fetch(url: str) -> str:
+        calls.append(url)
+        if url.endswith("bad.js"):
+            raise OSError("missing chunk")
+        return (
+            '<script src="/bad.js"></script>{"name":"One","console":"Gameboy Advance","slug":"one"}'
+        )
+
+    client = R36SCompatibilityClient(tmp_path / "cache.json", fetch_text=fetch)
+
+    with pytest.raises(ValueError, match="usable frontend"):
+        client._download_game_index()
+    assert client._fetch_optional("https://example.test/bad.js") == ""
+    assert client._same_origin("https://r36sgamelist.com/chunk.js")
+    assert not client._same_origin("https://other.test/chunk.js")
+
+
+class Response(io.BytesIO):
+    def __enter__(self) -> Response:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
+
+def test_default_fetcher_and_cache_write_failure(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    opened = mocker.patch(
+        "dw_cli.compatibility.urlopen",
+        return_value=Response("café".encode()),
+    )
+    client = R36SCompatibilityClient(tmp_path / "cache.json")
+    assert client._fetch_text("https://r36sgamelist.com") == "café"
+    assert opened.call_count == 1
+
+    mocker.patch.object(Path, "write_text", side_effect=OSError("read only"))
+    client._write_cache(frozenset({("gameboy advance", "game")}))
+
+
+def test_parser_skips_invalid_json_and_title_scores_empty_and_exact() -> None:
+    document = (
+        '{"name":"bad\\uZZZZ","console":"Gameboy Advance","slug":"bad"}'
+        '{"name":"Good","console":"Unknown","slug":"good"}'
+    )
+    assert parse_game_index(document) == frozenset()
+    assert title_match_score("", "Game") == 0.0
+    assert title_match_score("Game", "Game") == 1.0

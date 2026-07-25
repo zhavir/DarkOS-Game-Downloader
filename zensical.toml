@@ -12,7 +12,7 @@ nav = [
   { "Install on R36S" = "install.md" },
   { "Using the TUI" = "usage.md" },
   { "Compatibility" = "compatibility.md" },
-  { "Development" = "development.md" },
+  { "Troubleshooting" = "troubleshooting.md" },
 ]
 
 [project.theme]

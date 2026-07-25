@@ -52,33 +52,42 @@ def test_demo_environment_creates_two_safe_local_cards(tmp_path: Path) -> None:
 def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
     local_vault: str,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     staging = tmp_path / "downloads"
     card = tmp_path / "sd1"
     (card / "gba").mkdir(parents=True)
-    monkeypatch.setenv("DW_BASE_URL", local_vault)
-    monkeypatch.setenv("DW_DOWNLOAD_DIR", str(staging))
-    monkeypatch.setenv("DW_ROMS_DIR", str(card))
+    config = Config.from_environment(
+        {
+            "DW_BASE_URL": local_vault,
+            "DW_DOWNLOAD_DIR": str(staging),
+            "DW_ROMS_DIR": str(card),
+        }
+    )
 
-    assert main(["search", "GBA", "aDv"]) == 0
+    assert main(["search", "GBA", "aDv"], runtime_config=config) == 0
     search_output = capsys.readouterr().out
     assert "Advance Wars" in search_output
     assert "Golden Sun" not in search_output
 
-    assert main(["search", "GBA"]) == 0
+    assert main(["search", "GBA"], runtime_config=config) == 0
     catalogue_output = capsys.readouterr().out
     assert "Advance Wars" in catalogue_output
     assert "Golden Sun" in catalogue_output
     assert "007 - Everything or Nothing" in catalogue_output
 
-    assert main(["search", "ALL"]) == 0
+    assert main(["search", "ALL"], runtime_config=config) == 0
     all_catalogue_output = capsys.readouterr().out
     assert "Advance Wars" in all_catalogue_output
     assert "Golden Sun" in all_catalogue_output
 
-    assert main(["download", "--platform", "GBA", f"{local_vault}/vault/2001"]) == 0
+    assert (
+        main(
+            ["download", "--platform", "GBA", f"{local_vault}/vault/2001"],
+            runtime_config=config,
+        )
+        == 0
+    )
     download_output = capsys.readouterr().out
     installed = card / "gba" / "Golden Sun (USA).zip"
     assert str(installed) in download_output
@@ -94,19 +103,19 @@ def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
 def test_dual_card_install_update_and_delete_workflow(
     local_vault: str,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     card_one = tmp_path / "sd1"
     card_two = tmp_path / "sd2"
     staging = tmp_path / "downloads"
     (card_one / "gba").mkdir(parents=True)
     (card_two / "gba").mkdir(parents=True)
-    monkeypatch.setenv("DW_BASE_URL", local_vault)
-    monkeypatch.setenv("DW_DOWNLOAD_DIR", str(staging))
-    monkeypatch.setenv("DW_ROMS_DIRS", os.pathsep.join((str(card_one), str(card_two))))
-    monkeypatch.delenv("DW_ROMS_DIR", raising=False)
-
-    config = Config.from_environment()
+    config = Config.from_environment(
+        {
+            "DW_BASE_URL": local_vault,
+            "DW_DOWNLOAD_DIR": str(staging),
+            "DW_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
+        }
+    )
     assert config.roms_directories == (card_one, card_two)
     assert detect_roms_directories(config.roms_directories) == (card_one, card_two)
     platform = resolve_platform("GBA")

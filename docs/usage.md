@@ -83,8 +83,8 @@ B/Escape to cancel without changing the installed application. After validation,
 the Tools launcher replaces the application while preserving `.downloads`, then returns directly to
 EmulationStation. Reopen the tool to verify the update. The previous version is deleted only after
 the updated TUI exits successfully; a crash during that first launch restores the previous version
-without losing preferences. This self-update option is intentionally unavailable from a local
-source checkout, where `git` and uv remain the update mechanism.
+without losing preferences. Automatic application updates are available in the self-contained R36S
+package.
 
 ## Bundled BIOS files
 

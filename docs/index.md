@@ -5,14 +5,14 @@ or dArkOSRE. The release ZIP is self-contained: it includes an ARM64 executable 
 so neither Python, uv, nor a package manager is required on the handheld.
 
 [Install on an R36S](install.md){ .md-button .md-button--primary }
-[Test locally](development.md){ .md-button }
+[Use the downloader](usage.md){ .md-button }
 
 ## What it does
 
 - Searches the remote library by a case-insensitive title prefix.
 - Remembers the download store selected during first-run setup. It can be changed later in
-  **Settings**; Vimm and Minerva Archive share the same extensible store contract.
-- Selectively downloads Minerva torrent pieces in native Python with no external torrent client.
+  **Settings**.
+- Downloads selected Minerva files without requiring an external torrent client.
 - Accepts an empty search to list the complete selected catalogue, including **All platforms**.
 - Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
 - Installs explicitly bundled BIOS files without overwriting existing firmware.
@@ -21,8 +21,8 @@ so neither Python, uv, nor a package manager is required on the handheld.
   TUI open, and applies one refresh when the user exits.
 - Filters console families that cannot run on the R36S, including PS2, PS3, Xbox, Xbox 360,
   GameCube, Wii, Switch, Nintendo 3DS, and PS Vita.
-- Shows an RK3326 compatibility level and scored title-match confidence before download using the
-  live [R36S Game List](https://r36sgamelist.com/) frontend catalogue.
+- Shows an RK3326 compatibility level and title-match confidence before download when the
+  [R36S Game List](https://r36sgamelist.com/) has a reliable match.
 
 ## Controller-first
 

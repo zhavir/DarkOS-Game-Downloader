@@ -1,10 +1,20 @@
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
-from dw_cli.models import DownloadResult
-from dw_cli.organizer import OrganizeError, available_roms_directories, move_to_arkos
+from dw_cli.models import DownloadResult, Platform
+from dw_cli.organizer import (
+    OrganizeError,
+    _bios_destinations,
+    _bundled_bios_members,
+    available_roms_directories,
+    detect_roms_directories,
+    detect_roms_directory,
+    install_bundled_bios,
+    move_to_arkos,
+    unique_destination,
+)
 from dw_cli.platforms import PLATFORMS, discover_platforms, resolve_platform
 
 
@@ -163,3 +173,59 @@ def test_unsafe_bios_archive_path_is_rejected_before_game_move(tmp_path: Path) -
 
     assert archive.is_file()
     assert not (tmp_path / "escape.bin").exists()
+
+
+def test_configured_rom_roots_and_preferred_root_are_preserved(tmp_path: Path) -> None:
+    roots = (tmp_path / "sd2", tmp_path / "sd1")
+
+    assert detect_roms_directories(roots) == roots
+    assert detect_roms_directories(roots[0]) == (roots[0],)
+    assert detect_roms_directory(roots) == roots[0]
+    assert detect_roms_directory(()) is None
+
+
+def test_move_reports_unsupported_platform_missing_file_and_invalid_root(tmp_path: Path) -> None:
+    unsupported = Platform("Unsupported", "unsupported", "", "NONE", None)
+    with pytest.raises(OrganizeError, match="does not have"):
+        move_to_arkos([], unsupported, tmp_path)
+
+    gba = resolve_platform("GBA")
+    assert gba is not None
+    with pytest.raises(OrganizeError, match="not found"):
+        move_to_arkos([DownloadResult("url", tmp_path / "missing.zip")], gba, tmp_path)
+
+    occupied = tmp_path / "occupied"
+    occupied.write_text("not a directory", encoding="utf-8")
+    with pytest.raises(OrganizeError, match="Cannot create"):
+        move_to_arkos([], gba, occupied)
+
+
+def test_non_zip_has_no_bundled_bios_and_advision_bios_is_rom_local(tmp_path: Path) -> None:
+    advision = resolve_platform("advision")
+    assert advision is not None
+    assert install_bundled_bios(tmp_path / "game.bin", advision, tmp_path) == ()
+    destinations = _bios_destinations(PurePosixPath("advision.zip"), advision, tmp_path)
+    assert destinations == (tmp_path / "advision" / "advision.zip",)
+
+
+def test_bios_member_validation_rejects_links_and_oversized_payload(tmp_path: Path) -> None:
+    archive_path = tmp_path / "bios.zip"
+    link = zipfile.ZipInfo("bios/link.bin")
+    link.external_attr = 0o120777 << 16
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(link, b"target")
+    with (
+        zipfile.ZipFile(archive_path) as archive,
+        pytest.raises(OrganizeError, match="symbolic link"),
+    ):
+        _bundled_bios_members(archive)
+
+
+def test_unique_destination_handles_multiple_suffixes_and_no_suffix(tmp_path: Path) -> None:
+    archive = tmp_path / "game.tar.gz"
+    archive.write_bytes(b"one")
+    (tmp_path / "game (2).tar.gz").write_bytes(b"two")
+    assert unique_destination(archive).name == "game (3).tar.gz"
+    plain = tmp_path / "README"
+    plain.write_text("one")
+    assert unique_destination(plain).name == "README (2)"
