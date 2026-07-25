@@ -564,19 +564,3 @@ Existing repositories that already contain a semantic version tag do not need th
 - **Native Windows import error for curses:** use WSL2.
 - **R36S returns immediately to EmulationStation:** copy the complete latest package again and inspect
   `tools/darkos-downloader/darkos-downloader.log`.
-
-## Project layout
-
-```text
-src/dw_cli/                    Application, TUI, client, download, and library code
-docs/                          Zensical documentation sources
-tests/                         Unit tests
-tests/e2e/                     Offline end-to-end workflows
-scripts/local_vault_server.py  Reusable fake remote service
-scripts/run_local_demo.py      One-command interactive local environment
-scripts/build_artifacts.sh        Wheel, source archive, and R36S ZIP builder
-darkos/dArkOS Downloader.sh    Device Tools launcher
-packaging/                     ARM64 frozen-application build files
-.github/workflows/             Pull-request checks and merged-PR semantic releases
-zensical.toml                  Documentation site configuration
-```
