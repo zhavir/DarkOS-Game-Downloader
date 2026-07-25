@@ -70,6 +70,21 @@ if ! file "$EXECUTABLE" | grep -q "ARM aarch64"; then
     exit 1
 fi
 
+printf '%s\n' "Testing the exported application without the builder's Python installation..."
+SMOKE_VERSION=$(
+    docker run \
+        --rm \
+        --platform linux/arm64 \
+        --volume "$WORK_DIR/export/darkos-downloader:/app:ro" \
+        ubuntu:18.04 \
+        /app/darkos-downloader --version
+)
+if [ "$SMOKE_VERSION" != "dw $RELEASE_VERSION" ]; then
+    printf 'Clean ARM64 smoke test returned %s instead of dw %s.\n' \
+        "$SMOKE_VERSION" "$RELEASE_VERSION" >&2
+    exit 1
+fi
+
 mkdir -p "$WORK_DIR/bundle/tools/darkos-downloader"
 cp -R "$WORK_DIR/export/darkos-downloader/." "$WORK_DIR/bundle/tools/darkos-downloader/"
 cp "$WORK_DIR/export/ca-certificates.crt" \

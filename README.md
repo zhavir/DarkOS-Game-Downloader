@@ -396,8 +396,10 @@ The selected default store is saved under `tools/darkos-downloader/.downloads`, 
 application files with a newer release keeps the setting.
 For future updates, open **Settings → Check for application update**. The TUI downloads and validates
 the exact new R36S bundle, closes, and lets the Tools launcher swap it into place while preserving
-`.downloads`. Reopen the tool after the success message. Manual copying remains available as a
-recovery path if an SD-card write is interrupted.
+`.downloads`. The launcher returns directly to EmulationStation without opening a keyboard-only
+confirmation dialog. Reopen the tool to verify the update: the previous version remains available
+until the updated TUI exits successfully and is restored automatically if that first launch crashes.
+Manual copying remains available as a recovery path if an SD-card write is interrupted.
 The application reads the live device tree exposed by Linux; you do not need to find or decompile a
 `.dtb` file. Device-tree key labels and `linux,code` values are diagnostic clues. The active
 joystick ioctl mapping remains authoritative because a DTB does not reliably describe joydev button

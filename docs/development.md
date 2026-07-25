@@ -120,4 +120,6 @@ sh scripts/build_artifacts.sh
 
 This creates the uv wheel and source distribution, downloads a fresh Python 3.14 ARM64 runtime,
 performs an uncached PyInstaller build, verifies the ELF architecture, and writes the self-contained
-R36S ZIP under `dist/`.
+R36S ZIP under `dist/`. Before packaging, it also runs the exported application in a clean ARM64
+Ubuntu 18.04 container without the builder's Python installation and requires the exact release
+version.
