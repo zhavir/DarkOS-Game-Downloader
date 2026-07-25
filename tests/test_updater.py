@@ -175,15 +175,25 @@ def test_device_launcher_applies_pending_update_and_preserves_download_state(
     current_executable = install_directory / "darkos-downloader"
     current_executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     staged_executable = staged_install / "darkos-downloader"
-    staged_executable.write_text("#!/bin/sh\n# updated\nexit 0\n", encoding="utf-8")
+    staged_executable.write_text(
+        "#!/bin/sh\n# updated\n"
+        'if [ "${1:-}" = "--version" ]; then printf "dw 1.2.0\\n"; exit 0; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
     current_executable.chmod(0o755)
     staged_executable.chmod(0o755)
     downloads = install_directory / ".downloads"
     downloads.mkdir()
-    (downloads / "preference.json").write_text("saved\n", encoding="utf-8")
+    preferences = downloads / ".darkos-downloader.json"
+    preferences.write_text('{"store": "minerva"}\n', encoding="utf-8")
     (pending / READY_MARKER).write_text("1.2.0\n", encoding="ascii")
     _write_executable(fake_commands / "uname", "#!/bin/sh\nprintf 'aarch64\\n'\n")
-    _write_executable(fake_commands / "dialog", "#!/bin/sh\nexit 0\n")
+    dialog_called = tmp_path / "dialog-called"
+    _write_executable(
+        fake_commands / "dialog",
+        f'#!/bin/sh\ntouch "{dialog_called}"\nexit 0\n',
+    )
     environment = dict(os.environ)
     environment["PATH"] = f"{fake_commands}{os.pathsep}{environment['PATH']}"
 
@@ -198,9 +208,144 @@ def test_device_launcher_applies_pending_update_and_preserves_download_state(
 
     assert completed.returncode == 0, completed.stderr
     assert "# updated" in (install_directory / "darkos-downloader").read_text(encoding="utf-8")
-    assert (install_directory / ".downloads" / "preference.json").read_text() == "saved\n"
+    assert preferences.read_text(encoding="utf-8") == '{"store": "minerva"}\n'
     assert not pending.exists()
+    assert (tools_directory / ".darkos-downloader-backup").is_dir()
+    assert not dialog_called.exists()
+
+    confirmed = subprocess.run(
+        ["/bin/sh", str(launcher), "--run-on-vt"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert confirmed.returncode == 0, confirmed.stderr
+    assert preferences.read_text(encoding="utf-8") == '{"store": "minerva"}\n'
     assert not (tools_directory / ".darkos-downloader-backup").exists()
+    assert not dialog_called.exists()
+
+
+def test_device_launcher_rolls_back_a_crashing_update_and_keeps_preferences(
+    tmp_path: Path,
+) -> None:
+    tools_directory = tmp_path / "tools"
+    install_directory = tools_directory / "darkos-downloader"
+    pending = tools_directory / PENDING_UPDATE_DIRECTORY
+    staged_install = pending / "darkos-downloader"
+    fake_commands = tmp_path / "commands"
+    install_directory.mkdir(parents=True)
+    staged_install.mkdir(parents=True)
+    fake_commands.mkdir()
+    launcher = tools_directory / "dArkOS Downloader.sh"
+    source_launcher = REPOSITORY_ROOT / "darkos" / "dArkOS Downloader.sh"
+    shutil.copy2(source_launcher, launcher)
+    shutil.copy2(source_launcher, pending / "dArkOS Downloader.sh")
+    current_executable = install_directory / "darkos-downloader"
+    current_executable.write_text("#!/bin/sh\n# previous\nexit 0\n", encoding="utf-8")
+    staged_executable = staged_install / "darkos-downloader"
+    staged_executable.write_text(
+        "#!/bin/sh\n# crashing update\n"
+        'if [ "${1:-}" = "--version" ]; then printf "dw 1.2.0\\n"; exit 0; fi\n'
+        'printf "updated TUI crashed\\n" >&2\nexit 42\n',
+        encoding="utf-8",
+    )
+    current_executable.chmod(0o755)
+    staged_executable.chmod(0o755)
+    downloads = install_directory / ".downloads"
+    downloads.mkdir()
+    preferences = downloads / ".darkos-downloader.json"
+    preferences.write_text('{"store": "minerva"}\n', encoding="utf-8")
+    (pending / READY_MARKER).write_text("1.2.0\n", encoding="ascii")
+    _write_executable(fake_commands / "uname", "#!/bin/sh\nprintf 'aarch64\\n'\n")
+    dialog_called = tmp_path / "dialog-called"
+    _write_executable(
+        fake_commands / "dialog",
+        f'#!/bin/sh\ntouch "{dialog_called}"\nexit 0\n',
+    )
+    environment = dict(os.environ)
+    environment["PATH"] = f"{fake_commands}{os.pathsep}{environment['PATH']}"
+
+    installed = subprocess.run(
+        ["/bin/sh", str(launcher), "--run-on-vt"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert installed.returncode == 0, installed.stderr
+    assert "# crashing update" in current_executable.read_text(encoding="utf-8")
+    assert (tools_directory / ".darkos-downloader-backup").is_dir()
+
+    recovered = subprocess.run(
+        ["/bin/sh", str(launcher), "--run-on-vt"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert "# previous" in current_executable.read_text(encoding="utf-8")
+    assert preferences.read_text(encoding="utf-8") == '{"store": "minerva"}\n'
+    assert "updated TUI crashed" in (install_directory / "darkos-downloader.log").read_text()
+    assert (
+        "Rolled back application update"
+        in (install_directory / "darkos-downloader.log").read_text()
+    )
+    assert not (tools_directory / ".darkos-downloader-backup").exists()
+    assert not dialog_called.exists()
+
+
+def test_device_launcher_recovers_preferences_after_interrupted_update(
+    tmp_path: Path,
+) -> None:
+    tools_directory = tmp_path / "tools"
+    install_directory = tools_directory / "darkos-downloader"
+    backup = tools_directory / ".darkos-downloader-backup"
+    fake_commands = tmp_path / "commands"
+    install_directory.mkdir(parents=True)
+    backup.mkdir(parents=True)
+    fake_commands.mkdir()
+    launcher = tools_directory / "dArkOS Downloader.sh"
+    source_launcher = REPOSITORY_ROOT / "darkos" / "dArkOS Downloader.sh"
+    shutil.copy2(source_launcher, launcher)
+    shutil.copy2(source_launcher, backup / ".previous-launcher.sh")
+    interrupted_executable = install_directory / "darkos-downloader"
+    interrupted_executable.write_text("#!/bin/sh\n# incomplete update\nexit 0\n", encoding="utf-8")
+    previous_executable = backup / "darkos-downloader"
+    previous_executable.write_text("#!/bin/sh\n# previous\nexit 0\n", encoding="utf-8")
+    interrupted_executable.chmod(0o755)
+    previous_executable.chmod(0o755)
+    preferences = backup / ".downloads" / ".darkos-downloader.json"
+    preferences.parent.mkdir()
+    preferences.write_text('{"store": "minerva"}\n', encoding="utf-8")
+    _write_executable(fake_commands / "uname", "#!/bin/sh\nprintf 'aarch64\\n'\n")
+    environment = dict(os.environ)
+    environment["PATH"] = f"{fake_commands}{os.pathsep}{environment['PATH']}"
+
+    recovered = subprocess.run(
+        ["/bin/sh", str(launcher), "--run-on-vt"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert "# previous" in interrupted_executable.read_text(encoding="utf-8")
+    restored_preferences = install_directory / ".downloads" / ".darkos-downloader.json"
+    assert restored_preferences.read_text(encoding="utf-8") == '{"store": "minerva"}\n'
+    assert (
+        "update transaction was interrupted"
+        in (install_directory / "darkos-downloader.log").read_text()
+    )
+    assert not backup.exists()
 
 
 def _bundle_bytes() -> bytes:

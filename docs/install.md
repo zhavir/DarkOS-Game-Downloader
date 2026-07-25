@@ -33,8 +33,10 @@ tools/
 
     Open **Settings → Check for application update** in the TUI. Confirm a newer version and wait for
     it to finish. The application closes so its Tools launcher can transactionally replace the
-    executable while preserving `.downloads`, including the selected store and caches. Reopen the
-    tool after the success message. No Python, uv, or external update utility is used.
+    executable while preserving `.downloads`, including the selected store, Minerva settings, and
+    caches. It returns directly to EmulationStation without a second confirmation dialog. Reopen the
+    tool to verify the update; if that first TUI launch crashes, the launcher restores the previous
+    application while retaining the preferences. No Python, uv, or external update utility is used.
 
 ## ROM cards and folders
 

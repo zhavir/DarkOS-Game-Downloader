@@ -12,6 +12,9 @@ CA_BUNDLE="$APP_DIR/ca-certificates.crt"
 UPDATE_DIR="$SCRIPT_DIR/.darkos-downloader-update"
 UPDATE_BACKUP="$SCRIPT_DIR/.darkos-downloader-backup"
 UPDATE_LAUNCHER_TEMP="$SCRIPT_DIR/.darkos-downloader-launcher.new"
+PREVIOUS_LAUNCHER_NAME=".previous-launcher.sh"
+FAILED_UPDATE_DIR="$SCRIPT_DIR/.darkos-downloader-failed"
+VERIFICATION_MARKER=".update-awaiting-first-launch"
 
 show_failure() {
     message="dArkOS Downloader stopped with exit code $1.\n\nDiagnostic log:\n$LOG_FILE"
@@ -27,17 +30,48 @@ show_failure() {
     fi
 }
 
-show_update_message() {
-    title=$1
-    message=$2
-    if command -v dialog >/dev/null 2>&1; then
-        dialog --clear --title "$title" --msgbox "$message" 10 64
-    else
-        clear 2>/dev/null || true
-        printf '\n%s\n\n%s\n\n' "$title" "$message"
-        printf 'Press Enter to return...'
-        read -r _answer
+restore_previous_installation() {
+    reason=$1
+
+    if [ ! -f "$UPDATE_BACKUP/darkos-downloader" ]; then
+        return 1
     fi
+
+    rm -rf "$FAILED_UPDATE_DIR"
+    if [ -d "$APP_DIR" ] && ! mv "$APP_DIR" "$FAILED_UPDATE_DIR"; then
+        return 1
+    fi
+    if ! mv "$UPDATE_BACKUP" "$APP_DIR"; then
+        if [ -d "$FAILED_UPDATE_DIR" ]; then
+            mv "$FAILED_UPDATE_DIR" "$APP_DIR" 2>/dev/null || true
+        fi
+        return 1
+    fi
+
+    if [ -d "$FAILED_UPDATE_DIR/.downloads" ]; then
+        rm -rf "$APP_DIR/.downloads"
+        if ! mv "$FAILED_UPDATE_DIR/.downloads" "$APP_DIR/.downloads"; then
+            return 1
+        fi
+    fi
+    if [ -f "$APP_DIR/$PREVIOUS_LAUNCHER_NAME" ]; then
+        if ! cp "$APP_DIR/$PREVIOUS_LAUNCHER_NAME" "$UPDATE_LAUNCHER_TEMP"; then
+            return 1
+        fi
+        chmod +x "$UPDATE_LAUNCHER_TEMP" 2>/dev/null || true
+        if ! mv "$UPDATE_LAUNCHER_TEMP" "$LAUNCHER"; then
+            return 1
+        fi
+        rm -f "$APP_DIR/$PREVIOUS_LAUNCHER_NAME"
+    fi
+
+    if [ -f "$FAILED_UPDATE_DIR/darkos-downloader.log" ]; then
+        printf '%s\n' "Output captured from the failed updated version:" >>"$LOG_FILE"
+        cat "$FAILED_UPDATE_DIR/darkos-downloader.log" >>"$LOG_FILE" 2>/dev/null || true
+    fi
+    rm -rf "$FAILED_UPDATE_DIR" "$UPDATE_DIR"
+    printf 'Rolled back application update: %s\n' "$reason" >>"$LOG_FILE"
+    return 0
 }
 
 apply_pending_update() {
@@ -53,18 +87,12 @@ apply_pending_update() {
     if [ ! -f "$staged_executable" ] || [ ! -f "$staged_launcher" ]; then
         printf '%s\n' "A staged update is incomplete; keeping the installed version." >>"$LOG_FILE"
         rm -rf "$UPDATE_DIR"
-        show_update_message \
-            "dArkOS Downloader update failed" \
-            "The downloaded update was incomplete. The installed version was not changed."
         return 2
     fi
 
     rm -f "$UPDATE_LAUNCHER_TEMP"
     if ! cp "$staged_launcher" "$UPDATE_LAUNCHER_TEMP"; then
         printf '%s\n' "Could not prepare the updated Tools launcher." >>"$LOG_FILE"
-        show_update_message \
-            "dArkOS Downloader update failed" \
-            "The new launcher could not be prepared. The installed version was not changed."
         return 2
     fi
     chmod +x "$UPDATE_LAUNCHER_TEMP" "$staged_executable" 2>/dev/null || true
@@ -72,54 +100,56 @@ apply_pending_update() {
     rm -rf "$UPDATE_BACKUP"
     if ! mv "$APP_DIR" "$UPDATE_BACKUP"; then
         rm -f "$UPDATE_LAUNCHER_TEMP"
-        show_update_message \
-            "dArkOS Downloader update failed" \
-            "The installed application could not be backed up. It was not changed."
+        return 2
+    fi
+    if ! cp "$LAUNCHER" "$UPDATE_BACKUP/$PREVIOUS_LAUNCHER_NAME"; then
+        mv "$UPDATE_BACKUP" "$APP_DIR" 2>/dev/null || true
+        rm -f "$APP_DIR/$PREVIOUS_LAUNCHER_NAME"
+        rm -f "$UPDATE_LAUNCHER_TEMP"
         return 2
     fi
     if ! mv "$staged_app" "$APP_DIR"; then
         mv "$UPDATE_BACKUP" "$APP_DIR" 2>/dev/null || true
+        rm -f "$APP_DIR/$PREVIOUS_LAUNCHER_NAME"
         rm -f "$UPDATE_LAUNCHER_TEMP"
-        show_update_message \
-            "dArkOS Downloader update failed" \
-            "The new application could not be installed. The previous version was restored."
         return 2
     fi
     if [ -d "$UPDATE_BACKUP/.downloads" ]; then
         rm -rf "$APP_DIR/.downloads"
         if ! mv "$UPDATE_BACKUP/.downloads" "$APP_DIR/.downloads"; then
-            rm -rf "$APP_DIR"
-            mv "$UPDATE_BACKUP" "$APP_DIR" 2>/dev/null || true
             rm -f "$UPDATE_LAUNCHER_TEMP"
-            show_update_message \
-                "dArkOS Downloader update failed" \
-                "Settings could not be preserved. The previous version was restored."
+            restore_previous_installation "settings could not be moved to the update" || true
             return 2
         fi
     fi
     if ! mv "$UPDATE_LAUNCHER_TEMP" "$LAUNCHER"; then
-        if [ -d "$APP_DIR/.downloads" ]; then
-            mv "$APP_DIR/.downloads" "$UPDATE_BACKUP/.downloads" 2>/dev/null || true
-        fi
-        rm -rf "$APP_DIR"
-        mv "$UPDATE_BACKUP" "$APP_DIR" 2>/dev/null || true
-        show_update_message \
-            "dArkOS Downloader update failed" \
-            "The Tools launcher could not be updated. The previous version was restored."
+        restore_previous_installation "the Tools launcher could not be replaced" || true
         return 2
     fi
 
-    rm -rf "$UPDATE_BACKUP" "$UPDATE_DIR"
+    reported_version=$("$EXECUTABLE" --version 2>>"$LOG_FILE" || true)
+    if [ "$reported_version" != "dw $update_version" ]; then
+        restore_previous_installation \
+            "the new executable failed its startup or version check" || true
+        return 2
+    fi
+
+    if ! printf '%s\n' "$update_version" >"$APP_DIR/$VERIFICATION_MARKER"; then
+        restore_previous_installation "first-launch verification could not be prepared" || true
+        return 2
+    fi
+    rm -rf "$UPDATE_DIR"
     printf 'Updated dArkOS Downloader to v%s.\n' "$update_version" >>"$LOG_FILE"
-    show_update_message \
-        "dArkOS Downloader updated" \
-        "Version $update_version is installed. Reopen the tool to use it."
+    printf '%s\n' "The previous version is retained until the updated TUI exits successfully." \
+        >>"$LOG_FILE"
     return 0
 }
 
-if [ ! -f "$EXECUTABLE" ] && [ -f "$UPDATE_BACKUP/darkos-downloader" ]; then
-    rm -rf "$APP_DIR"
-    mv "$UPDATE_BACKUP" "$APP_DIR" 2>/dev/null || true
+if [ -f "$UPDATE_BACKUP/darkos-downloader" ] && \
+    [ ! -f "$APP_DIR/$VERIFICATION_MARKER" ]; then
+    restore_previous_installation "the update transaction was interrupted" || true
+elif [ ! -f "$EXECUTABLE" ] && [ -f "$UPDATE_BACKUP/darkos-downloader" ]; then
+    restore_previous_installation "the updated executable was missing at startup" || true
 fi
 
 if [ ! -f "$EXECUTABLE" ]; then
@@ -174,15 +204,36 @@ run_application() {
     chmod +x "$EXECUTABLE" 2>/dev/null || true
     clear 2>/dev/null || true
 
+    verifying_update=false
+    if [ -f "$UPDATE_BACKUP/darkos-downloader" ] && \
+        [ -f "$APP_DIR/$VERIFICATION_MARKER" ]; then
+        verifying_update=true
+    fi
+
     set +e
     "$EXECUTABLE" 2>>"$LOG_FILE"
     status=$?
     set -e
 
-    set +e
-    apply_pending_update
-    update_status=$?
-    set -e
+    if [ "$verifying_update" = true ]; then
+        if [ "$status" -eq 0 ]; then
+            rm -rf "$UPDATE_BACKUP"
+            rm -f "$APP_DIR/$VERIFICATION_MARKER"
+            printf '%s\n' "Updated TUI exited successfully; removed the previous version." \
+                >>"$LOG_FILE"
+        elif restore_previous_installation "the updated TUI exited with code $status"; then
+            clear 2>/dev/null || true
+            return 0
+        fi
+    fi
+
+    update_status=1
+    if [ "$status" -eq 0 ]; then
+        set +e
+        apply_pending_update
+        update_status=$?
+        set -e
+    fi
     refresh_emulationstation
     if [ "$status" -ne 0 ]; then
         show_failure "$status"
