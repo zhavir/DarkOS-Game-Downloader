@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-07-25)
+
+### Features
+
+- Expose torrent option in the tui ([#6](https://github.com/zhavir/DarkOS-Game-Downloader/pull/6),
+  [`d45cc3d`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/d45cc3d97b84b532c98f63185f4918e4a7015d29))
+
+
 ## v1.1.0 (2026-07-24)
 
 ### Bug Fixes
