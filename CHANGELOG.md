@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-07-25)
+
+### Bug Fixes
+
+- Make the download less strict on the final file name position
+  ([`b9523bb`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/b9523bb770e8ea417206204c6f195d621976e109))
+
+### Continuous Integration
+
+- Fix warnings on ci
+  ([`51372af`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/51372aff265d70aeb69d17233581b47aeafc3897))
+
+
 ## v1.5.0 (2026-07-25)
 
 ### Features
