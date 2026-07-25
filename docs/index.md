@@ -15,7 +15,11 @@ so neither Python, uv, nor a package manager is required on the handheld.
 - Downloads selected Minerva files without requiring an external torrent client.
 - Accepts an empty search to list the complete selected catalogue, including **All platforms**.
 - Downloads a selected game and moves it into the correct dArkOS ROM folder on SD1 or SD2.
-- Installs explicitly bundled BIOS files without overwriting existing firmware.
+- Installs bundled BIOS files first, checks both SD cards, and offers required missing firmware
+  through RetroBIOS.
+- Provides a manual BIOS catalogue search for required and optional firmware.
+- Caches R36S compatibility scores and RetroBIOS metadata locally, marks them stale after seven
+  days, and refreshes them only when requested in **Settings**.
 - Updates and deletes installed games while preserving multi-file `.cue` and `.m3u` groups.
 - Queues an EmulationStation game-list refresh after every install, update, or deletion, keeps the
   TUI open, and applies one refresh when the user exits.

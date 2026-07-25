@@ -19,8 +19,9 @@ required on the handheld.
 - Choose Vimm or Minerva Archive once and change the preferred store later in **Settings**.
 - Download to the correct dArkOS ROM folder on SD1 or SD2.
 - Show R36S compatibility information before downloading when a reliable match is available.
-- Install BIOS files explicitly bundled inside a game's `bios/` directory without overwriting an
-  existing BIOS.
+- Cache the R36S Game List locally and refresh it only when requested from **Settings**.
+- Install BIOS files bundled with a game first, then check required firmware across both SD cards.
+- Offer required missing BIOS through RetroBIOS, plus a manual BIOS search from the main menu.
 - Scan, update, and delete installed games, including grouped `.cue` and `.m3u` files.
 - Cancel active downloads with B or Escape and remove incomplete files.
 - Refresh the EmulationStation game list once when the TUI closes after a library change.
@@ -82,6 +83,28 @@ On first launch, choose the default store. Then:
 
 Downloads are completed in a staging directory before being moved. Existing ROMs are not silently
 overwritten.
+
+## BIOS requirements and downloads
+
+After a game is installed, the downloader processes any firmware supplied in its explicit `bios/`
+directory before checking for anything else. It then compares the game's required firmware with
+the BIOS directories on both SD cards. A valid copy on either card counts as installed, so it does
+not ask to download a duplicate.
+
+If required firmware is still missing or has the wrong checksum, the TUI explains what was found
+and lets you either download the verified file from
+[RetroBIOS](https://github.com/Abdess/retrobios) or keep the game without it. Optional firmware is
+not prompted automatically. Known ROM-local exceptions are installed in their required locations.
+
+Use **Search and download BIOS** on the main menu to browse all supported firmware, including
+optional files, and install one manually. The RetroBIOS catalogue is downloaded on the first BIOS
+operation and cached under `.downloads/retrobios`. It is not refreshed automatically; use
+**Settings → Update RetroBIOS catalogue** when you want the latest upstream metadata.
+
+The R36S Game List used for compatibility scores follows the same policy: it is fetched on first
+use, stored locally, and refreshed only through **Settings → Update R36S Game List**. Both catalogue
+timestamps have a seven-day TTL. After seven days Settings marks the cache as stale, but the saved
+copy remains usable until you choose to update it; searches never replace it silently.
 
 ### Stores
 
@@ -146,6 +169,15 @@ uv run dw search GBA
 uv run dw --store minerva search ALL "mario"
 uv run dw download --platform GBA --roms-directory .local-test/sd1 DETAIL_URL
 ```
+
+The live RetroBIOS integration test downloads current metadata and one small firmware file from the
+real upstream service:
+
+```sh
+uv run pytest -m live tests/e2e/test_live_retrobios.py -v
+```
+
+Run it only where outbound GitHub access is available. The ordinary test suite remains offline.
 
 ## Configuration
 

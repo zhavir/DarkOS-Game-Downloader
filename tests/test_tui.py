@@ -360,6 +360,7 @@ def test_completed_download_defers_refresh_until_tui_exit(
         "download_request",
         lambda _url: MediaDownload("https://example.test/game.zip"),
     )
+    mocker.patch.object(tui, "_bios_followup", new=lambda *_args: 0)
     refresh_requests: list[bool] = []
     mocker.patch(
         "dw_cli.tui.request_emulationstation_refresh",
@@ -381,7 +382,7 @@ def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> N
     tui.refresh_on_exit = True
     tui.exit_after_update = False
     tui.gamepad = None
-    choices = iter((5, 1))
+    choices = iter((6, 1))
     mocker.patch.object(tui, "_menu", new=lambda *_args: next(choices))
     refresh_requests: list[bool] = []
     mocker.patch(

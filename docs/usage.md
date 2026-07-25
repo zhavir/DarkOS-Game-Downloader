@@ -33,6 +33,17 @@ Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace,
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
 
+## Compatibility catalogue
+
+The first compatible-platform search downloads the frontend game index from R36S Game List and
+stores it in `.downloads/.r36s-game-list-cache.json`. Later searches use that local copy without a
+network request to the compatibility site. Open **Settings → Update R36S Game List** to fetch a new
+copy explicitly.
+
+The cache has a seven-day TTL. Once it is older than seven days, Settings labels it **stale**, while
+searches continue using the available offline copy until you decide to refresh it. A failed refresh
+does not remove or replace the working catalogue.
+
 Minerva distributes games through per-platform torrents. The application has its own Python
 BitTorrent client and retrieves only the chosen file's verified pieces. No external torrent client
 is installed or invoked. The client does not seed or accept incoming peer connections; your public
@@ -92,9 +103,30 @@ the updated TUI exits successfully; a crash during that first launch restores th
 without losing preferences. Automatic application updates are available in the self-contained R36S
 package.
 
-## Bundled BIOS files
+## BIOS requirements and downloads
 
-Only files under an explicit `bios/` subtree in a downloaded ZIP are treated as firmware. They are
-installed into the selected card's shared BIOS directory and never overwrite an existing file.
-Known ROM-local exceptions are handled automatically, including Neo Geo firmware copied beside the
-ROM set.
+The downloader handles firmware in this order after installing or updating a game:
+
+1. It installs files supplied under an explicit `bios/` subtree in the downloaded archive. Existing
+   firmware is never silently overwritten.
+2. It checks the required BIOS files for the selected platform, using checksums where available.
+3. It searches the BIOS locations on both SD cards. A valid copy on either card satisfies the
+   requirement.
+4. Only unresolved required files produce a prompt. Choose **Download from RetroBIOS** or keep the
+   game without them after reviewing the details. Optional files are not prompted automatically.
+
+The requirement and checksum catalogue comes from
+[RetroBIOS](https://github.com/Abdess/retrobios). It is downloaded once, when a BIOS operation first
+needs it, and then loaded from `.downloads/retrobios/catalogue.json`. The application never refreshes
+it silently. Its seven-day TTL is shown as **stale** in Settings after it expires; the saved copy
+continues to work. Select **Settings → Update RetroBIOS catalogue** to replace the cache with current
+upstream metadata; a failed update leaves the working cache intact.
+
+Select **Search and download BIOS** on the main menu to browse by system, platform, filename,
+description, or region. An empty search lists the complete supported catalogue. The details screen
+shows whether the file is required or optional and whether it is valid, missing, or invalid on the
+detected cards. Downloads require explicit confirmation that you may legally obtain the firmware.
+
+Known ROM-local exceptions are installed automatically, including Neo Geo firmware copied beside
+the ROM set. Some emulator cores have different optional firmware choices; use the manual search if
+the core configured on your image needs a file that was not offered automatically.

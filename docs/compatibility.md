@@ -25,6 +25,15 @@ are shown as unlisted instead of presenting uncertain compatibility as fact.
 If the site or network is unavailable, searching and downloading continue normally with the known
 platform-level rating.
 
+## Offline cache
+
+The frontend title catalogue is fetched on the first compatible-platform search and then read from
+the device's local `.downloads/.r36s-game-list-cache.json`. It is not contacted again during normal
+searches. Open **Settings → Update R36S Game List** when you want to replace the cache.
+
+Settings marks the catalogue **stale** after its seven-day TTL. A stale catalogue remains usable
+offline until you explicitly refresh it, and a failed refresh preserves the prior copy.
+
 ## Explicitly excluded families
 
 PS2, PS3, PS4, PS5, Xbox, Xbox 360, Xbox One, GameCube, Wii, Wii U, Nintendo Switch, Nintendo 3DS,

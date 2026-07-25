@@ -1,6 +1,8 @@
 """R36S compatibility ratings and cached r36sgamelist.com title matching."""
 
 import json
+import logging
+import os
 import re
 import ssl
 import unicodedata
@@ -18,7 +20,9 @@ from dw_cli.models import Platform, SearchResult
 from dw_cli.store import USER_AGENT
 
 R36S_GAME_LIST_URL = "https://r36sgamelist.com"
-CACHE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
+CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
+
+LOGGER = logging.getLogger(__name__)
 
 _SCRIPT_PATTERN = re.compile(r'(?:src|href)="([^"?#]+\.js(?:\?[^"#]*)?)"')
 _GAME_PATTERN = re.compile(
@@ -178,6 +182,10 @@ type FetchText = Callable[[str], str]
 type TitleIndex = Mapping[str, Sequence[str]]
 
 
+class CompatibilityError(RuntimeError):
+    """The R36S Game List catalogue could not be downloaded or stored."""
+
+
 @dataclass(frozen=True, slots=True)
 class CompatibilityInfo:
     """Compatibility displayed next to one remote search result."""
@@ -278,6 +286,40 @@ class R36SCompatibilityClient:
             for result, console in zip(results, consoles, strict=True)
         ]
 
+    def load(self) -> frozenset[GameKey] | None:
+        """Load the local catalogue, including a stale but still usable copy."""
+
+        cached = self._read_cache()
+        if cached is not None:
+            self._game_index = cached
+        return cached
+
+    def refresh(self) -> int:
+        """Explicitly replace the cache with the current frontend catalogue."""
+
+        try:
+            index = self._download_game_index()
+            self._write_cache(index, strict=True)
+        except CompatibilityError:
+            raise
+        except (OSError, TimeoutError, ValueError) as error:
+            raise CompatibilityError(f"Could not update the R36S Game List: {error}") from error
+        self._game_index = index
+        LOGGER.info("R36S Game List cached games=%d path=%s", len(index), self.cache_path)
+        return len(index)
+
+    def cache_age_seconds(self) -> float | None:
+        """Return the age of a valid local cache, or ``None`` when unavailable."""
+
+        payload = self._read_cache_payload()
+        return None if payload is None else max(0.0, time() - payload[0])
+
+    def cache_is_stale(self) -> bool:
+        """Return whether the local catalogue is older than seven days."""
+
+        age = self.cache_age_seconds()
+        return age is not None and age > CACHE_TTL_SECONDS
+
     @staticmethod
     def _result_console(result: SearchResult, platform: Platform) -> str | None:
         candidates = (
@@ -374,27 +416,38 @@ class R36SCompatibilityClient:
             return ""
 
     def _read_cache(self) -> frozenset[GameKey] | None:
+        payload = self._read_cache_payload()
+        return None if payload is None else payload[1]
+
+    def _read_cache_payload(self) -> tuple[float, frozenset[GameKey]] | None:
         try:
             payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
             fetched_at = float(payload["fetched_at"])
             games = payload["games"]
-            if time() - fetched_at > CACHE_MAX_AGE_SECONDS or not isinstance(games, list):
+            if not isinstance(games, list):
                 return None
             index = frozenset((str(item[0]), str(item[1])) for item in games)
         except IndexError, KeyError, OSError, TypeError, ValueError, json.JSONDecodeError:
             return None
-        return index if index else None
+        return (fetched_at, index) if index else None
 
-    def _write_cache(self, index: frozenset[GameKey]) -> None:
+    def _write_cache(self, index: frozenset[GameKey], *, strict: bool = False) -> None:
         payload = {"fetched_at": time(), "games": sorted(index)}
+        temporary = self.cache_path.with_name(self.cache_path.name + ".tmp")
         try:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_path.write_text(
+            temporary.write_text(
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
                 encoding="utf-8",
             )
-        except OSError:
-            pass
+            os.replace(temporary, self.cache_path)
+        except OSError as error:
+            temporary.unlink(missing_ok=True)
+            if strict:
+                raise CompatibilityError(
+                    f"Could not save the R36S Game List catalogue: {error}"
+                ) from error
+            LOGGER.warning("Could not cache the R36S Game List: %s", error)
 
 
 def parse_game_index(document: str) -> frozenset[GameKey]:

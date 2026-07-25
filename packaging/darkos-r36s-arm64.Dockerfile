@@ -11,17 +11,14 @@ RUN tar -xzf /tmp/python.tar.gz -C /opt && rm /tmp/python.tar.gz
 ENV PATH="/opt/python/bin:${PATH}"
 WORKDIR /work
 
-RUN python3 -m ensurepip --upgrade && \
-    python3 -m pip install --no-cache-dir "pyinstaller==6.21.0"
-
 ARG APP_VERSION
+COPY dist/*.whl /tmp/dist/
 RUN test -n "$APP_VERSION" && \
-    METADATA_DIR="/opt/python/lib/python3.14/site-packages/darkos_downloader-${APP_VERSION}.dist-info" && \
-    mkdir -p "$METADATA_DIR" && \
-    printf 'Metadata-Version: 2.4\nName: darkos-downloader\nVersion: %s\n' "$APP_VERSION" \
-        > "$METADATA_DIR/METADATA"
+    python3 -m ensurepip --upgrade && \
+    python3 -m pip install --no-cache-dir \
+        "pyinstaller==6.21.0" \
+        "/tmp/dist/darkos_downloader-${APP_VERSION}-py3-none-any.whl"
 
-COPY src /work/src
 COPY packaging/frozen_entry.py /work/packaging/frozen_entry.py
 
 RUN python3 -m PyInstaller \
@@ -29,7 +26,6 @@ RUN python3 -m PyInstaller \
     --noconfirm \
     --onedir \
     --name darkos-downloader \
-    --paths /work/src \
     --copy-metadata darkos-downloader \
     /work/packaging/frozen_entry.py && \
     /work/dist/darkos-downloader/darkos-downloader --version

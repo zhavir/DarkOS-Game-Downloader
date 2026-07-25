@@ -14,6 +14,7 @@ from typing import Any
 
 from dw_cli.bittorrent import BitTorrentSettings, TorrentFileChoice
 from dw_cli.compatibility import (
+    CompatibilityError,
     CompatibilityInfo,
     R36SCompatibilityClient,
     filter_supported_results,
@@ -48,6 +49,18 @@ from dw_cli.preferences import (
     load_preferences,
     preference_path,
     save_preferences,
+)
+from dw_cli.retrobios import (
+    BiosCheck,
+    BiosDownloadCancelled,
+    BiosError,
+    BiosState,
+    RetroBiosCatalog,
+    RetroBiosRepository,
+    audit_bios,
+    audit_bios_roots,
+    install_bios,
+    unresolved,
 )
 from dw_cli.store import GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
@@ -106,6 +119,11 @@ class DownloaderTui:
         self.preferences_path = preference_path(config.download_directory)
         preferences = load_preferences(self.preferences_path)
         self.preferences = preferences
+        self.retrobios_repository = RetroBiosRepository(
+            config.download_directory,
+            config.timeout_seconds,
+        )
+        self.retrobios_catalog: RetroBiosCatalog | None = None
         self.selected_store = (
             self.store_catalog.find(preferences.store_id) if preferences.store_id else None
         )
@@ -163,6 +181,7 @@ class DownloaderTui:
                 "Search the library",
                 "Download from a detail link",
                 "Manage installed games",
+                "Search and download BIOS",
                 "Settings",
                 "dArkOS status and controls",
                 "Exit",
@@ -173,7 +192,7 @@ class DownloaderTui:
                     options,
                     "D-pad/stick: move   A/Enter: select",
                 )
-                if choice is None or choice == 5:
+                if choice is None or choice == 6:
                     if self._confirm_exit():
                         return
                     continue
@@ -184,8 +203,10 @@ class DownloaderTui:
                 elif choice == 2:
                     self._manage_library_flow()
                 elif choice == 3:
-                    self._settings_screen()
+                    self._bios_search_flow()
                 elif choice == 4:
+                    self._settings_screen()
+                elif choice == 5:
                     self._status_screen()
                 if self.exit_after_update:
                     return
@@ -298,7 +319,12 @@ class DownloaderTui:
             ]
             action = self._menu("TITLE DETAILS", [*details, "Download", "Back"], "Select Download")
             if action == len(details):
-                self._download_detail(result.link, effective_platform, store)
+                self._download_detail(
+                    result.link,
+                    effective_platform,
+                    store,
+                    region=result.region,
+                )
             elif action is None or action == len(details) + 1:
                 continue
 
@@ -328,6 +354,8 @@ class DownloaderTui:
         detail_url: str,
         platform: Platform,
         store: GameStore,
+        *,
+        region: str | None = None,
     ) -> None:
         if platform.arkos_folder is None:
             self._error("This platform has no dArkOS ROM folder on supported handhelds.")
@@ -359,11 +387,16 @@ class DownloaderTui:
             self._error(str(error))
             return
         final_path = completed[0].path
+        retrobios_installed = self._bios_followup(platform, roms_directory, region)
         self.refresh_on_exit = True
         LOGGER.info("Game installed path=%s bios_files=%d", final_path, len(installed_bios))
         bios_message = (
             "\nInstalled %d bundled BIOS file(s)." % len(installed_bios) if installed_bios else ""
         )
+        if retrobios_installed:
+            bios_message += "\nInstalled %d required BIOS file(s) from RetroBIOS." % (
+                retrobios_installed
+            )
         self._draw_message(
             "DOWNLOAD COMPLETE",
             f"{final_path.name}\nMoved to {final_path.parent}{bios_message}"
@@ -530,6 +563,11 @@ class DownloaderTui:
             self._error(str(error))
             return False
         self.refresh_on_exit = True
+        retrobios_installed = self._bios_followup(
+            game.platform,
+            game.roms_directory,
+            selected.region,
+        )
         LOGGER.info("Game updated title=%r path=%s", game.title, completed.path)
         self._draw_message(
             "GAME UPDATED",
@@ -539,6 +577,11 @@ class DownloaderTui:
                 "\nInstalled %d bundled BIOS file(s)." % len(installed_bios)
                 if installed_bios
                 else "",
+            )
+            + (
+                "\nInstalled %d required BIOS file(s) from RetroBIOS." % retrobios_installed
+                if retrobios_installed
+                else ""
             )
             + "\nThe game list will refresh when you exit the downloader.",
             4,
@@ -588,8 +631,14 @@ class DownloaderTui:
 
     def _settings_screen(self) -> None:
         current = self.selected_store.display_name if self.selected_store is not None else "not set"
-        options = [f"Change download store  [current: {current}]"]
-        actions = ["store"]
+        retrobios_status = self._retrobios_cache_label()
+        compatibility_status = self._compatibility_cache_label()
+        options = [
+            f"Change download store  [current: {current}]",
+            f"Update RetroBIOS catalogue  [{retrobios_status}]",
+            f"Update R36S Game List  [{compatibility_status}]",
+        ]
+        actions = ["store", "retrobios_update", "compatibility_update"]
         if self.selected_store is not None and self.selected_store.store_id == "minerva":
             options.append("Minerva BitTorrent settings")
             actions.append("minerva")
@@ -610,10 +659,377 @@ class DownloaderTui:
         action = actions[choice]
         if action == "store":
             self._configure_store()
+        elif action == "retrobios_update":
+            self._update_retrobios_catalogue()
+        elif action == "compatibility_update":
+            self._update_compatibility_catalogue()
         elif action == "minerva":
             self._minerva_bittorrent_settings_screen()
         elif action == "update":
             self._application_update_flow()
+
+    def _retrobios_cache_label(self) -> str:
+        if not hasattr(self, "retrobios_repository"):
+            return "not downloaded"
+        try:
+            catalogue = self.retrobios_repository.load()
+        except BiosError:
+            return "cache invalid"
+        if catalogue is None:
+            return "not downloaded"
+        freshness = "stale (>7 days)" if catalogue.cache_is_stale() else "fresh"
+        return f"{catalogue.revision[:8]} - {freshness}"
+
+    def _compatibility_cache_label(self) -> str:
+        if not hasattr(self, "compatibility_client"):
+            return "not downloaded"
+        age = self.compatibility_client.cache_age_seconds()
+        if age is None:
+            return "not downloaded"
+        return "stale (>7 days)" if self.compatibility_client.cache_is_stale() else "fresh"
+
+    def _update_compatibility_catalogue(self) -> None:
+        choice = self._menu(
+            "UPDATE R36S GAME LIST?",
+            ("Download latest compatibility catalogue", "Keep current catalogue"),
+            "The existing offline cache is kept if the update fails",
+        )
+        if choice != 0:
+            return
+        self._draw_message(
+            "UPDATING R36S GAME LIST",
+            "Downloading the current frontend compatibility catalogue...",
+            1,
+        )
+        try:
+            count = self.compatibility_client.refresh()
+        except CompatibilityError as error:
+            self._error(str(error))
+            return
+        self._draw_message(
+            "R36S GAME LIST UPDATED",
+            f"Cached {count} game title(s). The catalogue is valid for seven days.",
+            4,
+            wait=True,
+        )
+
+    def _load_retrobios_catalogue(self, *, update: bool = False) -> RetroBiosCatalog:
+        if not update and self.retrobios_catalog is not None:
+            return self.retrobios_catalog
+        cancelled = Event()
+        state_lock = Lock()
+        progress_state: list[str | int | None] = ["Connecting to RetroBIOS...", 0, None]
+
+        def report(label: str, current: int, total: int | None) -> None:
+            with state_lock:
+                progress_state[:] = [label, current, total]
+
+        operation = self.retrobios_repository.update if update else self.retrobios_repository.ensure
+        with ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="retrobios-catalogue",
+        ) as executor:
+            future = executor.submit(operation, report, cancelled.is_set)
+            while not future.done():
+                with state_lock:
+                    label, current, total = progress_state
+                assert isinstance(label, str)
+                assert isinstance(current, int)
+                assert total is None or isinstance(total, int)
+                self._progress(label, current, total)
+                pressed = self._poll_input()
+                if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
+                    cancelled.set()
+            catalogue = future.result()
+        self.retrobios_catalog = catalogue
+        return catalogue
+
+    def _update_retrobios_catalogue(self) -> None:
+        choice = self._menu(
+            "UPDATE RETROBIOS CATALOGUE?",
+            ("Download latest metadata", "Keep current catalogue"),
+            "The existing offline cache is kept if the update fails",
+        )
+        if choice != 0:
+            return
+        try:
+            catalogue = self._load_retrobios_catalogue(update=True)
+        except BiosDownloadCancelled:
+            self._draw_message(
+                "RETROBIOS UPDATE CANCELLED",
+                "The existing catalogue was not changed.",
+                3,
+                wait=True,
+            )
+            return
+        except BiosError as error:
+            self._error(str(error))
+            return
+        self._draw_message(
+            "RETROBIOS UPDATED",
+            "Revision: {}\nSystems: {}\nRetroArch profile: {}".format(
+                catalogue.revision[:12],
+                len(catalogue.systems),
+                catalogue.retroarch_version or "unknown",
+            ),
+            4,
+            wait=True,
+        )
+
+    def _bios_search_flow(self) -> None:
+        root = self._choose_from_roots(self.roms_directories, "CHOOSE BIOS MEMORY CARD")
+        if root is None:
+            self._error("No dArkOS ROM partition was found.")
+            return
+        try:
+            catalogue = self._load_retrobios_catalogue()
+        except BiosDownloadCancelled:
+            return
+        except BiosError as error:
+            self._error(str(error))
+            return
+        query = self._on_screen_keyboard(
+            "SEARCH BIOS",
+            empty_hint="DONE with no text: list the full R36S BIOS catalogue",
+        )
+        if query is None:
+            return
+        normalized = query.casefold().strip()
+        entries: list[tuple[Platform, BiosCheck]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for platform in self.platforms:
+            if platform.arkos_folder is None:
+                continue
+            system = catalogue.system_for(platform)
+            if system is None:
+                continue
+            for check in audit_bios(system.requirements, platform, root):
+                requirement = check.requirement
+                haystack = " ".join(
+                    (
+                        platform.name,
+                        platform.alias,
+                        system.name,
+                        requirement.name,
+                        requirement.description or "",
+                        requirement.region or "",
+                    )
+                ).casefold()
+                if normalized and normalized not in haystack:
+                    continue
+                key = (
+                    platform.slug,
+                    requirement.destination.casefold(),
+                    requirement.sha256 or requirement.sha1 or requirement.md5 or "",
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                entries.append((platform, check))
+        if not entries:
+            self._draw_message(
+                "NO BIOS RESULTS",
+                f"Nothing matched {query}." if query else "The R36S BIOS catalogue is empty.",
+                3,
+                wait=True,
+            )
+            return
+        while True:
+            choice = self._menu(
+                f"BIOS RESULTS ({len(entries)})",
+                [
+                    f"{platform.alias} | {self._bios_check_label(check)}"
+                    for platform, check in entries
+                ],
+                "Select a BIOS to inspect or download; B/Escape returns",
+            )
+            if choice is None:
+                return
+            platform, old_check = entries[choice]
+            check = audit_bios((old_check.requirement,), platform, root)[0]
+            entries[choice] = (platform, check)
+            requirement = check.requirement
+            detail = [
+                requirement.description or requirement.name,
+                f"Platform: {platform.name}",
+                f"Status: {check.state.value.upper()}",
+                "Required" if requirement.required else "Optional",
+                f"Region: {requirement.region or 'all'}",
+                f"Destination: {check.paths[0]}",
+            ]
+            if requirement.note:
+                detail.append(requirement.note)
+            if check.state is BiosState.VALID:
+                self._draw_message("BIOS DETAILS", "\n".join(detail), 4, wait=True)
+                continue
+            if catalogue.source_url(requirement) is None:
+                detail.append("RetroBIOS has metadata but no downloadable file for this entry.")
+                self._draw_message("BIOS DETAILS", "\n".join(detail), 3, wait=True)
+                continue
+            self._draw_message("BIOS DETAILS", "\n".join(detail), 3, wait=True)
+            confirmation = self._confirm_retrobios_download((check,))
+            if confirmation:
+                self._install_bios_checks(catalogue, (check,), platform, root)
+
+    def _bios_followup(
+        self,
+        platform: Platform,
+        roms_directory: Path,
+        region: str | None,
+    ) -> int:
+        """Offer BIOS only after bundled and existing files have been checked."""
+
+        try:
+            catalogue = self._load_retrobios_catalogue()
+        except BiosDownloadCancelled:
+            return 0
+        except BiosError as error:
+            self._draw_message(
+                "BIOS CHECK UNAVAILABLE",
+                f"The game was installed, but RetroBIOS metadata could not be loaded:\n{error}\n"
+                "You can retry from Search and download BIOS.",
+                3,
+                wait=True,
+            )
+            return 0
+        requirements = catalogue.requirements_for(
+            platform,
+            region,
+            required_only=True,
+        )
+        if not requirements:
+            return 0
+        checks = audit_bios_roots(
+            requirements,
+            platform,
+            self.roms_directories,
+            roms_directory,
+        )
+        missing = unresolved(checks)
+        if not missing:
+            LOGGER.info(
+                "Required BIOS already available platform=%s roots=%s",
+                platform.alias,
+                self.roms_directories,
+            )
+            return 0
+        lines = [
+            "The game archive did not provide these required BIOS files, and no valid copy "
+            "was found on either memory card:",
+            "",
+            *(f"{check.requirement.name} [{check.state.value}]" for check in missing[:8]),
+        ]
+        if len(missing) > 8:
+            lines.append(f"...and {len(missing) - 8} more")
+        self._draw_message("REQUIRED BIOS NOT FOUND", "\n".join(lines), 3, wait=True)
+        choice = self._menu(
+            "DOWNLOAD REQUIRED BIOS?",
+            ("Download from RetroBIOS", "Keep the game without BIOS"),
+            "The game may not start without required firmware",
+        )
+        if choice != 0 or not self._confirm_retrobios_download(missing):
+            LOGGER.warning(
+                "User kept game without %d required BIOS file(s) platform=%s",
+                len(missing),
+                platform.alias,
+            )
+            return 0
+        return self._install_bios_checks(catalogue, missing, platform, roms_directory)
+
+    def _confirm_retrobios_download(self, checks: Sequence[BiosCheck]) -> bool:
+        downloadable = tuple(check for check in checks if check.requirement.source_path is not None)
+        if not downloadable:
+            self._draw_message(
+                "BIOS NOT DOWNLOADABLE",
+                "RetroBIOS has requirement metadata but no downloadable copy for the "
+                "selected files.",
+                3,
+                wait=True,
+            )
+            return False
+        choice = self._menu(
+            "CONFIRM RETROBIOS DOWNLOAD",
+            ("Cancel", f"Download {len(downloadable)} verified BIOS file(s)"),
+            "Only continue if you are permitted to obtain these personal backup files",
+        )
+        return choice == 1
+
+    def _install_bios_checks(
+        self,
+        catalogue: RetroBiosCatalog,
+        checks: Sequence[BiosCheck],
+        platform: Platform,
+        root: Path,
+    ) -> int:
+        selected = tuple(
+            check for check in checks if catalogue.source_url(check.requirement) is not None
+        )
+        if not selected:
+            return 0
+        cancelled = Event()
+        state_lock = Lock()
+        progress_state: list[str | int | None] = ["Connecting to RetroBIOS...", 0, None]
+
+        def report(label: str, current: int, total: int | None) -> None:
+            with state_lock:
+                progress_state[:] = [label, current, total]
+
+        def install_selected() -> int:
+            installed = 0
+            for check in selected:
+                install_bios(
+                    catalogue,
+                    check.requirement,
+                    platform,
+                    root,
+                    self.config.timeout_seconds,
+                    report,
+                    cancelled.is_set,
+                )
+                installed += 1
+            return installed
+
+        try:
+            with ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="retrobios-download",
+            ) as executor:
+                future = executor.submit(install_selected)
+                while not future.done():
+                    with state_lock:
+                        label, current, total = progress_state
+                    assert isinstance(label, str)
+                    assert isinstance(current, int)
+                    assert total is None or isinstance(total, int)
+                    self._progress(label, current, total)
+                    pressed = self._poll_input()
+                    if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
+                        cancelled.set()
+                installed = future.result()
+        except BiosDownloadCancelled:
+            self._draw_message(
+                "BIOS DOWNLOAD CANCELLED",
+                "No incomplete BIOS file was installed.",
+                3,
+                wait=True,
+            )
+            return 0
+        except BiosError as error:
+            self._error(str(error))
+            return 0
+        self._draw_message(
+            "BIOS INSTALLED",
+            f"Installed and verified {installed} BIOS file(s) in {root / 'bios'}.",
+            4,
+            wait=True,
+        )
+        return installed
+
+    @staticmethod
+    def _bios_check_label(check: BiosCheck) -> str:
+        kind = "R" if check.requirement.required else "O"
+        region = f" {check.requirement.region}" if check.requirement.region else ""
+        return f"[{check.state.value.upper()}] [{kind}]{region} {check.requirement.name}"
 
     def _minerva_bittorrent_settings_screen(self) -> None:
         fields = (

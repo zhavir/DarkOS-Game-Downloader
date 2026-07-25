@@ -131,6 +131,9 @@ wheels = [
 name = "darkos-downloader"
 version = "1.5.1"
 source = { editable = "." }
+dependencies = [
+    { name = "pyyaml" },
+]
 
 [package.optional-dependencies]
 release = [
@@ -150,7 +153,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "uv", marker = "extra == 'release'", specifier = "==0.11.32" }]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "uv", marker = "extra == 'release'", specifier = "==0.11.32" },
+]
 provides-extras = ["release"]
 
 [package.metadata.requires-dev]

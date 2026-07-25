@@ -49,6 +49,33 @@ Search and downloads continue when the R36S compatibility catalogue cannot be re
 show only known platform-level information or **Not listed**. Retry later to refresh the cached
 catalogue.
 
+The R36S Game List is downloaded only when it is missing. Use **Settings → Update R36S Game List**
+to refresh it. A cache older than seven days is labelled **stale**, but remains available for
+offline matching until you choose to update it. A failed update preserves the existing copy.
+
+## The RetroBIOS catalogue is unavailable
+
+The first automatic BIOS check or manual BIOS search needs GitHub access to download the RetroBIOS
+metadata. Retry when the network is available. After the first successful download, the cached
+catalogue is used without contacting GitHub.
+
+Use **Settings → Update RetroBIOS catalogue** to refresh it explicitly. If an update fails or the
+download is cancelled, the previous valid cache remains available. Settings marks it **stale**
+after its seven-day TTL rather than replacing it automatically.
+
+## A BIOS download fails validation
+
+The downloader checks the published file size and strongest available checksum before installing a
+BIOS. A mismatch is not copied over an existing file. Update the RetroBIOS catalogue and retry; if
+it still fails, keep the existing firmware and report the upstream metadata/source mismatch.
+
+## A game still reports missing firmware
+
+Automatic prompts cover firmware marked as required by the matching RetroBIOS core profile. A
+dArkOS image can configure another emulator core with different optional files. Open **Search and
+download BIOS**, search for the system or filename, and compare the result with the core's own
+documentation. The manual screen also shows whether a valid copy already exists on either SD card.
+
 ## Local terminal problems
 
 - The terminal must be at least 40 columns by 15 rows.

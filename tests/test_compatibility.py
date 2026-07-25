@@ -7,6 +7,8 @@ import pytest
 from pytest_mock import MockerFixture
 
 from dw_cli.compatibility import (
+    CACHE_TTL_SECONDS,
+    CompatibilityError,
     CompatibilityInfo,
     R36SCompatibilityClient,
     filter_supported_results,
@@ -149,7 +151,7 @@ def test_unknown_console_does_not_load_remote_index(tmp_path: Path) -> None:
     assert normalize_console("unknown") is None
 
 
-def test_client_uses_fresh_cache_and_ignores_stale_or_malformed_cache(tmp_path: Path) -> None:
+def test_client_uses_cached_catalogue_until_user_refreshes_it(tmp_path: Path) -> None:
     platform = resolve_platform("GBA")
     assert platform is not None
     cache = tmp_path / "cache.json"
@@ -160,6 +162,18 @@ def test_client_uses_fresh_cache_and_ignores_stale_or_malformed_cache(tmp_path: 
     client = R36SCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
     assert client.lookup_many([SearchResult("Cached Game", "detail")], platform)[0].title_listed
     assert client._load_game_index() == frozenset({("gameboy advance", "cached game")})
+    assert not client.cache_is_stale()
+
+    cache.write_text(
+        json.dumps({"fetched_at": 0, "games": [["gameboy advance", "stale game"]]}),
+        encoding="utf-8",
+    )
+    stale = R36SCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
+    assert stale.lookup_many([SearchResult("Stale Game", "detail")], platform)[0].title_listed
+    cache_age = stale.cache_age_seconds()
+    assert cache_age is not None
+    assert cache_age > CACHE_TTL_SECONDS
+    assert stale.cache_is_stale()
 
     for payload in (
         '{"fetched_at": 0, "games": []}',
@@ -218,6 +232,28 @@ def test_default_fetcher_and_cache_write_failure(
 
     mocker.patch.object(Path, "write_text", side_effect=OSError("read only"))
     client._write_cache(frozenset({("gameboy advance", "game")}))
+    with pytest.raises(CompatibilityError, match="Could not save"):
+        client._write_cache(frozenset({("gameboy advance", "game")}), strict=True)
+
+
+def test_explicit_refresh_replaces_in_memory_and_disk_catalogues(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    cache = tmp_path / "cache.json"
+    client = R36SCompatibilityClient(cache)
+    index = frozenset(("gameboy advance", f"game {number}") for number in range(101))
+    mocker.patch.object(client, "_download_game_index", return_value=index)
+
+    assert client.refresh() == 101
+    assert client.load() == index
+    assert client._game_index == index
+    assert not client.cache_is_stale()
+
+    mocker.patch.object(client, "_download_game_index", side_effect=OSError("offline"))
+    with pytest.raises(CompatibilityError, match="Could not update"):
+        client.refresh()
+    assert client.load() == index
 
 
 def test_parser_skips_invalid_json_and_title_scores_empty_and_exact() -> None:
