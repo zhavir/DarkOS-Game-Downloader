@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-07-25)
+
+### Continuous Integration
+
+- Make ruleset more admin friendly ([#7](https://github.com/zhavir/DarkOS-Game-Downloader/pull/7),
+  [`5493859`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/549385925205dc27fb8482b5b64c4004380d777d))
+
+### Features
+
+- Expose torrent option in the tui ([#7](https://github.com/zhavir/DarkOS-Game-Downloader/pull/7),
+  [`5493859`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/549385925205dc27fb8482b5b64c4004380d777d))
+
+
 ## v1.2.0 (2026-07-25)
 
 ### Features
