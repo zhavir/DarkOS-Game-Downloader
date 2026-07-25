@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-07-25)
+
+### Bug Fixes
+
+- Fix auto update ([#8](https://github.com/zhavir/DarkOS-Game-Downloader/pull/8),
+  [`ca19bd8`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/ca19bd858675e9f366840a924bd3aefce3f927de))
+
+### Continuous Integration
+
+- Make ruleset more admin friendly ([#8](https://github.com/zhavir/DarkOS-Game-Downloader/pull/8),
+  [`ca19bd8`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/ca19bd858675e9f366840a924bd3aefce3f927de))
+
+### Features
+
+- Expose torrent option in the tui ([#8](https://github.com/zhavir/DarkOS-Game-Downloader/pull/8),
+  [`ca19bd8`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/ca19bd858675e9f366840a924bd3aefce3f927de))
+
+
 ## v1.3.0 (2026-07-25)
 
 ### Continuous Integration
