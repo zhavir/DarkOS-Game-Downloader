@@ -505,13 +505,20 @@ Use conventional commit messages so the release type and notes are deterministic
 When using squash merges, make the pull-request title conventional because it becomes the commit
 subject.
 
-### Enable protected releases and admin-only merges
+### Enable protected releases and administrator direct pushes
 
-The repository stores two layered rulesets for `main`. The first requires a pull request, an
-up-to-date branch, and successful **Pre-commit** and **All tests** jobs. The second restricts updates
-to repository administrators through pull requests. Because rulesets are aggregated, an admin can
-merge but cannot skip either required job. A dedicated release GitHub App is the only direct-update
-exception, allowing Python Semantic Release to write its version commit and protected tag.
+The repository stores one ruleset for `main`. Normal pull-request merges require successful
+**Pre-commit** and **All tests** jobs. They do not require an otherwise conflict-free branch to be
+rebased whenever `main` advances, and unresolved review conversations are not an additional merge
+gate. Repository administrators have an explicit always-allow exception so they can push directly
+when necessary; the dedicated release GitHub App has the same exception for Python Semantic
+Release's version commit. Granting direct-push access necessarily means administrators can also
+bypass pull-request checks, so reserve that role for trusted maintainers.
+
+Do not add a separate **Restrict updates** rule to make merges administrator-only. GitHub treats a
+merge as a branch update, so that rule forces every allowed administrator merge through the bypass
+flow even after all checks pass. If only administrators should be able to merge, enforce that with
+repository access: give other collaborators **Read** or **Triage**, not **Write** or **Maintain**.
 
 Configure GitHub once before syncing the rulesets:
 
@@ -523,7 +530,8 @@ Configure GitHub once before syncing the rulesets:
 4. Add `GH_TOKEN` as an Actions repository secret. Use a fine-grained personal access token from a
    repository administrator with **Administration: Read and write** for this repository. This token
    only creates and updates rulesets; release pushes use the GitHub App token.
-5. Open **Actions → Sync GitHub rulesets → Run workflow** once. Later changes under
+5. Open **Actions → Sync GitHub rulesets → Run workflow** once. This also removes the retired
+   `Restrict default branch updates to administrators` ruleset. Later changes under
    `.github/rulesets/` are synchronized automatically after they reach `main`.
 
 The stored ruleset JSON uses integration actor ID `0` as a template placeholder; the sync workflow

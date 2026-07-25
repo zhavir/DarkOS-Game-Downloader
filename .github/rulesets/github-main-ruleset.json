@@ -4,6 +4,11 @@
   "enforcement": "active",
   "bypass_actors": [
     {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+    },
+    {
       "actor_id": 0,
       "actor_type": "Integration",
       "bypass_mode": "always"
@@ -37,7 +42,7 @@
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_approving_review_count": 0,
-        "required_review_thread_resolution": true
+        "required_review_thread_resolution": false
       }
     },
     {
@@ -52,7 +57,7 @@
             "context": "All tests"
           }
         ],
-        "strict_required_status_checks_policy": true
+        "strict_required_status_checks_policy": false
       }
     }
   ]

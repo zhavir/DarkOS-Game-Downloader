@@ -70,10 +70,12 @@ a short-lived token. The separate ruleset-sync workflow uses the administrator-o
 secret with repository Administration write permission. Run **Sync GitHub rulesets** manually after
 the initial secrets and variable are configured.
 
-The two `main` rulesets deliberately layer: required PR checks have no human bypass, while a second
-restrict-update rule grants repository administrators PR-only bypass. The release App is the sole
-always-bypass actor so semantic release can create its version commit and tag after the pushed
-revision passes all tests.
+The `main` ruleset requires successful PR checks for normal merges without also requiring every
+branch to be rebased after `main` advances or every review conversation to be resolved. Repository
+administrators and the release App have always-allow exceptions, enabling administrator direct
+pushes and semantic release commits. Do not layer a **Restrict updates** rule over it: merges are
+branch updates, so such a rule makes administrators use the bypass flow even when checks pass.
+Limit non-administrator collaborators to Read or Triage when merges must remain admin-only.
 
 ## Documentation
 

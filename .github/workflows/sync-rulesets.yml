@@ -106,3 +106,24 @@ jobs:
 
             rm -f "${payload}"
           done
+
+          # This former ruleset made every merge an update-rule bypass and
+          # prevented administrators from pushing directly to main.
+          retired_ruleset="Restrict default branch updates to administrators"
+          retired_ruleset_id="$(
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "repos/${GH_REPO}/rulesets?includes_parents=false&per_page=100" |
+              jq -r --arg name "${retired_ruleset}" \
+                '.[] | select(.name == $name) | .id' |
+              head -n 1
+          )"
+          if [[ -n "${retired_ruleset_id}" ]]; then
+            echo "Deleting retired ruleset '${retired_ruleset}'"
+            gh api \
+              --method DELETE \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "repos/${GH_REPO}/rulesets/${retired_ruleset_id}"
+          fi
