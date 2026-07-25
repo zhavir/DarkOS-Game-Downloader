@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.2 (2026-07-25)
+
+### Bug Fixes
+
+- Fix back navigation
+  ([`dd477fa`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/dd477fa993c0b6fbaa9cf495bf1a41ffebd00fef))
+
+
 ## v1.6.1 (2026-07-25)
 
 ### Bug Fixes
