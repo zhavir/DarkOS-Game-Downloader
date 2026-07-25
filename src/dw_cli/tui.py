@@ -7,12 +7,13 @@ import logging
 import textwrap
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
 from dw_cli.bittorrent import BitTorrentSettings, TorrentFileChoice
+from dw_cli.cache_policy import catalogue_ttl_seconds
 from dw_cli.compatibility import (
     CompatibilityError,
     CompatibilityInfo,
@@ -36,6 +37,7 @@ from dw_cli.library import (
     replace_game,
     scan_library,
 )
+from dw_cli.logging_config import configure_logging
 from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
 from dw_cli.organizer import (
     OrganizeError,
@@ -45,6 +47,7 @@ from dw_cli.organizer import (
 )
 from dw_cli.platforms import discover_platforms, resolve_platform
 from dw_cli.preferences import (
+    Preferences,
     PreferencesError,
     load_preferences,
     preference_path,
@@ -63,6 +66,7 @@ from dw_cli.retrobios import (
     unresolved,
 )
 from dw_cli.store import GameStore, StoreError
+from dw_cli.store_cache import CatalogueCacheError, StoreCacheStatus
 from dw_cli.store_catalog import StoreCatalog
 from dw_cli.updater import (
     ReleaseUpdate,
@@ -105,6 +109,68 @@ KEYBOARD_GAMEPAD_KEYS: dict[InputAction, int] = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class KeyboardKey:
+    """One key in the fixed twelve-column dArkOS-style keyboard grid."""
+
+    label: str
+    value: str = ""
+    action: str | None = None
+    span: int = 1
+
+
+_KEYBOARD_LETTER_ROWS: tuple[tuple[str, ...], ...] = (
+    tuple("1234567890-="),
+    tuple("QWERTYUIOP[]"),
+    tuple("ASDFGHJKL;'#"),
+    ("Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "`", "\\"),
+)
+_KEYBOARD_SYMBOL_ROWS: tuple[tuple[str, ...], ...] = (
+    ("!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+"),
+    ("{", "}", "[", "]", "<", ">", "|", "~", ":", ";", '"', "'"),
+    ("?", "/", "\\", "=", "-", ".", ",", "&", "%", "$", "@", "#"),
+    ("€", "£", "¥", "©", "®", "°", "±", "×", "÷", "§", "¶", "•"),  # noqa: RUF001
+)
+_KEYBOARD_ACCENT_ROWS: tuple[tuple[str, ...], ...] = (
+    tuple("ÀÁÂÃÄÅÆÇÈÉÊË"),
+    tuple("ÌÍÎÏÑÒÓÔÕÖØŒ"),
+    tuple("ÙÚÛÜÝŸŠŽÐÞŁĆ"),
+    tuple("ČĐĞİŚŞŤŹŻÑÕØ"),
+)
+
+
+def _keyboard_rows(page: str, uppercase: bool) -> tuple[tuple[KeyboardKey, ...], ...]:
+    if page == "symbols":
+        character_rows = _KEYBOARD_SYMBOL_ROWS
+    elif page == "accents":
+        character_rows = _KEYBOARD_ACCENT_ROWS
+    else:
+        character_rows = _KEYBOARD_LETTER_ROWS
+    if not uppercase and page != "symbols":
+        character_rows = tuple(tuple(value.lower() for value in row) for row in character_rows)
+    actions = (
+        KeyboardKey("aA", action="case", span=2),
+        KeyboardKey("#+=", action="symbols", span=2),
+        KeyboardKey("ÁÉ", action="accents", span=2),
+        KeyboardKey("SPACE", action="space", span=2),
+        KeyboardKey("BACK", action="back", span=2),
+        KeyboardKey("DONE", action="done", span=2),
+    )
+    return (
+        *tuple(tuple(KeyboardKey(value, value) for value in row) for row in character_rows),
+        actions,
+    )
+
+
+def _keyboard_key_center(row: Sequence[KeyboardKey], index: int) -> float:
+    start = sum(key.span for key in row[:index])
+    return start + row[index].span / 2
+
+
+def _nearest_keyboard_key(row: Sequence[KeyboardKey], center: float) -> int:
+    return min(range(len(row)), key=lambda index: abs(_keyboard_key_center(row, index) - center))
+
+
 class TerminalTooSmall(RuntimeError):
     """The active terminal cannot display the interface."""
 
@@ -115,13 +181,15 @@ class DownloaderTui:
     def __init__(self, screen: Window, config: Config) -> None:
         self.screen = screen
         self.config = config
-        self.store_catalog = StoreCatalog.from_config(config)
         self.preferences_path = preference_path(config.download_directory)
         preferences = load_preferences(self.preferences_path)
         self.preferences = preferences
+        ttl_seconds = catalogue_ttl_seconds(preferences.catalogue_ttl_days)
+        self.store_catalog = StoreCatalog.from_config(config, ttl_seconds)
         self.retrobios_repository = RetroBiosRepository(
             config.download_directory,
             config.timeout_seconds,
+            ttl_seconds,
         )
         self.retrobios_catalog: RetroBiosCatalog | None = None
         self.selected_store = (
@@ -132,11 +200,13 @@ class DownloaderTui:
         self.compatibility_client = R36SCompatibilityClient(
             config.download_directory / ".r36s-game-list-cache.json",
             timeout_seconds=config.timeout_seconds,
+            ttl_seconds=ttl_seconds,
         )
         self.roms_directories = detect_roms_directories(config.roms_directories or None)
         self.platforms = discover_platforms(self.roms_directories)
         self.hardware = detect_hardware_profile()
         self.gamepad = LinuxJoystick.open_first()
+        self._apply_logging_preferences()
         LOGGER.debug(
             "Runtime detected model=%r display=%s roms=%s platforms=%d gamepad=%s",
             self.hardware.model,
@@ -633,12 +703,27 @@ class DownloaderTui:
         current = self.selected_store.display_name if self.selected_store is not None else "not set"
         retrobios_status = self._retrobios_cache_label()
         compatibility_status = self._compatibility_cache_label()
+        game_catalogue_count = sum(
+            store.catalogue_cache_file_count() for store in self.store_catalog.stores
+        )
         options = [
             f"Change download store  [current: {current}]",
+            f"Refresh store game catalogue  [{game_catalogue_count} cached]",
             f"Update RetroBIOS catalogue  [{retrobios_status}]",
             f"Update R36S Game List  [{compatibility_status}]",
+            f"Catalogue cache lifetime  [{self.preferences.catalogue_ttl_days} days]",
+            f"Application log level  [{self.preferences.log_level or self.config.log_level}]",
+            f"Write logs to file  [{'on' if self._file_logging_enabled() else 'off'}]",
         ]
-        actions = ["store", "retrobios_update", "compatibility_update"]
+        actions = [
+            "store",
+            "store_catalogue",
+            "retrobios_update",
+            "compatibility_update",
+            "catalogue_ttl",
+            "log_level",
+            "log_file",
+        ]
         if self.selected_store is not None and self.selected_store.store_id == "minerva":
             options.append("Minerva BitTorrent settings")
             actions.append("minerva")
@@ -659,14 +744,170 @@ class DownloaderTui:
         action = actions[choice]
         if action == "store":
             self._configure_store()
+        elif action == "store_catalogue":
+            self._refresh_store_catalogue()
         elif action == "retrobios_update":
             self._update_retrobios_catalogue()
         elif action == "compatibility_update":
             self._update_compatibility_catalogue()
+        elif action == "catalogue_ttl":
+            self._configure_catalogue_ttl()
+        elif action == "log_level":
+            self._configure_log_level()
+        elif action == "log_file":
+            self._configure_file_logging()
         elif action == "minerva":
             self._minerva_bittorrent_settings_screen()
         elif action == "update":
             self._application_update_flow()
+
+    def _configure_catalogue_ttl(self) -> None:
+        raw_value = self._on_screen_keyboard(
+            "CATALOGUE CACHE DAYS",
+            empty_hint=f"Current: {self.preferences.catalogue_ttl_days}; default: 7",
+        )
+        if raw_value is None:
+            return
+        try:
+            days = int(raw_value)
+            if not 1 <= days <= 3650:
+                raise ValueError("enter a value from 1 to 3650 days")
+        except ValueError as error:
+            self._error(f"Invalid catalogue lifetime: {error}")
+            return
+        self._save_runtime_preferences(
+            replace(self.preferences, catalogue_ttl_days=days),
+            "CACHE LIFETIME SAVED",
+            f"Catalogue files now expire after {days} day(s).",
+        )
+
+    def _configure_log_level(self) -> None:
+        levels = ("DEBUG", "INFO", "WARNING", "ERROR")
+        choice = self._menu(
+            "APPLICATION LOG LEVEL",
+            levels,
+            "The selected level applies immediately",
+        )
+        if choice is None:
+            return
+        level = levels[choice]
+        self._save_runtime_preferences(
+            replace(self.preferences, log_level=level),
+            "LOG LEVEL SAVED",
+            f"Application logging is now set to {level}.",
+        )
+
+    def _configure_file_logging(self) -> None:
+        choice = self._menu(
+            "WRITE LOGS TO FILE?",
+            ("Off", "On"),
+            "Changes apply immediately and are saved for the next launch",
+        )
+        if choice is None:
+            return
+        enabled = choice == 1
+        self._save_runtime_preferences(
+            replace(self.preferences, log_to_file=enabled),
+            "FILE LOGGING SAVED",
+            "File logging is enabled." if enabled else "File logging is disabled.",
+        )
+
+    def _save_runtime_preferences(
+        self,
+        preferences: Preferences,
+        title: str,
+        message: str,
+    ) -> bool:
+        try:
+            save_preferences(self.preferences_path, preferences)
+        except PreferencesError as error:
+            self._error(str(error))
+            return False
+        self.preferences = preferences
+        self._apply_runtime_preferences()
+        self._draw_message(title, message, 4, wait=True)
+        return True
+
+    def _apply_runtime_preferences(self) -> None:
+        ttl_seconds = catalogue_ttl_seconds(self.preferences.catalogue_ttl_days)
+        for store in self.store_catalog.stores:
+            store.set_catalogue_ttl(ttl_seconds)
+        self.retrobios_repository.ttl_seconds = ttl_seconds
+        if self.retrobios_catalog is not None:
+            self.retrobios_catalog.ttl_seconds = ttl_seconds
+        self.compatibility_client.ttl_seconds = ttl_seconds
+        self._apply_logging_preferences()
+
+    def _file_logging_enabled(self) -> bool:
+        if self.preferences.log_to_file is not None:
+            return self.preferences.log_to_file
+        return self.config.log_file is not None
+
+    def _apply_logging_preferences(self) -> None:
+        log_file = None
+        if self._file_logging_enabled():
+            log_file = (
+                self.config.log_file or self.config.download_directory / "darkos-downloader.log"
+            )
+        configure_logging(log_file, self.preferences.log_level or self.config.log_level)
+
+    def _refresh_store_catalogue(self) -> None:
+        stores = self.store_catalog.stores
+        store_choice = self._menu(
+            "CHOOSE STORE CATALOGUE",
+            [
+                f"{store.display_name}  [{store.catalogue_cache_file_count()} cached]"
+                for store in stores
+            ],
+            "Select a store; B/Escape returns",
+        )
+        if store_choice is None:
+            return
+        store = stores[store_choice]
+        choices: list[tuple[Platform, str, StoreCacheStatus | None]] = []
+        seen_codes: set[str] = set()
+        for platform in self.platforms:
+            if not store.supports_platform(platform):
+                continue
+            system_code = store.platform_code(platform)
+            if system_code in seen_codes:
+                continue
+            seen_codes.add(system_code)
+            choices.append((platform, system_code, store.catalogue_cache_status(system_code)))
+        platform_choice = self._menu(
+            f"REFRESH {store.display_name.upper()}",
+            [
+                f"{platform.name}  [{self._store_cache_status_label(status)}]"
+                for platform, _system_code, status in choices
+            ],
+            "This replaces the selected cache even before its configured lifetime expires",
+        )
+        if platform_choice is None:
+            return
+        platform, system_code, _status = choices[platform_choice]
+        self._draw_message(
+            "REFRESHING GAME CATALOGUE",
+            f"Downloading the complete {store.display_name} catalogue for {platform.name}...",
+            1,
+        )
+        try:
+            results = store.refresh_catalogue(system_code, self._catalog_progress)
+        except (CatalogueCacheError, StoreError) as error:
+            self._error(str(error))
+            return
+        self._draw_message(
+            "GAME CATALOGUE UPDATED",
+            f"Cached {len(results)} {store.display_name} result(s) for {platform.name}.",
+            4,
+            wait=True,
+        )
+
+    @staticmethod
+    def _store_cache_status_label(status: StoreCacheStatus | None) -> str:
+        if status is None:
+            return "not downloaded"
+        freshness = "stale" if status.stale else "fresh"
+        return f"{freshness}, {status.result_count} games"
 
     def _retrobios_cache_label(self) -> str:
         if not hasattr(self, "retrobios_repository"):
@@ -677,7 +918,11 @@ class DownloaderTui:
             return "cache invalid"
         if catalogue is None:
             return "not downloaded"
-        freshness = "stale (>7 days)" if catalogue.cache_is_stale() else "fresh"
+        freshness = (
+            f"stale (>{self.preferences.catalogue_ttl_days} days)"
+            if catalogue.cache_is_stale()
+            else "fresh"
+        )
         return f"{catalogue.revision[:8]} - {freshness}"
 
     def _compatibility_cache_label(self) -> str:
@@ -686,7 +931,11 @@ class DownloaderTui:
         age = self.compatibility_client.cache_age_seconds()
         if age is None:
             return "not downloaded"
-        return "stale (>7 days)" if self.compatibility_client.cache_is_stale() else "fresh"
+        return (
+            f"stale (>{self.preferences.catalogue_ttl_days} days)"
+            if self.compatibility_client.cache_is_stale()
+            else "fresh"
+        )
 
     def _update_compatibility_catalogue(self) -> None:
         choice = self._menu(
@@ -708,7 +957,8 @@ class DownloaderTui:
             return
         self._draw_message(
             "R36S GAME LIST UPDATED",
-            f"Cached {count} game title(s). The catalogue is valid for seven days.",
+            f"Cached {count} game title(s). The catalogue is valid for "
+            f"{self.preferences.catalogue_ttl_days} day(s).",
             4,
             wait=True,
         )
@@ -1458,18 +1708,13 @@ class DownloaderTui:
         allow_lowercase: bool = False,
         empty_hint: str = "",
     ) -> str | None:
-        rows: tuple[tuple[str, ...], ...] = (
-            tuple("1234567890"),
-            tuple("QWERTYUIOP"),
-            tuple("ASDFGHJKL"),
-            tuple("ZXCVBNM"),
-            tuple("-_.:/?=&"),
-            ("SPACE", "BACK", "CLEAR", "DONE", "CANCEL"),
-        )
         value = ""
+        page = "letters"
+        uppercase = not allow_lowercase
         row = 0
         column = 0
         while True:
+            rows = _keyboard_rows(page, uppercase)
             height, width = self.screen.getmaxyx()
             self._require_size(height, width)
             self.screen.erase()
@@ -1477,23 +1722,29 @@ class DownloaderTui:
             display = value[-max(1, width - 8) :]
             self._safe_add(3, 3, "> " + display, curses.color_pair(3) | curses.A_BOLD)
             start_y = 6
+            row_step = 2 if height >= 18 else 1
+            key_width = max(3, (width - 4) // 12)
+            total_width = key_width * 12
+            start_x = max(1, (width - total_width) // 2)
             for row_index, keys in enumerate(rows):
-                key_width = max(3, (width - 6) // max(1, len(keys)))
-                total_width = key_width * len(keys)
-                start_x = max(2, (width - total_width) // 2)
+                grid_column = 0
                 for column_index, key in enumerate(keys):
                     selected = row_index == row and column_index == column
-                    label = f" {key} "
+                    button_width = key_width * key.span
+                    content_width = max(1, button_width - 2)
+                    visible_label = key.label[:content_width]
+                    label = f"[{visible_label:^{content_width}}]"
                     attribute = (
                         curses.color_pair(2) | curses.A_BOLD if selected else curses.A_NORMAL
                     )
                     self._safe_add(
-                        start_y + row_index * 2,
-                        start_x + column_index * key_width,
+                        start_y + row_index * row_step,
+                        start_x + grid_column * key_width,
                         label,
                         attribute,
                     )
-            footer = "D-pad/stick: move   A: key   X: search   B: cancel"
+                    grid_column += key.span
+            footer = f"{page.upper()}   D-pad: move   A: key   X: search   Y: back   B: cancel"
             if empty_hint:
                 footer = f"{footer}   {empty_hint}"
             self._footer(footer)
@@ -1504,11 +1755,13 @@ class DownloaderTui:
             if pressed == GAMEPAD_SEARCH_KEY:
                 return value.strip()
             if pressed in (curses.KEY_UP, ord("k")):
+                center = _keyboard_key_center(rows[row], column)
                 row = (row - 1) % len(rows)
-                column = min(column, len(rows[row]) - 1)
+                column = _nearest_keyboard_key(rows[row], center)
             elif pressed in (curses.KEY_DOWN, ord("j")):
+                center = _keyboard_key_center(rows[row], column)
                 row = (row + 1) % len(rows)
-                column = min(column, len(rows[row]) - 1)
+                column = _nearest_keyboard_key(rows[row], center)
             elif pressed in (curses.KEY_LEFT, ord("h")):
                 column = (column - 1) % len(rows[row])
             elif pressed in (curses.KEY_RIGHT, ord("l")):
@@ -1517,18 +1770,20 @@ class DownloaderTui:
                 value = value[:-1]
             elif pressed in (10, 13, curses.KEY_ENTER):
                 key = rows[row][column]
-                if key == "SPACE":
+                if key.action == "space":
                     value += " "
-                elif key == "BACK":
+                elif key.action == "back":
                     value = value[:-1]
-                elif key == "CLEAR":
-                    value = ""
-                elif key == "DONE":
+                elif key.action == "done":
                     return value.strip()
-                elif key == "CANCEL":
-                    return None
+                elif key.action == "case":
+                    uppercase = not uppercase
+                elif key.action == "symbols":
+                    page = "letters" if page == "symbols" else "symbols"
+                elif key.action == "accents":
+                    page = "letters" if page == "accents" else "accents"
                 else:
-                    value += key.lower() if allow_lowercase else key
+                    value += key.value
             elif 32 <= pressed <= 126:
                 value += chr(pressed)
 

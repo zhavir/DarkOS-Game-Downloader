@@ -50,8 +50,9 @@ show only known platform-level information or **Not listed**. Retry later to ref
 catalogue.
 
 The R36S Game List is downloaded only when it is missing. Use **Settings → Update R36S Game List**
-to refresh it. A cache older than seven days is labelled **stale**, but remains available for
-offline matching until you choose to update it. A failed update preserves the existing copy.
+to refresh it. A cache older than the configured catalogue lifetime is labelled **stale**, but
+remains available for offline matching until you choose to update it. A failed update preserves the
+existing copy.
 
 ## The RetroBIOS catalogue is unavailable
 
@@ -61,7 +62,17 @@ catalogue is used without contacting GitHub.
 
 Use **Settings → Update RetroBIOS catalogue** to refresh it explicitly. If an update fails or the
 download is cancelled, the previous valid cache remains available. Settings marks it **stale**
-after its seven-day TTL rather than replacing it automatically.
+after the configured catalogue lifetime rather than replacing it automatically.
+
+## A store search is slow or unavailable
+
+The first search downloads a complete store/platform catalogue. Later empty and title-prefix
+searches use `.downloads/game-catalogues` and should be fast. After the configured lifetime, one
+search attempts to refresh the file. If that request fails, the last valid file is used instead.
+
+Use **Settings → Refresh store game catalogue** to replace one selected cache immediately. If a
+forced refresh fails, the existing cache is preserved. Increase **Settings → Catalogue cache
+lifetime** if you prefer fewer automatic store refreshes.
 
 ## A BIOS download fails validation
 
@@ -85,10 +96,13 @@ documentation. The manual screen also shows whether a valid copy already exists 
 
 ## More diagnostic detail
 
-The device launcher writes logs automatically. For a local session, choose a log file and level:
+On the device, use **Settings → Application log level** and **Settings → Write logs to file**. The
+launcher can still add startup or update-recovery diagnostics to its own log even when application
+file logging is off. For a local session, environment variables provide the initial file and level:
 
 ```sh
 DW_LOG_FILE=.local-test/darkos-downloader.log DW_LOG_LEVEL=DEBUG uv run dw
 ```
 
-Valid levels are `DEBUG`, `INFO`, `WARNING`, and `ERROR`. Logs rotate automatically.
+Valid levels are `DEBUG`, `INFO`, `WARNING`, and `ERROR`. Saved TUI settings take precedence on the
+next launch. Logs rotate automatically.

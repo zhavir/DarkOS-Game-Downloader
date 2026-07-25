@@ -17,6 +17,7 @@ required on the handheld.
 - Search by a case-insensitive title prefix, or submit an empty search to list a catalogue.
 - Search one platform or all platforms supported by the selected store.
 - Choose Vimm or Minerva Archive once and change the preferred store later in **Settings**.
+- Cache complete store catalogues by store and platform for fast offline empty and prefix searches.
 - Download to the correct dArkOS ROM folder on SD1 or SD2.
 - Show R36S compatibility information before downloading when a reliable match is available.
 - Cache the R36S Game List locally and refresh it only when requested from **Settings**.
@@ -69,6 +70,8 @@ preferred store, Minerva settings, and cached data.
 | Start | Select in menus; ignored by the on-screen keyboard |
 
 On a computer, use the arrow keys, Enter, Escape, Page Up, Page Down, Backspace, and normal typing.
+The on-screen keyboard uses a fixed 12-column grid with equally sized character keys. Use its
+`aA`, `#+=`, and `ÁÉ` keys to switch case or enter punctuation, symbols, and accented characters.
 
 ## Search and download
 
@@ -102,9 +105,9 @@ operation and cached under `.downloads/retrobios`. It is not refreshed automatic
 **Settings → Update RetroBIOS catalogue** when you want the latest upstream metadata.
 
 The R36S Game List used for compatibility scores follows the same policy: it is fetched on first
-use, stored locally, and refreshed only through **Settings → Update R36S Game List**. Both catalogue
-timestamps have a seven-day TTL. After seven days Settings marks the cache as stale, but the saved
-copy remains usable until you choose to update it; searches never replace it silently.
+use, stored locally, and refreshed only through **Settings → Update R36S Game List**. Settings marks
+RetroBIOS and compatibility metadata stale after the configured catalogue lifetime, which defaults
+to seven days. Their saved copies remain usable until you choose to update them.
 
 ### Stores
 
@@ -112,6 +115,13 @@ copy remains usable until you choose to update it; searches never replace it sil
 - **Minerva Archive** uses its RetroAchievements collection. The application downloads only the
   selected file's verified torrent pieces. Availability depends on public trackers and seeders,
   and the public IP address of the handheld is visible to the swarm while downloading.
+
+Each store's complete game catalogue is saved as structured JSON under
+`.downloads/game-catalogues/<store>/<platform>.json`. A fresh cache is reused for empty and
+case-insensitive prefix searches without contacting the store. After the configured lifetime, the
+next search refreshes it automatically; if the store is unavailable, the last valid catalogue is
+used. Use **Settings → Refresh store game catalogue** to replace a selected store/platform cache
+immediately.
 
 If Minerva reorders a torrent, the downloader finds a unique filename automatically. When a game
 was renamed or is ambiguous, the TUI shows the closest torrent files with their position, path,
@@ -197,6 +207,10 @@ Run it only where outbound GitHub access is available. The ordinary test suite r
 Minerva-specific transfer limits can be edited from **Settings → Minerva BitTorrent settings**
 when Minerva is selected.
 
+The catalogue cache lifetime, application log level, and application file logging can also be
+changed from **Settings**. These choices apply immediately and are saved for later launches. The
+default catalogue lifetime is seven days.
+
 ## Diagnostics
 
 On the handheld, structured application logs and launcher diagnostics are stored in:
@@ -205,8 +219,10 @@ On the handheld, structured application logs and launcher diagnostics are stored
 tools/darkos-downloader/darkos-downloader.log
 ```
 
-The log rotates automatically so repeated use does not grow one file indefinitely. Set
-`DW_LOG_LEVEL=DEBUG` before local startup when more detail is needed.
+The log rotates automatically so repeated use does not grow one file indefinitely. Use
+**Settings → Application log level** to choose `DEBUG`, `INFO`, `WARNING`, or `ERROR`, and
+**Settings → Write logs to file** to enable or disable application records. Environment variables
+provide the initial local defaults; saved TUI preferences take precedence.
 
 Common problems:
 

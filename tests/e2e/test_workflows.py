@@ -1,5 +1,6 @@
 """Offline end-to-end coverage for the user-visible library workflows."""
 
+import json
 import os
 import threading
 import zipfile
@@ -7,6 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pytest_mock import MockerFixture
 
 from dw_cli.app import main
 from dw_cli.config import Config
@@ -49,10 +51,11 @@ def test_demo_environment_creates_two_safe_local_cards(tmp_path: Path) -> None:
 
 @pytest.mark.e2e
 @pytest.mark.integration
-def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
+def test_search_caches_full_catalogue_for_prefix_empty_and_offline_replay(
     local_vault: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    mocker: MockerFixture,
 ) -> None:
     staging = tmp_path / "downloads"
     card = tmp_path / "sd1"
@@ -80,6 +83,25 @@ def test_search_falls_back_from_exact_only_404_to_prefix_and_full_catalogue(
     all_catalogue_output = capsys.readouterr().out
     assert "Advance Wars" in all_catalogue_output
     assert "Golden Sun" in all_catalogue_output
+
+    cache_path = staging / "game-catalogues" / "vimm" / "GBA.json"
+    cache_payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert cache_payload["store_id"] == "vimm"
+    assert cache_payload["system_code"] == "GBA"
+    assert {item["title"] for item in cache_payload["results"]} >= {
+        "Advance Wars",
+        "Golden Sun",
+    }
+
+    cached_store = VimmStore(local_vault, config.timeout_seconds, staging)
+    network_fetch = mocker.patch.object(
+        cached_store,
+        "_fetch_catalogue",
+        side_effect=AssertionError("a fresh catalogue must not contact the store"),
+    )
+    assert [result.title for result in cached_store.search("GBA", "gOlD")] == ["Golden Sun"]
+    assert len(cached_store.search("GBA", "")) >= 3
+    network_fetch.assert_not_called()
 
     assert (
         main(

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from dw_cli.vimm_store import CATALOG_SECTIONS, VimmStore, parse_download_url, parse_search_results
 
 ALL_RESULTS = """
@@ -24,8 +26,8 @@ CATALOG_RESULTS = (
 
 
 class StaticVimmStore(VimmStore):
-    def __init__(self, response: str) -> None:
-        super().__init__("https://example.net")
+    def __init__(self, response: str, cache_directory: Path | None = None) -> None:
+        super().__init__("https://example.net", cache_directory=cache_directory)
         self.response = response
         self.requested_urls: list[str] = []
 
@@ -68,7 +70,7 @@ def test_search_uses_case_insensitive_prefix_filter() -> None:
     )
     results = client.search("GBA", "  sUn ")
     assert [result.title for result in results] == ["Sunset Riders"]
-    assert "q=sUn" in client.requested_urls[0]
+    assert "section=number" in client.requested_urls[0]
 
 
 def test_all_platform_search_omits_empty_system_and_filters_prefix() -> None:
@@ -77,7 +79,7 @@ def test_all_platform_search_omits_empty_system_and_filters_prefix() -> None:
     results = client.search("", "aDvAnCe")
 
     assert [(result.system, result.title) for result in results] == [("GBA", "Advance Wars")]
-    assert "q=aDvAnCe" in client.requested_urls[0]
+    assert "section=number" in client.requested_urls[0]
     assert "system=" not in client.requested_urls[0]
 
 
@@ -98,6 +100,23 @@ def test_empty_all_platform_search_loads_all_catalogue_sections() -> None:
     assert [(result.system, result.title) for result in results] == [("GBA", "Advance Wars")]
     assert len(client.requested_urls) == len(CATALOG_SECTIONS)
     assert all("system=" not in url for url in client.requested_urls)
+
+
+def test_vimm_search_and_forced_refresh_share_structured_catalogue_cache(tmp_path: Path) -> None:
+    first = StaticVimmStore(CATALOG_RESULTS, tmp_path)
+    assert [result.title for result in first.search("GBA", "advance")] == ["Advance Wars"]
+    assert len(first.requested_urls) == len(CATALOG_SECTIONS)
+
+    cached = StaticVimmStore("not used", tmp_path)
+    assert [result.title for result in cached.search("GBA", "advance")] == ["Advance Wars"]
+    assert cached.requested_urls == []
+    status = cached.catalogue_cache_status("GBA")
+    assert status is not None and status.result_count == 1
+
+    cached.response = CATALOG_RESULTS.replace("Advance Wars", "Advance Wars 2")
+    refreshed = cached.refresh_catalogue("GBA")
+    assert [result.title for result in refreshed] == ["Advance Wars 2"]
+    assert len(cached.requested_urls) == len(CATALOG_SECTIONS)
 
 
 def test_parse_download_form_with_relative_action() -> None:

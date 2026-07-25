@@ -6,8 +6,8 @@ from types import TracebackType
 import pytest
 from pytest_mock import MockerFixture
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.compatibility import (
-    CACHE_TTL_SECONDS,
     CompatibilityError,
     CompatibilityInfo,
     R36SCompatibilityClient,
@@ -172,7 +172,7 @@ def test_client_uses_cached_catalogue_until_user_refreshes_it(tmp_path: Path) ->
     assert stale.lookup_many([SearchResult("Stale Game", "detail")], platform)[0].title_listed
     cache_age = stale.cache_age_seconds()
     assert cache_age is not None
-    assert cache_age > CACHE_TTL_SECONDS
+    assert cache_age > catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS)
     assert stale.cache_is_stale()
 
     for payload in (

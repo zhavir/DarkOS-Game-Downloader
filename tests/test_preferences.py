@@ -48,6 +48,20 @@ def test_minerva_bittorrent_preferences_round_trip(tmp_path: Path) -> None:
     assert load_preferences(path) == Preferences("minerva", settings)
 
 
+def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> None:
+    path = preference_path(tmp_path)
+    preferences = Preferences(
+        store_id="vimm",
+        catalogue_ttl_days=14,
+        log_level="DEBUG",
+        log_to_file=False,
+    )
+
+    save_preferences(path, preferences)
+
+    assert load_preferences(path) == preferences
+
+
 @pytest.mark.parametrize(
     ("payload", "expected_store"),
     [
@@ -74,6 +88,9 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
     path.write_text(
         """{
           "store": "minerva",
+          "catalogue_ttl_days": 0,
+          "log_level": "verbose",
+          "log_to_file": "yes",
           "minerva_bittorrent": {
             "block_size": true,
             "max_peer_attempts": "many",
@@ -88,6 +105,9 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
 
     assert preferences.store_id == "minerva"
     assert preferences.minerva_bittorrent == BitTorrentSettings()
+    assert preferences.catalogue_ttl_days == 7
+    assert preferences.log_level is None
+    assert preferences.log_to_file is None
 
 
 def test_preferences_accept_integer_timeout(tmp_path: Path) -> None:

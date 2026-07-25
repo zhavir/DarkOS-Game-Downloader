@@ -18,8 +18,10 @@ so neither Python, uv, nor a package manager is required on the handheld.
 - Installs bundled BIOS files first, checks both SD cards, and offers required missing firmware
   through RetroBIOS.
 - Provides a manual BIOS catalogue search for required and optional firmware.
-- Caches R36S compatibility scores and RetroBIOS metadata locally, marks them stale after seven
-  days, and refreshes them only when requested in **Settings**.
+- Caches each store/platform game catalogue as structured JSON for fast local searching and safe
+  stale-cache fallback when a store is unavailable.
+- Caches R36S compatibility scores and RetroBIOS metadata locally and refreshes them only when
+  requested in **Settings**.
 - Updates and deletes installed games while preserving multi-file `.cue` and `.m3u` groups.
 - Queues an EmulationStation game-list refresh after every install, update, or deletion, keeps the
   TUI open, and applies one refresh when the user exits.
@@ -31,8 +33,9 @@ so neither Python, uv, nor a package manager is required on the handheld.
 ## Controller-first
 
 The TUI reads the R36S controls directly from `/dev/input/js*`. Up/down moves through menus and
-supports press-and-hold scrolling. On the on-screen keyboard, all four directions navigate and X
-submits the current search—even when it is empty.
+supports press-and-hold scrolling. The on-screen keyboard uses an evenly spaced fixed grid with
+letter, symbol, and accented-character pages. All four directions navigate and X submits the
+current search—even when it is empty.
 
 ## Standalone device package
 

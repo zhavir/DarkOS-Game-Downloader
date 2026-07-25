@@ -10,6 +10,7 @@ from dataclasses import replace
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from dw_cli.cache_policy import catalogue_ttl_seconds
 from dw_cli.compatibility import filter_supported_results
 from dw_cli.config import Config
 from dw_cli.downloader import DownloadError, download_files
@@ -18,6 +19,7 @@ from dw_cli.logging_config import configure_logging
 from dw_cli.models import SearchResult
 from dw_cli.organizer import OrganizeError, detect_roms_directory, move_to_arkos
 from dw_cli.platforms import resolve_platform
+from dw_cli.preferences import load_preferences, preference_path
 from dw_cli.store import GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
 from dw_cli.tui import TerminalTooSmall, run_tui
@@ -76,7 +78,18 @@ def main(argv: Sequence[str] | None = None, *, runtime_config: Config | None = N
     parser = build_parser()
     arguments = parser.parse_args(argv)
     config = runtime_config or Config.from_environment()
-    configure_logging(config.log_file, config.log_level)
+    if arguments.base_url:
+        config = replace(config, base_url=arguments.base_url.rstrip("/"))
+    preferences = load_preferences(preference_path(config.download_directory))
+    log_to_file = (
+        config.log_file is not None if preferences.log_to_file is None else preferences.log_to_file
+    )
+    log_file = (
+        config.log_file or config.download_directory / "darkos-downloader.log"
+        if log_to_file
+        else None
+    )
+    configure_logging(log_file, preferences.log_level or config.log_level)
     LOGGER.info("Starting dArkOS Downloader command=%s", arguments.command or "tui")
     LOGGER.debug(
         "Runtime configuration stores=%s download_directory=%s roms_directories=%s timeout=%s",
@@ -85,9 +98,10 @@ def main(argv: Sequence[str] | None = None, *, runtime_config: Config | None = N
         config.roms_directories,
         config.timeout_seconds,
     )
-    if arguments.base_url:
-        config = replace(config, base_url=arguments.base_url.rstrip("/"))
-    store_catalog = StoreCatalog.from_config(config)
+    store_catalog = StoreCatalog.from_config(
+        config,
+        catalogue_ttl_seconds(preferences.catalogue_ttl_days),
+    )
 
     if arguments.command in (None, "tui"):
         if not store_catalog.stores:

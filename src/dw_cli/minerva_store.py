@@ -13,6 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.models import MediaDownload, Platform, SearchResult
 from dw_cli.platforms import PLATFORMS
 from dw_cli.store import USER_AGENT, CatalogProgress, GameStore, StoreError
@@ -182,6 +183,8 @@ class MinervaStore(GameStore):
         base_url: str,
         torrent_base_url: str,
         timeout_seconds: float = 30.0,
+        cache_directory: Path | None = None,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._torrent_base_url = torrent_base_url.rstrip("/")
@@ -194,6 +197,7 @@ class MinervaStore(GameStore):
             raise ValueError("torrent_base_url must be an absolute HTTP(S) URL")
         self._ssl_context = ssl.create_default_context()
         self._entry_cache: dict[str, tuple[MinervaEntry, ...]] = {}
+        self._configure_catalogue_cache(cache_directory, ttl_seconds)
 
     @property
     def base_url(self) -> str:
@@ -225,7 +229,17 @@ class MinervaStore(GameStore):
         query: str,
         catalog_progress: CatalogProgress | None = None,
     ) -> list[SearchResult]:
+        catalogue = self._load_catalogue(system_code, catalog_progress)
         normalized_query = " ".join(query.split()).casefold()
+        return [
+            result for result in catalogue if result.title.casefold().startswith(normalized_query)
+        ]
+
+    def _fetch_catalogue(
+        self,
+        system_code: str,
+        catalog_progress: CatalogProgress | None,
+    ) -> list[SearchResult]:
         if system_code:
             if system_code not in RA_DIRECTORIES:
                 raise StoreError("Minerva does not provide this platform in RetroAchievements.")
@@ -244,8 +258,6 @@ class MinervaStore(GameStore):
             ):
                 for entry in entries:
                     title, region, version, languages = _title_metadata(entry.filename)
-                    if normalized_query and not title.casefold().startswith(normalized_query):
-                        continue
                     results.append(
                         SearchResult(
                             title=title,

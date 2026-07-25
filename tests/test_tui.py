@@ -10,6 +10,7 @@ from pytest_mock import MockerFixture
 
 from dw_cli.bittorrent import BitTorrentSettings
 from dw_cli.compatibility import CompatibilityInfo
+from dw_cli.config import Config
 from dw_cli.downloader import DownloadCancelled
 from dw_cli.gamepad import InputAction
 from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, SearchResult
@@ -218,12 +219,15 @@ def test_minerva_advanced_settings_only_appear_for_minerva(
 ) -> None:
     tui = object.__new__(DownloaderTui)
     shown_options: list[tuple[str, ...]] = []
+    tui.config = Config("https://example.test", Path("downloads"), ())
+    tui.preferences = Preferences()
     mocker.patch.object(
         tui,
         "_menu",
         new=lambda _title, options, _footer: shown_options.append(tuple(options)) or None,
     )
     tui.selected_store = VimmStore("https://example.test")
+    tui.store_catalog = StoreCatalog((tui.selected_store,))
 
     tui._settings_screen()
 

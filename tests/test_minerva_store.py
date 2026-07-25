@@ -1,5 +1,6 @@
 import io
 from email.message import Message
+from pathlib import Path
 from types import TracebackType
 from urllib.error import HTTPError, URLError
 
@@ -28,6 +29,33 @@ class StaticMinervaStore(MinervaStore):
     def _get_text(self, url: str) -> str:
         assert GBA_DIRECTORY.replace(" ", "%20") in url
         return HTML
+
+
+def test_minerva_search_uses_structured_disk_cache_and_supports_forced_refresh(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    store = StaticMinervaStore(
+        "https://minerva.example",
+        "https://cdn.minerva.example/torrents",
+        cache_directory=tmp_path,
+    )
+    fetched = mocker.spy(store, "_get_text")
+    assert len(store.search(GBA_DIRECTORY, "advance")) == 1
+    assert fetched.call_count == 1
+
+    reloaded = StaticMinervaStore(
+        "https://minerva.example",
+        "https://cdn.minerva.example/torrents",
+        cache_directory=tmp_path,
+    )
+    no_network = mocker.patch.object(reloaded, "_get_text", side_effect=OSError("offline"))
+    assert len(reloaded.search(GBA_DIRECTORY, "advance")) == 1
+    no_network.assert_not_called()
+
+    no_network.side_effect = None
+    no_network.return_value = HTML
+    assert len(reloaded.refresh_catalogue(GBA_DIRECTORY)) == 2
 
 
 def test_parse_directory_preserves_one_based_torrent_order() -> None:

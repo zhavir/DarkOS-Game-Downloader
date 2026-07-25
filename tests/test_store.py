@@ -1,9 +1,12 @@
 from pathlib import Path
 
+import pytest
+from pytest_mock import MockerFixture
+
 from dw_cli.config import Config
 from dw_cli.minerva_store import MinervaStore
 from dw_cli.models import Platform, SearchResult
-from dw_cli.store import CatalogProgress, GameStore
+from dw_cli.store import CatalogProgress, GameStore, StoreError
 from dw_cli.store_catalog import StoreCatalog
 from dw_cli.vimm_store import VimmStore
 
@@ -60,3 +63,25 @@ def test_catalog_accepts_future_store_without_tui_or_cli_changes() -> None:
 
     assert catalog.find("future") is future
     assert catalog.find("missing") is None
+
+
+def test_store_cache_contract_handles_disabled_and_configured_caches(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    future = FutureStore()
+    assert future.catalogue_cache_status("GBA") is None
+    assert future.catalogue_cache_file_count() == 0
+    future.set_catalogue_ttl(20)
+    with pytest.raises(StoreError, match="does not expose"):
+        future.refresh_catalogue("GBA")
+
+    future._configure_catalogue_cache(tmp_path, 10)
+    result = SearchResult("Future Game", "https://future.example/games/1")
+    mocker.patch.object(future, "_fetch_catalogue", return_value=[result])
+    assert future.refresh_catalogue("GBA") == [result]
+    assert future.catalogue_cache_status("GBA") is not None
+    assert future.catalogue_cache_file_count() == 1
+    future.set_catalogue_ttl(30)
+    assert future._catalogue_cache is not None
+    assert future._catalogue_cache.ttl_seconds == 30

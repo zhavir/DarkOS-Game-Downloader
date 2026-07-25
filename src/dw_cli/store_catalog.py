@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Self
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.config import Config
 from dw_cli.minerva_store import MinervaStore
 from dw_cli.store import GameStore
@@ -16,15 +17,26 @@ class StoreCatalog:
     stores: tuple[GameStore, ...]
 
     @classmethod
-    def from_config(cls, config: Config) -> Self:
+    def from_config(
+        cls,
+        config: Config,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
+    ) -> Self:
         """Create every enabled concrete store from application configuration."""
 
         available: tuple[GameStore, ...] = (
-            VimmStore(config.base_url, config.timeout_seconds),
+            VimmStore(
+                config.base_url,
+                config.timeout_seconds,
+                config.download_directory,
+                ttl_seconds,
+            ),
             MinervaStore(
                 config.minerva_base_url,
                 config.minerva_torrent_base_url,
                 config.timeout_seconds,
+                config.download_directory,
+                ttl_seconds,
             ),
         )
         enabled = set(config.enabled_stores)

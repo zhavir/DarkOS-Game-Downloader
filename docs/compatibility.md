@@ -31,8 +31,10 @@ The frontend title catalogue is fetched on the first compatible-platform search 
 the device's local `.downloads/.r36s-game-list-cache.json`. It is not contacted again during normal
 searches. Open **Settings → Update R36S Game List** when you want to replace the cache.
 
-Settings marks the catalogue **stale** after its seven-day TTL. A stale catalogue remains usable
-offline until you explicitly refresh it, and a failed refresh preserves the prior copy.
+Settings marks the catalogue **stale** after the configured catalogue lifetime, which defaults to
+seven days. A stale catalogue remains usable offline until you explicitly refresh it, and a failed
+refresh preserves the prior copy. Change the lifetime through **Settings → Catalogue cache
+lifetime**.
 
 ## Explicitly excluded families
 

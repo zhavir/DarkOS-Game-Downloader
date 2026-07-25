@@ -33,8 +33,9 @@ tools/
 
     Open **Settings → Check for application update** in the TUI. Confirm a newer version and wait for
     it to finish. The application closes so its Tools launcher can replace the
-    executable while preserving `.downloads`, including the selected store, Minerva settings, and
-    the downloaded RetroBIOS catalogue. It returns directly to EmulationStation without a second confirmation dialog. Reopen the
+    executable while preserving `.downloads`, including the selected store, cache lifetime, logging
+    preferences, store catalogues, Minerva settings, and RetroBIOS metadata. It returns directly to
+    EmulationStation without a second confirmation dialog. Reopen the
     tool to verify the update; if that first TUI launch crashes, the launcher restores the previous
     application while retaining the preferences. No Python, uv, or external update utility is used.
 
@@ -59,7 +60,9 @@ Startup and crash diagnostics are stored in:
 tools/darkos-downloader/darkos-downloader.log
 ```
 
-Application records include timestamps and severity levels. The log rotates automatically. For
-additional detail, set `DW_LOG_LEVEL=DEBUG` before launching the application.
+Application records include timestamps and severity levels. The log rotates automatically. Use
+**Settings → Application log level** to change detail and **Settings → Write logs to file** to
+enable or disable application records. Startup and update-recovery diagnostics from the launcher
+may still be written when application file logging is disabled.
 
 To uninstall, remove `dArkOS Downloader.sh` and the `darkos-downloader` directory from `tools`.

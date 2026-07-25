@@ -16,12 +16,11 @@ from time import time
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.models import Platform, SearchResult
 from dw_cli.store import USER_AGENT
 
 R36S_GAME_LIST_URL = "https://r36sgamelist.com"
-CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
-
 LOGGER = logging.getLogger(__name__)
 
 _SCRIPT_PATTERN = re.compile(r'(?:src|href)="([^"?#]+\.js(?:\?[^"#]*)?)"')
@@ -263,11 +262,13 @@ class R36SCompatibilityClient:
         base_url: str = R36S_GAME_LIST_URL,
         timeout_seconds: float = 30.0,
         fetch_text: FetchText | None = None,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
     ) -> None:
         self.cache_path = cache_path
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self._fetch_text_override = fetch_text
+        self.ttl_seconds = ttl_seconds
         self._game_index: frozenset[GameKey] | None = None
 
     def lookup_many(
@@ -315,10 +316,10 @@ class R36SCompatibilityClient:
         return None if payload is None else max(0.0, time() - payload[0])
 
     def cache_is_stale(self) -> bool:
-        """Return whether the local catalogue is older than seven days."""
+        """Return whether the local catalogue exceeds its configured lifetime."""
 
         age = self.cache_age_seconds()
-        return age is not None and age > CACHE_TTL_SECONDS
+        return age is not None and age > self.ttl_seconds
 
     @staticmethod
     def _result_console(result: SearchResult, platform: Platform) -> str | None:

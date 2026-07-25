@@ -16,6 +16,11 @@
 
 Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace, and normal typing.
 
+The on-screen keyboard has four fixed rows of equally sized character keys and one action row. Use
+`aA` for upper/lowercase, `#+=` for punctuation and symbols, and `ÁÉ` for accented characters.
+`SPACE`, `BACK`, and `DONE` are aligned to the same 12-column grid. The D-pad and stick navigate
+only while the keyboard is open; they do not accidentally submit or cancel the search.
+
 ## Search and download
 
 1. On first launch, select Vimm or Minerva Archive as the default store. The choice is saved; use
@@ -33,6 +38,20 @@ Keyboard users can use arrow keys, Enter, Escape, Page Up, Page Down, Backspace,
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
 
+## Store catalogue cache
+
+The first search for a store and platform downloads its complete game catalogue and saves structured
+JSON under `.downloads/game-catalogues/<store>/<platform>.json`. Empty searches and
+case-insensitive title-prefix searches then run against the local file. Vimm and Minerva use the
+same cache behavior, including **All platforms**.
+
+The default cache lifetime is seven days. After it expires, the next search tries to replace the
+catalogue. If the store cannot be reached, the previous valid cache remains available for offline
+searching. Open **Settings → Refresh store game catalogue** to choose a store and platform and force
+an immediate refresh. Open **Settings → Catalogue cache lifetime** to set the expiry period from 1
+to 3650 days; the change applies to store catalogues, R36S compatibility metadata, and RetroBIOS
+metadata.
+
 ## Compatibility catalogue
 
 The first compatible-platform search downloads the frontend game index from R36S Game List and
@@ -40,7 +59,7 @@ stores it in `.downloads/.r36s-game-list-cache.json`. Later searches use that lo
 network request to the compatibility site. Open **Settings → Update R36S Game List** to fetch a new
 copy explicitly.
 
-The cache has a seven-day TTL. Once it is older than seven days, Settings labels it **stale**, while
+Once it is older than the configured catalogue lifetime, Settings labels it **stale**, while
 searches continue using the available offline copy until you decide to refresh it. A failed refresh
 does not remove or replace the working catalogue.
 
@@ -118,9 +137,9 @@ The downloader handles firmware in this order after installing or updating a gam
 The requirement and checksum catalogue comes from
 [RetroBIOS](https://github.com/Abdess/retrobios). It is downloaded once, when a BIOS operation first
 needs it, and then loaded from `.downloads/retrobios/catalogue.json`. The application never refreshes
-it silently. Its seven-day TTL is shown as **stale** in Settings after it expires; the saved copy
-continues to work. Select **Settings → Update RetroBIOS catalogue** to replace the cache with current
-upstream metadata; a failed update leaves the working cache intact.
+it silently. Settings shows it as **stale** after the configured catalogue lifetime expires; the
+saved copy continues to work. Select **Settings → Update RetroBIOS catalogue** to replace the cache
+with current upstream metadata; a failed update leaves the working cache intact.
 
 Select **Search and download BIOS** on the main menu to browse by system, platform, filename,
 description, or region. An empty search lists the complete supported catalogue. The details screen
@@ -130,3 +149,11 @@ detected cards. Downloads require explicit confirmation that you may legally obt
 Known ROM-local exceptions are installed automatically, including Neo Geo firmware copied beside
 the ROM set. Some emulator cores have different optional firmware choices; use the manual search if
 the core configured on your image needs a file that was not offered automatically.
+
+## Logging settings
+
+Open **Settings → Application log level** to choose `DEBUG`, `INFO`, `WARNING`, or `ERROR`. Open
+**Settings → Write logs to file** to turn application file logging on or off. Both changes apply
+immediately and are saved in `.darkos-downloader.json`. When file logging is enabled on the R36S,
+records go to `tools/darkos-downloader/darkos-downloader.log`; for local runs without
+`DW_LOG_FILE`, they go to `darkos-downloader.log` inside the configured download directory.

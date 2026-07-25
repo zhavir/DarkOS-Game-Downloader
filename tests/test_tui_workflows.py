@@ -2,6 +2,7 @@ import curses
 import locale
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 
@@ -19,7 +20,7 @@ from dw_cli.library import LibraryError
 from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
 from dw_cli.organizer import OrganizeError
 from dw_cli.platforms import resolve_platform
-from dw_cli.preferences import Preferences, PreferencesError
+from dw_cli.preferences import Preferences, PreferencesError, load_preferences
 from dw_cli.retrobios import (
     BiosCheck,
     BiosDownloadCancelled,
@@ -36,6 +37,7 @@ from dw_cli.tui import (
     GAMEPAD_SEARCH_KEY,
     DownloaderTui,
     TerminalTooSmall,
+    _keyboard_rows,
 )
 from dw_cli.updater import ReleaseUpdate, UpdateCancelled, UpdateError
 
@@ -132,6 +134,8 @@ def bare_tui(screen: RecordingScreen | None = None) -> DownloaderTui:
     instance.refresh_on_exit = False
     instance.exit_after_update = False
     instance.preferences = Preferences()
+    instance.config = Config("https://example.test", Path("downloads"), ())
+    instance.store_catalog = StoreCatalog(())
     instance.selected_store = None
     instance.roms_directories = ()
     instance.platforms = ()
@@ -185,7 +189,7 @@ def test_constructor_detects_runtime_and_sets_up_screen(
     mocker.patch.object(
         tui_module.StoreCatalog,
         "from_config",
-        lambda _config: StoreCatalog((store,)),
+        lambda _config, _ttl: StoreCatalog((store,)),
     )
     mocker.patch.object(tui_module, "load_preferences", lambda _path: Preferences("fake"))
     mocker.patch.object(tui_module, "detect_roms_directories", lambda _roots: (tmp_path / "roms",))
@@ -648,10 +652,40 @@ def test_settings_and_minerva_settings_actions(
         "_update_compatibility_catalogue",
         new=lambda: actions.append("compatibility"),
     )
-    for choice in (None, 0, 1, 2, 3, 4, 5):
+    mocker.patch.object(
+        instance,
+        "_refresh_store_catalogue",
+        new=lambda: actions.append("store_catalogue"),
+    )
+    mocker.patch.object(
+        instance,
+        "_configure_catalogue_ttl",
+        new=lambda: actions.append("ttl"),
+    )
+    mocker.patch.object(
+        instance,
+        "_configure_log_level",
+        new=lambda: actions.append("log_level"),
+    )
+    mocker.patch.object(
+        instance,
+        "_configure_file_logging",
+        new=lambda: actions.append("log_file"),
+    )
+    for choice in (None, *range(10)):
         mocker.patch.object(instance, "_menu", new=lambda *_args, value=choice: value)
         instance._settings_screen()
-    assert actions == ["store", "retrobios", "compatibility", "minerva", "update"]
+    assert actions == [
+        "store",
+        "store_catalogue",
+        "retrobios",
+        "compatibility",
+        "ttl",
+        "log_level",
+        "log_file",
+        "minerva",
+        "update",
+    ]
 
     instance.preferences_path = tmp_path / "settings.json"
     instance.preferences = Preferences("minerva", BitTorrentSettings(block_size=32768))
@@ -669,6 +703,137 @@ def test_settings_and_minerva_settings_actions(
     mocker.patch.object(instance, "_error", new=errors.append)
     DownloaderTui._minerva_bittorrent_settings_screen(instance)
     assert errors and saved[-1].max_peer_timeout_seconds == 2.5
+
+
+def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.config = Config("https://example.test", tmp_path, ())
+    instance.preferences_path = tmp_path / "settings.json"
+    instance.retrobios_repository = mocker.Mock(ttl_seconds=1)
+    instance.compatibility_client = mocker.Mock(ttl_seconds=1)
+    instance.retrobios_catalog = bios_catalog_fixture()
+    store = FakeStore()
+    instance.store_catalog = StoreCatalog((store,))
+    set_store_ttl = mocker.patch.object(store, "set_catalogue_ttl")
+    configure_logging = mocker.patch.object(tui_module, "configure_logging")
+
+    mocker.patch.object(instance, "_on_screen_keyboard", return_value="14")
+    instance._configure_catalogue_ttl()
+
+    expected_seconds = 14 * 24 * 60 * 60
+    assert instance.preferences.catalogue_ttl_days == 14
+    assert instance.retrobios_repository.ttl_seconds == expected_seconds
+    assert instance.retrobios_catalog.ttl_seconds == expected_seconds
+    assert instance.compatibility_client.ttl_seconds == expected_seconds
+    set_store_ttl.assert_called_with(expected_seconds)
+    assert load_preferences(instance.preferences_path).catalogue_ttl_days == 14
+
+    mocker.patch.object(instance, "_menu", return_value=0)
+    instance._configure_log_level()
+    assert instance.preferences.log_level == "DEBUG"
+    configure_logging.assert_called_with(None, "DEBUG")
+
+    mocker.patch.object(instance, "_menu", return_value=1)
+    instance._configure_file_logging()
+    assert instance.preferences.log_to_file is True
+    configure_logging.assert_called_with(tmp_path / "darkos-downloader.log", "DEBUG")
+    assert load_preferences(instance.preferences_path).log_to_file is True
+
+    mocker.patch.object(instance, "_menu", return_value=0)
+    instance._configure_file_logging()
+    assert instance.preferences.log_to_file is False
+    configure_logging.assert_called_with(None, "DEBUG")
+
+    mocker.patch.object(instance, "_menu", return_value=None)
+    instance._configure_log_level()
+    instance._configure_file_logging()
+
+
+def test_runtime_settings_reject_invalid_cache_days_and_handle_save_errors(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.preferences_path = tmp_path / "settings.json"
+    errors: list[str] = []
+    mocker.patch.object(instance, "_error", new=errors.append)
+    keyboard = mocker.patch.object(instance, "_on_screen_keyboard", return_value="0")
+
+    instance._configure_catalogue_ttl()
+    assert errors[-1].startswith("Invalid catalogue lifetime:")
+
+    keyboard.return_value = None
+    instance._configure_catalogue_ttl()
+    mocker.patch.object(
+        tui_module,
+        "save_preferences",
+        side_effect=PreferencesError("storage is read-only"),
+    )
+    assert (
+        instance._save_runtime_preferences(
+            replace(instance.preferences, log_level="ERROR"),
+            "SAVED",
+            "Saved",
+        )
+        is False
+    )
+    assert errors[-1] == "storage is read-only"
+
+
+def test_settings_can_force_refresh_one_store_platform_catalogue(
+    mocker: MockerFixture,
+) -> None:
+    gba = resolve_platform("GBA")
+    all_platforms = resolve_platform("ALL")
+    assert gba is not None and all_platforms is not None
+    instance = bare_tui()
+    instance.platforms = (all_platforms, gba, gba)
+    store = FakeStore()
+    instance.store_catalog = StoreCatalog((store,))
+    result = SearchResult("Advance Wars", "https://example.test/game")
+    refresh = mocker.patch.object(store, "refresh_catalogue", return_value=[result])
+    choices = iter((0, 1))
+    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    messages: list[tuple[str, str]] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        new=lambda title, message, *_args, **_kwargs: messages.append((title, message)),
+    )
+
+    instance._refresh_store_catalogue()
+
+    refresh.assert_called_once_with(gba.code, instance._catalog_progress)
+    assert messages[-1] == (
+        "GAME CATALOGUE UPDATED",
+        "Cached 1 Fake Store result(s) for Game Boy Advance.",
+    )
+    assert instance._store_cache_status_label(None) == "not downloaded"
+
+
+def test_store_catalogue_refresh_can_cancel_or_report_failure(
+    mocker: MockerFixture,
+) -> None:
+    gba = resolve_platform("GBA")
+    assert gba is not None
+    instance = bare_tui()
+    instance.platforms = (gba,)
+    store = FakeStore()
+    instance.store_catalog = StoreCatalog((store,))
+
+    mocker.patch.object(instance, "_menu", return_value=None)
+    instance._refresh_store_catalogue()
+
+    choices = iter((0, 0))
+    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    mocker.patch.object(store, "refresh_catalogue", side_effect=StoreError("offline"))
+    errors: list[str] = []
+    mocker.patch.object(instance, "_error", new=errors.append)
+    instance._refresh_store_catalogue()
+    assert errors == ["offline"]
 
 
 def test_save_minerva_settings_handles_error_and_formats_values(
@@ -1382,6 +1547,58 @@ def test_keyboard_menu_and_drawing_primitives(mocker: MockerFixture) -> None:
     with pytest.raises(TerminalTooSmall):
         instance._require_size(20, 39)
     instance._require_size(15, 40)
+
+
+def test_keyboard_uses_fixed_darkos_grid_and_exposes_symbols_and_accents(
+    mocker: MockerFixture,
+) -> None:
+    letters = _keyboard_rows("letters", True)
+    symbols = _keyboard_rows("symbols", True)
+    accents = _keyboard_rows("accents", False)
+    assert all(sum(key.span for key in row) == 12 for row in letters)
+    assert all(key.span == 1 for row in letters[:4] for key in row)
+    assert all(key.span == 2 for key in letters[-1])
+    assert {"@", "?", "€", chr(0xD7)} <= {key.value for row in symbols[:4] for key in row}
+    assert {"à", "é", "ñ", "ø"} <= {key.value for row in accents[:4] for key in row}
+
+    screen = RecordingScreen()
+    instance = bare_tui(screen)
+    mocker.patch.object(instance, "_get_input", return_value=GAMEPAD_SEARCH_KEY)
+    assert instance._on_screen_keyboard("SEARCH") == ""
+    first_row = sorted((x, text) for y, x, text, _attribute in screen.writes if y == 6)
+    assert len(first_row) == 12
+    assert len({len(text) for _x, text in first_row}) == 1
+    assert len({right[0] - left[0] for left, right in pairwise(first_row)}) == 1
+
+    instance = bare_tui()
+    inputs = iter((curses.KEY_UP, curses.KEY_RIGHT, 10, curses.KEY_UP, 10, GAMEPAD_SEARCH_KEY))
+    mocker.patch.object(instance, "_get_input", new=lambda *_args: next(inputs))
+    assert instance._on_screen_keyboard("SEARCH") == "¥"
+
+
+@pytest.mark.parametrize(
+    ("keys", "expected"),
+    [
+        ((27,), None),
+        (
+            (ord("a"), curses.KEY_UP, *(curses.KEY_RIGHT,) * 3, 10, ord("b"), GAMEPAD_SEARCH_KEY),
+            "a b",
+        ),
+        ((ord("a"), curses.KEY_UP, *(curses.KEY_RIGHT,) * 4, 10, GAMEPAD_SEARCH_KEY), ""),
+        ((ord("a"), curses.KEY_UP, *(curses.KEY_RIGHT,) * 5, 10), "a"),
+        ((curses.KEY_UP, 10, curses.KEY_DOWN, curses.KEY_DOWN, 10, GAMEPAD_SEARCH_KEY), "q"),
+        ((curses.KEY_UP, *(curses.KEY_RIGHT,) * 2, 10, curses.KEY_UP, 10, GAMEPAD_SEARCH_KEY), "Ś"),
+    ],
+)
+def test_keyboard_action_keys_and_pages(
+    keys: tuple[int, ...],
+    expected: str | None,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    inputs = iter(keys)
+    mocker.patch.object(instance, "_get_input", new=lambda *_args: next(inputs))
+    assert instance._on_screen_keyboard("SEARCH", empty_hint="Type a title") == expected
 
 
 def test_get_input_waits_and_run_tui_uses_curses_wrapper(mocker: MockerFixture) -> None:

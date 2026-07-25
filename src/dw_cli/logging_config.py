@@ -14,6 +14,8 @@ def configure_logging(log_file: Path | None, level_name: str = DEFAULT_LOG_LEVEL
     """Configure one package logger, writing only to a file when one is requested."""
 
     logger = logging.getLogger(LOGGER_NAME)
+    for existing_handler in logger.handlers:
+        existing_handler.close()
     logger.handlers.clear()
     logger.propagate = False
     level = getattr(logging, level_name.upper(), logging.INFO)

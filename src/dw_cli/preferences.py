@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from dw_cli.bittorrent import BitTorrentSettings
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS
 
 PREFERENCES_FILENAME = ".darkos-downloader.json"
 
@@ -20,6 +21,9 @@ class Preferences:
 
     store_id: str | None = None
     minerva_bittorrent: BitTorrentSettings = field(default_factory=BitTorrentSettings)
+    catalogue_ttl_days: int = DEFAULT_CATALOGUE_TTL_DAYS
+    log_level: str | None = None
+    log_to_file: bool | None = None
 
 
 def preference_path(download_directory: Path) -> Path:
@@ -42,10 +46,22 @@ def load_preferences(path: Path) -> Preferences:
         normalized_store_id = None
     else:
         normalized_store_id = store_id.strip().casefold()
+    ttl_days = _integer_setting(payload, "catalogue_ttl_days", DEFAULT_CATALOGUE_TTL_DAYS)
+    if ttl_days <= 0:
+        ttl_days = DEFAULT_CATALOGUE_TTL_DAYS
+    raw_log_level = payload.get("log_level")
+    log_level = (
+        raw_log_level.upper()
+        if isinstance(raw_log_level, str)
+        and raw_log_level.upper() in {"DEBUG", "INFO", "WARNING", "ERROR"}
+        else None
+    )
+    raw_log_to_file = payload.get("log_to_file")
+    log_to_file = raw_log_to_file if isinstance(raw_log_to_file, bool) else None
     minerva_payload = payload.get("minerva_bittorrent")
     defaults = BitTorrentSettings()
     if not isinstance(minerva_payload, dict):
-        return Preferences(normalized_store_id, defaults)
+        return Preferences(normalized_store_id, defaults, ttl_days, log_level, log_to_file)
     try:
         settings = BitTorrentSettings(
             udp_protocol_id=_integer_setting(
@@ -92,7 +108,7 @@ def load_preferences(path: Path) -> Preferences:
         )
     except ValueError:
         settings = defaults
-    return Preferences(normalized_store_id, settings)
+    return Preferences(normalized_store_id, settings, ttl_days, log_level, log_to_file)
 
 
 def save_preferences(path: Path, preferences: Preferences) -> None:
@@ -106,6 +122,9 @@ def save_preferences(path: Path, preferences: Preferences) -> None:
             json.dumps(
                 {
                     "store": preferences.store_id,
+                    "catalogue_ttl_days": preferences.catalogue_ttl_days,
+                    "log_level": preferences.log_level,
+                    "log_to_file": preferences.log_to_file,
                     "minerva_bittorrent": {
                         "udp_protocol_id": settings.udp_protocol_id,
                         "block_size": settings.block_size,

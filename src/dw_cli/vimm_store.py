@@ -7,11 +7,13 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.models import Platform, SearchResult
 from dw_cli.store import USER_AGENT, CatalogProgress, GameStore, StoreError
 
@@ -168,7 +170,13 @@ class VimmStore(GameStore):
     display_name = "Vimm's Lair"
     description = "Vimm game vault"
 
-    def __init__(self, base_url: str, timeout_seconds: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float = 30.0,
+        cache_directory: Path | None = None,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         parsed = urlparse(self._base_url)
@@ -176,6 +184,7 @@ class VimmStore(GameStore):
             raise ValueError("base_url must be an absolute HTTP(S) URL")
         self._base = parsed
         self._ssl_context = ssl.create_default_context()
+        self._configure_catalogue_cache(cache_directory, ttl_seconds)
 
     @property
     def base_url(self) -> str:
@@ -223,35 +232,14 @@ class VimmStore(GameStore):
     ) -> list[SearchResult]:
         """Return case-insensitive title-prefix matches, or a platform catalogue when empty."""
 
-        normalized_query = " ".join(query.split())
-        if not normalized_query:
-            return self._list_catalog(system_code, catalog_progress)
+        catalogue = self._load_catalogue(system_code, catalog_progress)
+        needle = " ".join(query.split()).casefold()
+        return [result for result in catalogue if result.title.casefold().startswith(needle)]
 
-        parameters = {"p": "list", "q": normalized_query}
-        if system_code:
-            parameters["system"] = system_code
-        query_string = urlencode(parameters)
-        url = f"{self.base_url}/vault/?{query_string}"
-        try:
-            results = parse_search_results(self._get_text(url), self.base_url, system_code)
-        except StoreError as error:
-            if error.status_code != 404:
-                raise
-            results = []
-        needle = normalized_query.casefold()
-        matches = [result for result in results if result.title.casefold().startswith(needle)]
-        if matches or not system_code:
-            return matches
-
-        # Some server versions accept only complete titles or return 404 for a
-        # partial query. Catalogue locally and apply the prefix ourselves.
-        catalog = self._list_catalog(system_code, catalog_progress)
-        return [result for result in catalog if result.title.casefold().startswith(needle)]
-
-    def _list_catalog(
+    def _fetch_catalogue(
         self,
         system_code: str,
-        progress: CatalogProgress | None,
+        catalog_progress: CatalogProgress | None,
     ) -> list[SearchResult]:
         def fetch(section: str) -> list[SearchResult]:
             parameters = {"p": "list", "section": section}
@@ -278,8 +266,8 @@ class VimmStore(GameStore):
                     if result.link not in seen_links:
                         seen_links.add(result.link)
                         results.append(result)
-                if progress is not None:
-                    progress(completed, len(CATALOG_SECTIONS))
+                if catalog_progress is not None:
+                    catalog_progress(completed, len(CATALOG_SECTIONS))
         return results
 
     def retrieve_download_url(self, detail_url: str) -> str:

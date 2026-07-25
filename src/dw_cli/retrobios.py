@@ -18,6 +18,7 @@ from urllib.parse import quote
 
 import yaml
 
+from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
 from dw_cli.models import Platform
 from dw_cli.organizer import ROM_AND_SHARED_BIOS, ROM_LOCAL_BIOS
 
@@ -29,7 +30,6 @@ MAX_FIRMWARE_BYTES = 64 * 1024 * 1024
 MAX_CATALOGUE_BYTES = 16 * 1024 * 1024
 RETROBIOS_CACHE_FILENAME = "catalogue.json"
 RETROBIOS_API_URL = "https://api.github.com/repos/Abdess/retrobios/commits/main"
-CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 
 type BiosProgress = Callable[[str, int, int | None], None]
 type CancellationCheck = Callable[[], bool]
@@ -170,15 +170,21 @@ class RetroBiosCatalog:
         generated_at: str | None = None,
         retroarch_version: str | None = None,
         fetched_at: float | None = None,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
     ) -> None:
         self.revision = revision
         self.systems = systems
         self.generated_at = generated_at
         self.retroarch_version = retroarch_version
         self.fetched_at = fetched_at
+        self.ttl_seconds = ttl_seconds
 
     @classmethod
-    def from_json(cls, content: str) -> RetroBiosCatalog:
+    def from_json(
+        cls,
+        content: str,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
+    ) -> RetroBiosCatalog:
         """Parse a generated manifest while rejecting unsafe or malformed entries."""
 
         try:
@@ -220,6 +226,7 @@ class RetroBiosCatalog:
             _optional_string(payload.get("source_generated_at")),
             _optional_string(payload.get("retroarch_version")),
             _optional_float(payload.get("fetched_at")),
+            ttl_seconds,
         )
 
     def cache_age_seconds(self) -> float | None:
@@ -228,10 +235,10 @@ class RetroBiosCatalog:
         return None if self.fetched_at is None else max(0.0, time() - self.fetched_at)
 
     def cache_is_stale(self) -> bool:
-        """Return whether this catalogue is missing a timestamp or older than seven days."""
+        """Return whether this catalogue is missing a timestamp or exceeds its lifetime."""
 
         age = self.cache_age_seconds()
-        return age is None or age > CACHE_TTL_SECONDS
+        return age is None or age > self.ttl_seconds
 
     def system_for(self, platform: Platform) -> BiosSystem | None:
         """Return the exact RetroBIOS system mapped to a dArkOS platform."""
@@ -277,9 +284,15 @@ class RetroBiosCatalog:
 class RetroBiosRepository:
     """Persist an atomic local catalogue downloaded only on first use or request."""
 
-    def __init__(self, cache_directory: Path, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        cache_directory: Path,
+        timeout_seconds: float,
+        ttl_seconds: int = catalogue_ttl_seconds(DEFAULT_CATALOGUE_TTL_DAYS),
+    ) -> None:
         self.cache_path = cache_directory / "retrobios" / RETROBIOS_CACHE_FILENAME
         self.timeout_seconds = timeout_seconds
+        self.ttl_seconds = ttl_seconds
 
     def load(self) -> RetroBiosCatalog | None:
         """Load the existing cache without contacting GitHub."""
@@ -290,7 +303,7 @@ class RetroBiosRepository:
             return None
         except OSError as error:
             raise BiosError(f"Could not read the RetroBIOS catalogue: {error}") from error
-        return RetroBiosCatalog.from_json(content)
+        return RetroBiosCatalog.from_json(content, self.ttl_seconds)
 
     def ensure(
         self,
@@ -369,7 +382,7 @@ class RetroBiosRepository:
         )
         manifest = _build_manifest(revision, platform, profiles, database)
         serialized = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
-        catalogue = RetroBiosCatalog.from_json(serialized)
+        catalogue = RetroBiosCatalog.from_json(serialized, self.ttl_seconds)
         temporary = self.cache_path.with_name(self.cache_path.name + ".tmp")
         try:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
