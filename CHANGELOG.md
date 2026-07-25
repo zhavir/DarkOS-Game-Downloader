@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.1 (2026-07-25)
+
+### Bug Fixes
+
+- Fix layout of the keyboard and add cache to the stores
+  ([`4cc92f9`](https://github.com/zhavir/DarkOS-Game-Downloader/commit/4cc92f90de120444a7d2cb755ac1e4b3d2624ab1))
+
+
 ## v1.6.0 (2026-07-25)
 
 ### Features
