@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-07-26)
+
+### Features
+
+- Rename project internals to Pocket Harbor
+  ([`2eda07f`](https://github.com/zhavir/PoketHarbor/commit/2eda07f2ca5f84cc3b78347004bdacc7a2b87265))
+
+### Breaking Changes
+
+- The Python package is now ph, the command is ph, and environment variables use PH_. DarkOS now
+  installs under tools/pocket-harbor. Pre-2.0 installations require a manual reinstall; settings are
+  not migrated.
+
+
 ## v1.6.2 (2026-07-25)
 
 ### Bug Fixes

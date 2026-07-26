@@ -128,50 +128,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pocket-harbor"
-version = "1.6.2"
-source = { editable = "." }
-dependencies = [
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-release = [
-    { name = "uv" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "prek" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-mock" },
-    { name = "python-semantic-release" },
-    { name = "ruff" },
-    { name = "ty" },
-    { name = "zensical" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "uv", marker = "extra == 'release'", specifier = "==0.11.32" },
-]
-provides-extras = ["release"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "prek", specifier = ">=0.4.10" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-cov", specifier = ">=7.1,<8" },
-    { name = "pytest-mock", specifier = ">=3.15.1" },
-    { name = "python-semantic-release", specifier = ">=10.6.1,<11" },
-    { name = "ruff", specifier = ">=0.16" },
-    { name = "ty", specifier = ">=0.0.63" },
-    { name = "zensical", specifier = ">=0.0.51,<0.1" },
-]
-
-[[package]]
 name = "deepmerge"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -340,6 +296,50 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "pocket-harbor"
+version = "2.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+release = [
+    { name = "uv" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "prek" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "python-semantic-release" },
+    { name = "ruff" },
+    { name = "ty" },
+    { name = "zensical" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "uv", marker = "extra == 'release'", specifier = "==0.11.32" },
+]
+provides-extras = ["release"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "prek", specifier = ">=0.4.10" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-cov", specifier = ">=7.1,<8" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
+    { name = "python-semantic-release", specifier = ">=10.6.1,<11" },
+    { name = "ruff", specifier = ">=0.16" },
+    { name = "ty", specifier = ">=0.0.63" },
+    { name = "zensical", specifier = ">=0.0.51,<0.1" },
 ]
 
 [[package]]
