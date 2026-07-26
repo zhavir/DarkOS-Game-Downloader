@@ -16,6 +16,7 @@ from ph.config import Config
 from ph.downloader import DownloadCancelled, DownloadError, DownloadSelectionRequired
 from ph.gamepad import InputAction, LinuxJoystick
 from ph.hardware import DeviceTreeInput, DeviceTreeKey, HardwareProfile
+from ph.i18n import LanguageCode, translate
 from ph.library import LibraryError
 from ph.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
 from ph.organizer import OrganizeError
@@ -40,6 +41,10 @@ from ph.tui import (
     _keyboard_rows,
 )
 from ph.updater import ReleaseUpdate, UpdateCancelled, UpdateError
+
+
+def translated_operation_error(detail: str) -> str:
+    return translate("en", "operation_failed", error=detail)
 
 
 class RecordingScreen:
@@ -270,6 +275,66 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
     assert closed == [True] and refreshed == [True]
 
 
+def test_main_menu_is_retranslated_after_language_changes(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.store_catalog = StoreCatalog((FakeStore(),))
+    instance.selected_store = FakeStore()
+    choices = iter((4, 6))
+    menus: list[tuple[str, ...]] = []
+
+    def menu(_title: str, options: Sequence[str], _footer: str) -> int:
+        menus.append(tuple(options))
+        return next(choices)
+
+    def change_language() -> None:
+        instance.language = "it"
+
+    mocker.patch.object(instance, "_menu", new=menu)
+    mocker.patch.object(instance, "_settings_screen", new=change_language)
+    mocker.patch.object(instance, "_confirm_exit", return_value=True)
+
+    instance.run()
+
+    assert menus[0][0] == "Search the library"
+    assert menus[1][0] == "Cerca nella libreria"
+
+
+@pytest.mark.parametrize(
+    ("language", "expected_compatibility", "expected_bios"),
+    [
+        ("en", "Perfect - 93% match", "[MISSING] [R]"),
+        ("de", "Perfekt - 93 % Übereinstimmung", "[FEHLT] [E]"),
+        ("es", "Perfecto - 93 % de coincidencia", "[AUSENTE] [O]"),
+        ("it", "Perfetta - corrispondenza 93%", "[MANCANTE] [N]"),
+        ("pt", "Perfeito - 93% de correspondência", "[EM FALTA] [O]"),
+    ],
+)
+def test_dynamic_tui_badges_are_localized(
+    language: LanguageCode,
+    expected_compatibility: str,
+    expected_bios: str,
+) -> None:
+    instance = bare_tui()
+    instance.language = language
+    compatibility = CompatibilityInfo("Perfect", True, 0.93)
+    requirement = BiosRequirement(
+        "bios.bin",
+        "bios.bin",
+        True,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    check = BiosCheck(requirement, BiosState.MISSING, (Path("bios/bios.bin"),))
+
+    assert instance._compatibility_label(compatibility) == expected_compatibility
+    assert expected_bios in instance._bios_check_label(check)
+
+
 def test_run_handles_missing_and_first_run_stores(mocker: MockerFixture) -> None:
     instance = bare_tui()
     errors: list[str] = []
@@ -321,7 +386,7 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
     search = mocker.patch.object(store, "search", side_effect=StoreError("offline"))
     keyboard.side_effect = iter(("game", None))
     instance._search_platform_flow(store, platform)
-    assert errors == ["offline"]
+    assert errors == [translated_operation_error("offline")]
 
     search.side_effect = None
     search.return_value = []
@@ -537,7 +602,7 @@ def test_delete_handles_cancel_library_error_and_success(
         tui_module, "delete_game", lambda _game: (_ for _ in ()).throw(LibraryError("locked"))
     )
     assert instance._confirm_delete(game) is False
-    assert errors == ["locked"]
+    assert errors == [translated_operation_error("locked")]
     mocker.patch.object(tui_module, "delete_game", lambda _game: None)
     assert instance._confirm_delete(game) is True
     assert instance.refresh_on_exit is True
@@ -830,7 +895,7 @@ def test_runtime_settings_reject_invalid_cache_days_and_handle_save_errors(
     keyboard = mocker.patch.object(instance, "_on_screen_keyboard", return_value="0")
 
     instance._configure_catalogue_ttl()
-    assert errors[-1].startswith("Invalid catalogue lifetime:")
+    assert errors[-1] == "Enter a value from 1 to 3650 days."
 
     keyboard.return_value = None
     instance._configure_catalogue_ttl()
@@ -847,7 +912,7 @@ def test_runtime_settings_reject_invalid_cache_days_and_handle_save_errors(
         )
         is False
     )
-    assert errors[-1] == "storage is read-only"
+    assert errors[-1] == translated_operation_error("storage is read-only")
 
 
 def test_settings_can_force_refresh_one_store_platform_catalogue(
@@ -900,7 +965,7 @@ def test_store_catalogue_refresh_can_cancel_or_report_failure(
     errors: list[str] = []
     mocker.patch.object(instance, "_error", new=errors.append)
     instance._refresh_store_catalogue()
-    assert errors == ["offline"]
+    assert errors == [translated_operation_error("offline")]
 
 
 def test_store_catalogue_back_returns_from_platform_to_store_picker(
@@ -939,7 +1004,7 @@ def test_save_minerva_settings_handles_error_and_formats_values(
         lambda *_args: (_ for _ in ()).throw(PreferencesError("full")),
     )
     assert instance._save_minerva_bittorrent_settings(BitTorrentSettings()) is False
-    assert errors == ["full"]
+    assert errors == [translated_operation_error("full")]
     mocker.patch.object(tui_module, "save_preferences", lambda *_args: None)
     assert instance._save_minerva_bittorrent_settings(BitTorrentSettings()) is True
     assert instance._format_bittorrent_setting("udp_protocol_id", BitTorrentSettings()).isdigit()
@@ -1000,7 +1065,8 @@ def test_application_update_flow_covers_all_outcomes(
     )
     instance._application_update_flow()
     assert "ALREADY UP TO DATE" in messages and "UPDATE CANCELLED" in messages
-    assert "api error" in errors and "bad bundle" in errors
+    assert translated_operation_error("api error") in errors
+    assert translated_operation_error("bad bundle") in errors
 
 
 def test_bios_followup_does_not_prompt_for_bundled_or_second_card_bios(
@@ -1136,7 +1202,7 @@ def test_manual_bios_search_handles_cancel_empty_and_unavailable_catalogue(
     instance.roms_directories = (tmp_path,)
     mocker.patch.object(instance, "_load_retrobios_catalogue", side_effect=BiosError("offline"))
     instance._bios_search_flow()
-    assert errors[-1] == "offline"
+    assert errors[-1] == translated_operation_error("offline")
 
     catalog = bios_catalog_fixture()
     mocker.patch.object(instance, "_load_retrobios_catalogue", return_value=catalog)
@@ -1224,7 +1290,7 @@ def test_compatibility_cache_status_and_explicit_update(
     errors: list[str] = []
     mocker.patch.object(instance, "_error", new=errors.append)
     instance._update_compatibility_catalogue()
-    assert errors[-1] == "refresh failed"
+    assert errors[-1] == translated_operation_error("refresh failed")
 
 
 def test_install_bios_checks_reports_success_cancel_and_error(
@@ -1250,7 +1316,7 @@ def test_install_bios_checks_reports_success_cancel_and_error(
     errors: list[str] = []
     mocker.patch.object(instance, "_error", new=errors.append)
     assert instance._install_bios_checks(catalog, (check,), gba, tmp_path) == 0
-    assert errors[-1] == "failed"
+    assert errors[-1] == translated_operation_error("failed")
 
 
 def test_retrobios_settings_update_handles_keep_cancel_and_failure(
@@ -1278,7 +1344,7 @@ def test_retrobios_settings_update_handles_keep_cancel_and_failure(
 
     loader.side_effect = BiosError("metadata unavailable")
     instance._update_retrobios_catalogue()
-    assert errors[-1] == "metadata unavailable"
+    assert errors[-1] == translated_operation_error("metadata unavailable")
 
 
 def test_retrobios_cache_shortcut_and_uninitialized_label(mocker: MockerFixture) -> None:
