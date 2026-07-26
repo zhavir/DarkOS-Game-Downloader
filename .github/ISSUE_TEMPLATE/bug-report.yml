@@ -13,7 +13,7 @@ body:
     attributes:
       label: Pocket Harbor version
       description: Open Settings or use `ph --version`.
-      placeholder: 1.6.1
+      placeholder: Output from ph --version
     validations:
       required: true
   - type: dropdown

@@ -1,0 +1,66 @@
+name: Setup issue templates
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/issue-labels.json"
+      - ".github/workflows/setup-issue-templates.yml"
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: setup-issue-templates
+  cancel-in-progress: true
+jobs:
+  setup:
+    name: Configure issue forms
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+      - name: Validate issue form labels
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r label; do
+            if ! jq --exit-status --arg label "${label}" \
+              '.[] | select(.name == $label)' \
+              .github/issue-labels.json > /dev/null; then
+              echo "::error::Issue form label '${label}' is missing from .github/issue-labels.json"
+              exit 1
+            fi
+          done < <(
+            awk '
+              /^labels:/ { in_labels = 1; next }
+              in_labels && /^  - / {
+                sub(/^  - /, "")
+                gsub(/"/, "")
+                print
+                next
+              }
+              in_labels { in_labels = 0 }
+            ' .github/ISSUE_TEMPLATE/*.yml
+          )
+      - name: Create or update issue labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r label; do
+            name="$(jq --raw-output '.name' <<< "${label}")"
+            color="$(jq --raw-output '.color' <<< "${label}")"
+            description="$(jq --raw-output '.description' <<< "${label}")"
+
+            gh label create "${name}" \
+              --repo "${GH_REPO}" \
+              --color "${color}" \
+              --description "${description}" \
+              --force
+          done < <(jq --compact-output '.[]' .github/issue-labels.json)

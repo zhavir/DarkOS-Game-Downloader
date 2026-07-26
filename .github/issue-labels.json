@@ -1,0 +1,17 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something is not working as expected"
+  },
+  {
+    "name": "compatibility",
+    "color": "0e8a16",
+    "description": "Device, distribution, controller, display, or storage compatibility"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New feature or improvement"
+  }
+]
