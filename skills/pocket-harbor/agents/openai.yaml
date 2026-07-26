@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocket Harbor"
+  short_description: "Maintain and extend the handheld game manager"
+  default_prompt: "Use $pocket-harbor to develop, test, document, or package this project."

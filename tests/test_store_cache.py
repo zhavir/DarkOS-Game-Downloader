@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import store_cache as cache_module
-from dw_cli.models import SearchResult
-from dw_cli.store_cache import CatalogueCacheError, GameCatalogueCache
+from ph import store_cache as cache_module
+from ph.models import SearchResult
+from ph.store_cache import CatalogueCacheError, GameCatalogueCache
 
 
 def test_catalogue_cache_writes_structured_platform_file_and_reuses_it(tmp_path: Path) -> None:

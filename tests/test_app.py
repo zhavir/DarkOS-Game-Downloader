@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import app
-from dw_cli.app import build_parser
-from dw_cli.config import Config
-from dw_cli.downloader import DownloadError
-from dw_cli.models import DownloadResult, MediaDownload, Platform, SearchResult
-from dw_cli.platforms import resolve_platform
-from dw_cli.store import CatalogProgress, GameStore, StoreError
+from ph import app
+from ph.app import build_parser
+from ph.config import Config
+from ph.downloader import DownloadError
+from ph.models import DownloadResult, MediaDownload, Platform, SearchResult
+from ph.platforms import resolve_platform
+from ph.store import CatalogProgress, GameStore, StoreError
 
 
 class FakeStore(GameStore):
@@ -56,6 +56,7 @@ class FakeStore(GameStore):
 
 
 def test_supported_consoles_command_was_removed() -> None:
+    assert build_parser().prog == "ph"
     with pytest.raises(SystemExit):
         build_parser().parse_args(["consoles"])
 
@@ -128,7 +129,7 @@ def test_main_rejects_invalid_tui_environment(
 
 def test_main_routes_search_and_rejects_unknown_store(mocker: MockerFixture) -> None:
     config = Config("https://example.test", Path("downloads"), ())
-    calls: list[tuple[object, str, str]] = []
+    calls: list[tuple[object, ...]] = []
     mocker.patch.object(app, "_run_search", side_effect=lambda *args: calls.append(args) or 7)
 
     assert (
@@ -138,9 +139,16 @@ def test_main_routes_search_and_rejects_unknown_store(mocker: MockerFixture) -> 
         )
         == 7
     )
-    assert calls[0][1:] == ("GBA", "Advance Wars")
+    assert calls[0][1:] == ("GBA", "Advance Wars", config.target)
     with pytest.raises(SystemExit, match="2"):
         app.main(["--store", "missing", "search", "GBA"], runtime_config=config)
+
+
+def test_main_reports_an_unknown_linux_target_without_a_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert app.main(["search", "GBA"], runtime_environment={"PH_TARGET_OS": "future-os"}) == 2
+    assert "available targets: darkos" in capsys.readouterr().err
 
 
 def test_main_routes_download(mocker: MockerFixture) -> None:
@@ -201,7 +209,11 @@ def test_run_download_moves_roms_reports_bios_and_requests_refresh(
         timeout_seconds=2.0,
     )
     mocker.patch.object(app, "download_files", lambda *_args: [download])
-    mocker.patch.object(app, "detect_roms_directory", lambda _roots: tmp_path / "roms")
+    mocker.patch.object(
+        app,
+        "detect_roms_directory",
+        lambda _roots, _candidates: tmp_path / "roms",
+    )
 
     def move(
         _downloads: object,
@@ -212,10 +224,12 @@ def test_run_download_moves_roms_reports_bios_and_requests_refresh(
         bios_callback(tmp_path / "roms" / "bios" / "firmware.bin")
         return [moved]
 
-    mocker.patch.object(app, "move_to_arkos", move)
+    mocker.patch.object(app, "install_downloads", move)
     refreshed: list[bool] = []
     mocker.patch.object(
-        app, "request_emulationstation_refresh", lambda: refreshed.append(True) or True
+        app,
+        "request_game_frontend_refresh",
+        lambda **_kwargs: refreshed.append(True) or True,
     )
 
     assert app._run_download(store, config, ["detail"], tmp_path, "GBA", None) == 0
@@ -231,7 +245,7 @@ def test_run_download_moves_roms_reports_bios_and_requests_refresh(
     ("platform_name", "roms_root", "exception", "message"),
     [
         ("unknown", Path("roms"), None, "Unknown platform"),
-        ("GBA", None, None, "No dArkOS ROM root"),
+        ("GBA", None, None, "No ROM root"),
         (None, None, DownloadError("network"), "network"),
     ],
 )
@@ -255,7 +269,11 @@ def test_run_download_reports_failures(
         mocker.patch.object(app, "download_files", lambda *_args: [])
     else:
         mocker.patch.object(app, "download_files", lambda *_args: (_ for _ in ()).throw(exception))
-    mocker.patch.object(app, "detect_roms_directory", lambda _roots: roms_root)
+    mocker.patch.object(
+        app,
+        "detect_roms_directory",
+        lambda _roots, _candidates: roms_root,
+    )
 
     assert app._run_download(store, config, ["detail"], tmp_path, platform_name, None) == 1
     assert message in capsys.readouterr().err

@@ -7,14 +7,14 @@ from urllib.error import HTTPError, URLError
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import (
+from ph.bittorrent import (
     BitTorrentCancelled,
     BitTorrentError,
     BitTorrentSettings,
     TorrentFileChoice,
     TorrentSelectionRequired,
 )
-from dw_cli.downloader import (
+from ph.downloader import (
     DownloadCancelled,
     DownloadError,
     DownloadSelectionRequired,
@@ -24,7 +24,7 @@ from dw_cli.downloader import (
     _unique_download_path,
     download_files,
 )
-from dw_cli.models import MediaDownload
+from ph.models import MediaDownload
 
 
 class Response(io.BytesIO):
@@ -66,7 +66,7 @@ def test_torrent_download_uses_native_python_client(
         assert isinstance(destination, Path)
         destination.write_bytes(b"game")
 
-    mocker.patch("dw_cli.downloader.download_torrent_file", native_download)
+    mocker.patch("ph.downloader.download_torrent_file", native_download)
     settings = BitTorrentSettings(block_size=32 * 1024, peer_race_workers=4)
 
     result = download_files(
@@ -112,7 +112,7 @@ def test_direct_download_uses_headers_progress_and_unique_names(
         )
     )
     opened = mocker.patch(
-        "dw_cli.downloader.urlopen", side_effect=lambda *_args, **_kwargs: next(responses)
+        "ph.downloader.urlopen", side_effect=lambda *_args, **_kwargs: next(responses)
     )
     progress: list[tuple[str, int, int | None]] = []
 
@@ -139,7 +139,7 @@ def test_download_validates_empty_and_torrent_requests(
         download_files([MediaDownload("torrent", 1, None)], tmp_path, "")
 
     native = mocker.patch(
-        "dw_cli.downloader.download_torrent_file", side_effect=BitTorrentCancelled("stop")
+        "ph.downloader.download_torrent_file", side_effect=BitTorrentCancelled("stop")
     )
     with pytest.raises(DownloadCancelled):
         download_files([MediaDownload("torrent", 1, "game.zip")], tmp_path, "")
@@ -173,7 +173,7 @@ def test_direct_download_translates_network_errors(
     error: Exception,
     message: str,
 ) -> None:
-    mocker.patch("dw_cli.downloader.urlopen", side_effect=error)
+    mocker.patch("ph.downloader.urlopen", side_effect=error)
     with pytest.raises(DownloadError, match=message):
         _download_with_urllib(["https://example.test/file"], tmp_path, "", 1, None, None)
 
@@ -183,7 +183,7 @@ def test_cancelled_direct_download_removes_partial_file(
     mocker: MockerFixture,
 ) -> None:
     mocker.patch(
-        "dw_cli.downloader.urlopen",
+        "ph.downloader.urlopen",
         return_value=Response(b"data", headers={"Content-Length": "4"}),
     )
     checks = iter((False, False, True))

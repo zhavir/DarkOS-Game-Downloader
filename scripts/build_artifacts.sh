@@ -1,8 +1,25 @@
 #!/bin/sh
-# Replace and rebuild the uv distributions and self-contained dArkOS R36S bundle.
+# Replace and rebuild uv distributions and one target-specific Linux bundle.
 set -eu
 
 PROJECT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
+REQUESTED_TARGET=${1:-${POCKET_HARBOR_TARGET:-darkos}}
+case "$REQUESTED_TARGET" in
+    '' | *[!a-z0-9-]*)
+        printf 'Invalid build target: %s\n' "$REQUESTED_TARGET" >&2
+        exit 2
+        ;;
+esac
+TARGET_PROFILE="$PROJECT_DIR/packaging/targets/$REQUESTED_TARGET.conf"
+if [ ! -f "$TARGET_PROFILE" ]; then
+    printf 'Unknown build target %s. Available targets:\n' "$REQUESTED_TARGET" >&2
+    for profile in "$PROJECT_DIR"/packaging/targets/*.conf; do
+        basename "$profile" .conf >&2
+    done
+    exit 2
+fi
+# Profiles are version-controlled build configuration, not user input.
+. "$TARGET_PROFILE"
 CONFIGURED_VERSION=$(
     sed -n 's/^version = "\([^"]*\)"/\1/p' "$PROJECT_DIR/pyproject.toml" | head -n 1
 )
@@ -20,12 +37,11 @@ if [ "$CONFIGURED_VERSION" != "$RELEASE_VERSION" ]; then
 fi
 
 CACHE_DIR="$PROJECT_DIR/.build-cache"
-PYTHON_ARCHIVE="$CACHE_DIR/cpython-3.14.6-aarch64-linux-gnu.tar.gz"
-PYTHON_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.14.6%2B20260718-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
-BUNDLE="$PROJECT_DIR/dist/darkos-downloader-$RELEASE_VERSION-r36s-arm64.zip"
-WHEEL="$PROJECT_DIR/dist/darkos_downloader-$RELEASE_VERSION-py3-none-any.whl"
-SDIST="$PROJECT_DIR/dist/darkos_downloader-$RELEASE_VERSION.tar.gz"
-WORK_DIR=$(mktemp -d /tmp/darkos-downloader-arm64.XXXXXX)
+PYTHON_ARCHIVE="$CACHE_DIR/$PYTHON_ARCHIVE_NAME"
+BUNDLE="$PROJECT_DIR/dist/pocket-harbor-$RELEASE_VERSION-$TARGET_ID-$TARGET_ARCH.zip"
+WHEEL="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION-py3-none-any.whl"
+SDIST="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION.tar.gz"
+WORK_DIR=$(mktemp -d "/tmp/pocket-harbor-$TARGET_ID-$TARGET_ARCH.XXXXXX")
 
 cleanup() {
     rm -rf "$WORK_DIR"
@@ -39,7 +55,7 @@ cd "$PROJECT_DIR"
 uv lock
 uv build
 
-printf '%s\n' "Downloading a fresh ARM64 Python build..."
+printf 'Downloading a fresh %s Python build for %s...\n' "$TARGET_ARCH" "$TARGET_DISPLAY_NAME"
 if command -v curl >/dev/null 2>&1; then
     curl -L --fail --show-error "$PYTHON_URL" -o "$PYTHON_ARCHIVE"
 elif command -v wget >/dev/null 2>&1; then
@@ -49,23 +65,27 @@ else
     exit 1
 fi
 
-if ! docker run --rm --platform linux/arm64 ubuntu:18.04 /bin/true >/dev/null 2>&1; then
-    printf '%s\n' "Registering Docker's ARM64 emulation support..."
-    docker run --privileged --rm tonistiigi/binfmt --install arm64
+if ! docker run --rm --platform "$DOCKER_PLATFORM" "$SMOKE_IMAGE" /bin/true >/dev/null 2>&1; then
+    printf 'Registering Docker emulation support for %s...\n' "$TARGET_ARCH"
+    docker run --privileged --rm tonistiigi/binfmt --install "$TARGET_ARCH"
 fi
 
-printf '%s\n' "Building the dArkOS Linux ARM64 executable..."
+printf 'Building Pocket Harbor for %s %s...\n' "$TARGET_DISPLAY_NAME" "$TARGET_ARCH"
 docker build \
     --no-cache \
-    --platform linux/arm64 \
+    --platform "$DOCKER_PLATFORM" \
     --build-arg "APP_VERSION=$RELEASE_VERSION" \
-    --file "$PROJECT_DIR/packaging/darkos-r36s-arm64.Dockerfile" \
+    --build-arg "APPLICATION_DIRECTORY=$APPLICATION_DIRECTORY" \
+    --build-arg "BUILDER_IMAGE=$BUILDER_IMAGE" \
+    --build-arg "EXECUTABLE_NAME=$EXECUTABLE_NAME" \
+    --build-arg "PYTHON_ARCHIVE_NAME=$PYTHON_ARCHIVE_NAME" \
+    --file "$PROJECT_DIR/$DOCKERFILE" \
     --output "type=local,dest=$WORK_DIR/export" \
     "$PROJECT_DIR"
 
-EXECUTABLE="$WORK_DIR/export/darkos-downloader/darkos-downloader"
-if ! file "$EXECUTABLE" | grep -q "ARM aarch64"; then
-    printf '%s\n' "The generated executable is not Linux ARM64." >&2
+EXECUTABLE="$WORK_DIR/export/$APPLICATION_DIRECTORY/$EXECUTABLE_NAME"
+if ! file "$EXECUTABLE" | tr ' ' '_' | grep -q "$FILE_ARCH_PATTERN"; then
+    printf 'The generated executable is not Linux %s.\n' "$TARGET_ARCH" >&2
     file "$EXECUTABLE" >&2
     exit 1
 fi
@@ -74,27 +94,28 @@ printf '%s\n' "Testing the exported application without the builder's Python ins
 SMOKE_VERSION=$(
     docker run \
         --rm \
-        --platform linux/arm64 \
-        --volume "$WORK_DIR/export/darkos-downloader:/app:ro" \
-        ubuntu:18.04 \
-        /app/darkos-downloader --version
+        --platform "$DOCKER_PLATFORM" \
+        --volume "$WORK_DIR/export/$APPLICATION_DIRECTORY:/app:ro" \
+        "$SMOKE_IMAGE" \
+        "/app/$EXECUTABLE_NAME" --version
 )
-if [ "$SMOKE_VERSION" != "dw $RELEASE_VERSION" ]; then
-    printf 'Clean ARM64 smoke test returned %s instead of dw %s.\n' \
-        "$SMOKE_VERSION" "$RELEASE_VERSION" >&2
+if [ "$SMOKE_VERSION" != "$FROZEN_VERSION_COMMAND $RELEASE_VERSION" ]; then
+    printf 'Clean %s smoke test returned %s instead of %s %s.\n' \
+        "$TARGET_ARCH" "$SMOKE_VERSION" "$FROZEN_VERSION_COMMAND" "$RELEASE_VERSION" >&2
     exit 1
 fi
 
-mkdir -p "$WORK_DIR/bundle/tools/darkos-downloader"
-cp -R "$WORK_DIR/export/darkos-downloader/." "$WORK_DIR/bundle/tools/darkos-downloader/"
+mkdir -p "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$APPLICATION_DIRECTORY"
+cp -R "$WORK_DIR/export/$APPLICATION_DIRECTORY/." \
+    "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$APPLICATION_DIRECTORY/"
 cp "$WORK_DIR/export/ca-certificates.crt" \
-    "$WORK_DIR/bundle/tools/darkos-downloader/ca-certificates.crt"
-cp "$PROJECT_DIR/darkos/dArkOS Downloader.sh" "$WORK_DIR/bundle/tools/dArkOS Downloader.sh"
+    "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$APPLICATION_DIRECTORY/ca-certificates.crt"
+cp "$PROJECT_DIR/$LAUNCHER_SOURCE" "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$LAUNCHER_NAME"
 chmod +x \
-    "$WORK_DIR/bundle/tools/dArkOS Downloader.sh" \
-    "$WORK_DIR/bundle/tools/darkos-downloader/darkos-downloader"
+    "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$LAUNCHER_NAME" \
+    "$WORK_DIR/bundle/$TOOLS_DIRECTORY/$APPLICATION_DIRECTORY/$EXECUTABLE_NAME"
 
-(cd "$WORK_DIR/bundle" && zip -qr "$BUNDLE" tools)
+(cd "$WORK_DIR/bundle" && zip -qr "$BUNDLE" "$TOOLS_DIRECTORY")
 
 if [ ! -f "$WHEEL" ] || [ ! -f "$SDIST" ] || [ ! -f "$BUNDLE" ]; then
     printf '%s\n' "One or more expected release artifacts were not created." >&2

@@ -6,11 +6,11 @@ from types import TracebackType
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
-from dw_cli.compatibility import (
+from ph.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS, catalogue_ttl_seconds
+from ph.compatibility import (
     CompatibilityError,
     CompatibilityInfo,
-    R36SCompatibilityClient,
+    GameCompatibilityClient,
     filter_supported_results,
     is_unsupported_system,
     normalize_console,
@@ -18,8 +18,8 @@ from dw_cli.compatibility import (
     parse_game_index,
     title_match_score,
 )
-from dw_cli.models import SearchResult
-from dw_cli.platforms import resolve_platform
+from ph.models import SearchResult
+from ph.platforms import resolve_platform
 
 
 def test_frontend_chunk_parser_matches_regional_title_variants() -> None:
@@ -51,7 +51,7 @@ def test_client_discovers_frontend_chunk_and_caches_title_index(tmp_path: Path) 
         )
         return f"self.games=[{games}]"
 
-    client = R36SCompatibilityClient(cache, fetch_text=fetch)
+    client = GameCompatibilityClient(cache, fetch_text=fetch)
     platform = resolve_platform("GBA")
     assert platform is not None
     results = [SearchResult("Game 42 (USA)", "https://example.test/42")]
@@ -72,7 +72,7 @@ def test_network_failure_keeps_platform_rating_without_blocking(tmp_path: Path) 
     def fail(_url: str) -> str:
         raise OSError("offline")
 
-    client = R36SCompatibilityClient(tmp_path / "cache.json", fetch_text=fail)
+    client = GameCompatibilityClient(tmp_path / "cache.json", fetch_text=fail)
     platform = resolve_platform("N64")
     assert platform is not None
 
@@ -83,7 +83,7 @@ def test_network_failure_keeps_platform_rating_without_blocking(tmp_path: Path) 
 
 
 def test_compatibility_uses_scored_title_matching_for_release_metadata(tmp_path: Path) -> None:
-    client = R36SCompatibilityClient(tmp_path / "cache.json")
+    client = GameCompatibilityClient(tmp_path / "cache.json")
     client._game_index = frozenset(
         {
             ("gameboy advance", "advance wars"),
@@ -138,7 +138,7 @@ def test_compatibility_labels_cover_platform_and_title_states() -> None:
 
 
 def test_unknown_console_does_not_load_remote_index(tmp_path: Path) -> None:
-    client = R36SCompatibilityClient(
+    client = GameCompatibilityClient(
         tmp_path / "cache.json",
         fetch_text=lambda _url: pytest.fail("network should not be used"),
     )
@@ -159,7 +159,7 @@ def test_client_uses_cached_catalogue_until_user_refreshes_it(tmp_path: Path) ->
         json.dumps({"fetched_at": 9_999_999_999, "games": [["gameboy advance", "cached game"]]}),
         encoding="utf-8",
     )
-    client = R36SCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
+    client = GameCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
     assert client.lookup_many([SearchResult("Cached Game", "detail")], platform)[0].title_listed
     assert client._load_game_index() == frozenset({("gameboy advance", "cached game")})
     assert not client.cache_is_stale()
@@ -168,7 +168,7 @@ def test_client_uses_cached_catalogue_until_user_refreshes_it(tmp_path: Path) ->
         json.dumps({"fetched_at": 0, "games": [["gameboy advance", "stale game"]]}),
         encoding="utf-8",
     )
-    stale = R36SCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
+    stale = GameCompatibilityClient(cache, fetch_text=lambda _url: pytest.fail("no network"))
     assert stale.lookup_many([SearchResult("Stale Game", "detail")], platform)[0].title_listed
     cache_age = stale.cache_age_seconds()
     assert cache_age is not None
@@ -182,7 +182,7 @@ def test_client_uses_cached_catalogue_until_user_refreshes_it(tmp_path: Path) ->
         "not json",
     ):
         cache.write_text(payload, encoding="utf-8")
-        assert R36SCompatibilityClient(cache)._read_cache() is None
+        assert GameCompatibilityClient(cache)._read_cache() is None
 
 
 def test_small_or_partially_unavailable_frontend_index_is_rejected(tmp_path: Path) -> None:
@@ -196,7 +196,7 @@ def test_small_or_partially_unavailable_frontend_index_is_rejected(tmp_path: Pat
             '<script src="/bad.js"></script>{"name":"One","console":"Gameboy Advance","slug":"one"}'
         )
 
-    client = R36SCompatibilityClient(tmp_path / "cache.json", fetch_text=fetch)
+    client = GameCompatibilityClient(tmp_path / "cache.json", fetch_text=fetch)
 
     with pytest.raises(ValueError, match="usable frontend"):
         client._download_game_index()
@@ -223,10 +223,10 @@ def test_default_fetcher_and_cache_write_failure(
     mocker: MockerFixture,
 ) -> None:
     opened = mocker.patch(
-        "dw_cli.compatibility.urlopen",
+        "ph.compatibility.urlopen",
         return_value=Response("café".encode()),
     )
-    client = R36SCompatibilityClient(tmp_path / "cache.json")
+    client = GameCompatibilityClient(tmp_path / "cache.json")
     assert client._fetch_text("https://r36sgamelist.com") == "café"
     assert opened.call_count == 1
 
@@ -241,7 +241,7 @@ def test_explicit_refresh_replaces_in_memory_and_disk_catalogues(
     mocker: MockerFixture,
 ) -> None:
     cache = tmp_path / "cache.json"
-    client = R36SCompatibilityClient(cache)
+    client = GameCompatibilityClient(cache)
     index = frozenset(("gameboy advance", f"game {number}") for number in range(101))
     mocker.patch.object(client, "_download_game_index", return_value=index)
 

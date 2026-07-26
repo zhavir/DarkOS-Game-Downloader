@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from dw_cli.hardware import detect_hardware_profile
+from ph.hardware import detect_hardware_profile
 
 
 def write_bytes(path: Path, value: bytes) -> None:
@@ -12,8 +12,8 @@ def test_detects_device_tree_keys_and_framebuffer(tmp_path: Path) -> None:
     tree = tmp_path / "device-tree"
     graphics = tmp_path / "graphics"
     drm = tmp_path / "drm"
-    write_bytes(tree / "model", b"R36S Test Board\0")
-    write_bytes(tree / "compatible", b"rockchip,rk3326-r36s\0rockchip,rk3326\0")
+    write_bytes(tree / "model", b"Linux Test Board\0")
+    write_bytes(tree / "compatible", b"rockchip,rk3326-handheld\0rockchip,rk3326\0")
     write_bytes(tree / "gpio-keys" / "compatible", b"gpio-keys\0")
     write_bytes(tree / "gpio-keys" / "button-up" / "label", b"D-pad Up\0")
     write_bytes(tree / "gpio-keys" / "button-up" / "linux,code", (103).to_bytes(4, "big"))
@@ -27,8 +27,8 @@ def test_detects_device_tree_keys_and_framebuffer(tmp_path: Path) -> None:
         drm_root=drm,
     )
 
-    assert profile.model == "R36S Test Board"
-    assert profile.compatible == ("rockchip,rk3326-r36s", "rockchip,rk3326")
+    assert profile.model == "Linux Test Board"
+    assert profile.compatible == ("rockchip,rk3326-handheld", "rockchip,rk3326")
     assert {item.node for item in profile.input_nodes} == {"/adc-joystick", "/gpio-keys"}
     assert len(profile.keys) == 1
     assert profile.keys[0].label == "D-pad Up"

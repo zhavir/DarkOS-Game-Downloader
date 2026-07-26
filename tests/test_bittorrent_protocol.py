@@ -12,8 +12,8 @@ from urllib.request import Request
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import bittorrent
-from dw_cli.bittorrent import (
+from ph import bittorrent
+from ph.bittorrent import (
     BitTorrentCancelled,
     BitTorrentError,
     BitTorrentSettings,

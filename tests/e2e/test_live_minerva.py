@@ -7,10 +7,10 @@ from urllib.request import Request, urlopen
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import parse_torrent
-from dw_cli.config import DEFAULT_MINERVA_BASE_URL, DEFAULT_MINERVA_TORRENT_BASE_URL
-from dw_cli.minerva_store import MinervaStore
-from dw_cli.models import MediaDownload
+from ph.bittorrent import parse_torrent
+from ph.config import DEFAULT_MINERVA_BASE_URL, DEFAULT_MINERVA_TORRENT_BASE_URL
+from ph.minerva_store import MinervaStore
+from ph.models import MediaDownload
 
 GBA_DIRECTORY = "RA - Nintendo Game Boy Advance"
 ARDUBOY_DIRECTORY = "RA - Arduboy"
@@ -21,9 +21,9 @@ LIVE_DOWNLOAD_PREFIX = "Ardu-EZ Button"
 def live_minerva() -> MinervaStore:
     """Share live catalogue responses so the E2E suite does not hammer Minerva."""
 
-    base_url = os.environ.get("DW_LIVE_MINERVA_BASE_URL", DEFAULT_MINERVA_BASE_URL)
+    base_url = os.environ.get("PH_LIVE_MINERVA_BASE_URL", DEFAULT_MINERVA_BASE_URL)
     torrent_base_url = os.environ.get(
-        "DW_LIVE_MINERVA_TORRENT_BASE_URL",
+        "PH_LIVE_MINERVA_TORRENT_BASE_URL",
         DEFAULT_MINERVA_TORRENT_BASE_URL,
     )
     return MinervaStore(base_url, torrent_base_url, timeout_seconds=90)
@@ -56,7 +56,7 @@ def test_real_minerva_search_catalogue_all_platform_and_resolution(
     # to verify aggregation and filtering here without downloading tens of megabytes from Minerva
     # on every CI run and provoking its shared-IP connection protection.
     mocker.patch(
-        "dw_cli.minerva_store.RA_DIRECTORIES",
+        "ph.minerva_store.RA_DIRECTORIES",
         (GBA_DIRECTORY, ARDUBOY_DIRECTORY),
     )
     all_platform_results = live_minerva.search("", "aDvAnCe WaRs")

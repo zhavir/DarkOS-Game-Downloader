@@ -1,45 +1,46 @@
-# R36S compatibility
+# Platform and game compatibility
 
-The R36S uses an RK3326 processor. dArkOS exposes many emulators, but a ROM folder existing does not
-mean newer console hardware can be emulated acceptably.
+## Operating-system support
 
-## Result badges
+| Operating system | Architecture | Status | Tested environment |
+| --- | --- | --- | --- |
+| DarkOS | ARM64 | Supported and fully tested | R36S, one-card and two-card layouts |
+| Other Linux distributions | Not yet released | Portable core prepared for profiles | Contributions welcome |
 
-The downloader uses these levels from [R36S Game List](https://r36sgamelist.com/):
+Only the DarkOS artifact is currently published. Do not install that bundle on another Linux
+distribution merely because it uses ARM64: ROM mount points, Tools integration, frontend refresh,
+controller access, libc compatibility, and update layout must all be validated by a dedicated
+target profile. See [Linux targets](linux-targets.md) for the boundary and acceptance requirements.
+
+## Game compatibility badges
+
+The optional title catalogue currently comes from
+[R36S Game List](https://r36sgamelist.com/), whose ratings focus on RK3326 performance. Treat its
+badge as advisory on different hardware. The downloader uses these levels:
 
 | Level | Meaning |
 | --- | --- |
 | Perfect | The platform is expected to run at or near full speed |
 | Playable | Many games work, but some need tuning or have slowdowns |
 | Limited | Only lighter titles are likely to be usable |
-| Not listed | The site does not currently publish a rating for that platform |
+| Not listed | The source does not currently publish a rating for that platform |
 
-`Perfect - 96% match`, `Playable - 91% match`, or a similar badge means the game title was matched
-to the compatibility catalogue with that confidence. A plain platform rating means the console
-has a published RK3326 level but no sufficiently reliable title match was found.
+`Perfect - 96% match`, `Playable - 91% match`, or a similar badge means the title matched with that
+confidence. A plain platform rating means the console has a published level but no sufficiently
+reliable title match was found.
 
-Region, language, revision, version, prototype, and similar filename text is ignored where possible,
-so a stored title such as `Advance Wars (USA) (Rev 1)` can match `Advance Wars`. Ambiguous matches
-are shown as unlisted instead of presenting uncertain compatibility as fact.
-
-If the site or network is unavailable, searching and downloading continue normally with the known
-platform-level rating.
+Region, language, revision, version, prototype, and similar filename text is ignored where possible.
+Ambiguous matches remain unlisted instead of presenting uncertain compatibility as fact. Search and
+download continue if the catalogue is unavailable.
 
 ## Offline cache
 
-The frontend title catalogue is fetched on the first compatible-platform search and then read from
-the device's local `.downloads/.r36s-game-list-cache.json`. It is not contacted again during normal
-searches. Open **Settings → Update R36S Game List** when you want to replace the cache.
+The title catalogue is fetched on the first compatible-platform search and stored in
+`.downloads/.game-compatibility-cache.json`. Open **Settings → Update compatibility catalogue** to
+replace it. A stale catalogue remains usable offline, and a failed refresh preserves the prior copy.
 
-Settings marks the catalogue **stale** after the configured catalogue lifetime, which defaults to
-seven days. A stale catalogue remains usable offline until you explicitly refresh it, and a failed
-refresh preserves the prior copy. Change the lifetime through **Settings → Catalogue cache
-lifetime**.
-
-## Explicitly excluded families
+## Explicitly excluded console families
 
 PS2, PS3, PS4, PS5, Xbox, Xbox 360, Xbox One, GameCube, Wii, Wii U, Nintendo Switch, Nintendo 3DS,
-and PlayStation Vita are excluded from discovered ROM folders and **All platforms** results.
-
-Older systems absent from R36S Game List are not automatically removed. dArkOS supports many niche
-8-bit, 16-bit, computer, arcade, and port folders beyond that site's catalogue.
+and PlayStation Vita are excluded from discovered ROM folders and **All platforms** results. Older
+systems absent from the optional catalogue are not automatically removed.

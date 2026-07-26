@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from dw_cli.vimm_store import CATALOG_SECTIONS, VimmStore, parse_download_url, parse_search_results
+from ph.vimm_store import CATALOG_SECTIONS, VimmStore, parse_download_url, parse_search_results
 
 ALL_RESULTS = """
 <html><table class="rounded"><tr><th>System</th><th>Title</th><th>Region</th><th>Version</th></tr>

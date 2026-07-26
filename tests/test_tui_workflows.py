@@ -9,19 +9,19 @@ from typing import Any, cast
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import tui as tui_module
-from dw_cli.bittorrent import BitTorrentSettings, TorrentFileChoice, TorrentSelectionRequired
-from dw_cli.compatibility import CompatibilityError, CompatibilityInfo, R36SCompatibilityClient
-from dw_cli.config import Config
-from dw_cli.downloader import DownloadCancelled, DownloadError, DownloadSelectionRequired
-from dw_cli.gamepad import InputAction, LinuxJoystick
-from dw_cli.hardware import DeviceTreeInput, DeviceTreeKey, HardwareProfile
-from dw_cli.library import LibraryError
-from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
-from dw_cli.organizer import OrganizeError
-from dw_cli.platforms import resolve_platform
-from dw_cli.preferences import Preferences, PreferencesError, load_preferences
-from dw_cli.retrobios import (
+from ph import tui as tui_module
+from ph.bittorrent import BitTorrentSettings, TorrentFileChoice, TorrentSelectionRequired
+from ph.compatibility import CompatibilityError, CompatibilityInfo, GameCompatibilityClient
+from ph.config import Config
+from ph.downloader import DownloadCancelled, DownloadError, DownloadSelectionRequired
+from ph.gamepad import InputAction, LinuxJoystick
+from ph.hardware import DeviceTreeInput, DeviceTreeKey, HardwareProfile
+from ph.library import LibraryError
+from ph.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
+from ph.organizer import OrganizeError
+from ph.platforms import platform_catalogue, resolve_platform
+from ph.preferences import Preferences, PreferencesError, load_preferences
+from ph.retrobios import (
     BiosCheck,
     BiosDownloadCancelled,
     BiosError,
@@ -31,15 +31,15 @@ from dw_cli.retrobios import (
     RetroBiosCatalog,
     RetroBiosRepository,
 )
-from dw_cli.store import CatalogProgress, GameStore, StoreError
-from dw_cli.store_catalog import StoreCatalog
-from dw_cli.tui import (
+from ph.store import CatalogProgress, GameStore, StoreError
+from ph.store_catalog import StoreCatalog
+from ph.tui import (
     GAMEPAD_SEARCH_KEY,
     DownloaderTui,
     TerminalTooSmall,
     _keyboard_rows,
 )
-from dw_cli.updater import ReleaseUpdate, UpdateCancelled, UpdateError
+from ph.updater import ReleaseUpdate, UpdateCancelled, UpdateError
 
 
 class RecordingScreen:
@@ -138,7 +138,7 @@ def bare_tui(screen: RecordingScreen | None = None) -> DownloaderTui:
     instance.store_catalog = StoreCatalog(())
     instance.selected_store = None
     instance.roms_directories = ()
-    instance.platforms = ()
+    instance.platforms = platform_catalogue(instance.config.target)
     instance.retrobios_catalog = None
     return instance
 
@@ -192,8 +192,16 @@ def test_constructor_detects_runtime_and_sets_up_screen(
         lambda _config, _ttl: StoreCatalog((store,)),
     )
     mocker.patch.object(tui_module, "load_preferences", lambda _path: Preferences("fake"))
-    mocker.patch.object(tui_module, "detect_roms_directories", lambda _roots: (tmp_path / "roms",))
-    mocker.patch.object(tui_module, "discover_platforms", lambda _roots: (resolve_platform("GBA"),))
+    mocker.patch.object(
+        tui_module,
+        "detect_roms_directories",
+        lambda _roots, _candidates: (tmp_path / "roms",),
+    )
+    mocker.patch.object(
+        tui_module,
+        "discover_platforms",
+        lambda _roots, _known: (resolve_platform("GBA"),),
+    )
     mocker.patch.object(tui_module, "detect_hardware_profile", lambda: profile)
     mocker.patch.object(tui_module.LinuxJoystick, "open_first", lambda: joystick)
     mocker.patch.object(curses, "has_colors", lambda: False)
@@ -250,7 +258,9 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
     mocker.patch.object(instance, "_status_screen", new=lambda: actions.append("status"))
     refreshed: list[bool] = []
     mocker.patch.object(
-        tui_module, "request_emulationstation_refresh", lambda: refreshed.append(True) or True
+        tui_module,
+        "request_game_frontend_refresh",
+        lambda **_kwargs: refreshed.append(True) or True,
     )
     instance.refresh_on_exit = True
 
@@ -405,8 +415,8 @@ def test_direct_download_flow_handles_store_platform_and_url_choices(
 @pytest.mark.parametrize(
     ("platform", "root", "exception", "expected"),
     [
-        (Platform("All", "ALL", "", ""), Path("roms"), None, "no dArkOS ROM folder"),
-        (resolve_platform("GBA"), None, None, "No dArkOS ROM partition"),
+        (Platform("All", "ALL", "", ""), Path("roms"), None, "no ROM folder"),
+        (resolve_platform("GBA"), None, None, "No ROM partition"),
         (resolve_platform("GBA"), Path("roms"), DownloadCancelled("cancel"), "DOWNLOAD CANCELLED"),
         (resolve_platform("GBA"), Path("roms"), DownloadError("broken"), "broken"),
         (resolve_platform("GBA"), Path("roms"), StoreError("store"), "store"),
@@ -646,6 +656,11 @@ def test_settings_and_minerva_settings_actions(
     actions: list[str] = []
     mocker.patch.object(instance, "_configure_store", new=lambda: actions.append("store") or True)
     mocker.patch.object(
+        instance,
+        "_configure_language",
+        new=lambda: actions.append("language"),
+    )
+    mocker.patch.object(
         instance, "_minerva_bittorrent_settings_screen", new=lambda: actions.append("minerva")
     )
     mocker.patch.object(instance, "_application_update_flow", new=lambda: actions.append("update"))
@@ -679,8 +694,8 @@ def test_settings_and_minerva_settings_actions(
         "_configure_file_logging",
         new=lambda: actions.append("log_file"),
     )
-    for choice in (None, *range(10)):
-        menu_choices = iter((choice,) if choice in (None, 9) else (choice, None))
+    for choice in (None, *range(11)):
+        menu_choices = iter((choice,) if choice in (None, 10) else (choice, None))
         mocker.patch.object(
             instance,
             "_menu",
@@ -689,6 +704,7 @@ def test_settings_and_minerva_settings_actions(
         instance._settings_screen()
     assert actions == [
         "store",
+        "language",
         "store_catalogue",
         "retrobios",
         "compatibility",
@@ -722,7 +738,7 @@ def test_settings_submenu_back_returns_to_settings_before_main_menu(
 ) -> None:
     instance = bare_tui()
     instance.selected_store = FakeStore()
-    choices = iter((5, None))
+    choices = iter((6, None))
     titles: list[str] = []
 
     def menu(title: str, *_args: object) -> int | None:
@@ -735,6 +751,25 @@ def test_settings_submenu_back_returns_to_settings_before_main_menu(
     instance._settings_screen()
 
     assert titles == ["SETTINGS", "SETTINGS"]
+
+
+def test_language_setting_persists_and_applies_immediately(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    instance.preferences_path = tmp_path / "settings.json"
+    instance.retrobios_repository = mocker.Mock(ttl_seconds=1)
+    instance.compatibility_client = mocker.Mock(ttl_seconds=1)
+    mocker.patch.object(instance, "_menu", return_value=3)
+    mocker.patch.object(instance, "_draw_message")
+
+    instance._configure_language()
+
+    assert instance.language == "it"
+    assert instance.preferences.language == "it"
+    assert load_preferences(instance.preferences_path).language == "it"
+    assert instance._t("settings_title") == "IMPOSTAZIONI"
 
 
 def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
@@ -771,7 +806,7 @@ def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
     mocker.patch.object(instance, "_menu", return_value=1)
     instance._configure_file_logging()
     assert instance.preferences.log_to_file is True
-    configure_logging.assert_called_with(tmp_path / "darkos-downloader.log", "DEBUG")
+    configure_logging.assert_called_with(tmp_path / "pocket-harbor.log", "DEBUG")
     assert load_preferences(instance.preferences_path).log_to_file is True
 
     mocker.patch.object(instance, "_menu", return_value=0)
@@ -907,9 +942,7 @@ def test_save_minerva_settings_handles_error_and_formats_values(
     assert errors == ["full"]
     mocker.patch.object(tui_module, "save_preferences", lambda *_args: None)
     assert instance._save_minerva_bittorrent_settings(BitTorrentSettings()) is True
-    assert instance._format_bittorrent_setting("udp_protocol_id", BitTorrentSettings()).startswith(
-        "0x"
-    )
+    assert instance._format_bittorrent_setting("udp_protocol_id", BitTorrentSettings()).isdigit()
     assert instance._format_bittorrent_setting("block_size", BitTorrentSettings()) == "16384"
 
 
@@ -1098,7 +1131,7 @@ def test_manual_bios_search_handles_cancel_empty_and_unavailable_catalogue(
     errors: list[str] = []
     mocker.patch.object(instance, "_error", new=errors.append)
     instance._bios_search_flow()
-    assert "No dArkOS" in errors[-1]
+    assert "No ROM partition" in errors[-1]
 
     instance.roms_directories = (tmp_path,)
     mocker.patch.object(instance, "_load_retrobios_catalogue", side_effect=BiosError("offline"))
@@ -1161,7 +1194,7 @@ def test_compatibility_cache_status_and_explicit_update(
 ) -> None:
     instance = bare_tui()
     assert instance._compatibility_cache_label() == "not downloaded"
-    client = mocker.Mock(spec=R36SCompatibilityClient)
+    client = mocker.Mock(spec=GameCompatibilityClient)
     instance.compatibility_client = client
     client.cache_age_seconds.return_value = None
     assert instance._compatibility_cache_label() == "not downloaded"
@@ -1184,7 +1217,7 @@ def test_compatibility_cache_status_and_explicit_update(
         new=lambda title, message, *_args, **_kwargs: messages.append((title, message)),
     )
     instance._update_compatibility_catalogue()
-    assert messages[-1][0] == "R36S GAME LIST UPDATED"
+    assert messages[-1][0] == "COMPATIBILITY CATALOGUE UPDATED"
     assert "1234" in messages[-1][1]
 
     client.refresh.side_effect = CompatibilityError("refresh failed")
@@ -1412,7 +1445,12 @@ def test_stage_update_and_download_background_workers(
     mocker.patch.object(instance, "_progress", new=lambda *_args: None)
 
     def staged(
-        _release: object, _install: object, _timeout: object, progress: object, _cancel: object
+        _release: object,
+        _install: object,
+        _timeout: object,
+        progress: object,
+        _cancel: object,
+        _target: object,
     ) -> Path:
         cast(Callable[[str, int, int | None], None], progress)("bundle", 10, 10)
         return tmp_path / "pending"
@@ -1545,7 +1583,7 @@ def test_progress_status_rendering_and_input_helpers(mocker: MockerFixture) -> N
         compatible=("rockchip,rk3326",),
         input_nodes=(DeviceTreeInput("/keys", ("gpio-keys",)),),
         keys=(DeviceTreeKey("A", 1, "/keys/a"),),
-        model="R36S",
+        model="Linux test handheld",
         display_width=640,
         display_height=480,
     )
@@ -1554,7 +1592,7 @@ def test_progress_status_rendering_and_input_helpers(mocker: MockerFixture) -> N
     instance.gamepad.poll.return_value = InputAction.UP
     instance.config = Config("url", Path("downloads"), ())
     instance._status_screen()
-    assert "R36S" in drawn[-1]
+    assert "Linux test handheld" in drawn[-1]
     assert instance._poll_input() == curses.KEY_UP
     instance.gamepad = None
     assert instance._poll_input() == ord("q")
@@ -1602,7 +1640,7 @@ def test_keyboard_menu_and_drawing_primitives(mocker: MockerFixture) -> None:
     instance._require_size(15, 40)
 
 
-def test_keyboard_uses_fixed_darkos_grid_and_exposes_symbols_and_accents(
+def test_keyboard_uses_fixed_handheld_grid_and_exposes_symbols_and_accents(
     mocker: MockerFixture,
 ) -> None:
     letters = _keyboard_rows("letters", True)
@@ -1622,6 +1660,16 @@ def test_keyboard_uses_fixed_darkos_grid_and_exposes_symbols_and_accents(
     assert len(first_row) == 12
     assert len({len(text) for _x, text in first_row}) == 1
     assert len({right[0] - left[0] for left, right in pairwise(first_row)}) == 1
+    assert [text.strip() for _x, text in first_row] == list("1234567890-=")
+    assert all("[" not in text and "]" not in text for _x, text in first_row)
+    assert all(
+        abs(len(text) - len(text.lstrip()) - (len(text) - len(text.rstrip()))) <= 1
+        for _x, text in first_row
+    )
+    action_row = sorted((x, text) for y, x, text, _attribute in screen.writes if y == 14)
+    assert len(action_row) == 6
+    assert {len(text) for _x, text in action_row} == {2 * len(first_row[0][1])}
+    assert [text.strip() for _x, text in action_row] == ["aA", "#+=", "ÁÉ", "SPACE", "BACK", "DONE"]
 
     instance = bare_tui()
     inputs = iter((curses.KEY_UP, curses.KEY_RIGHT, 10, curses.KEY_UP, 10, GAMEPAD_SEARCH_KEY))

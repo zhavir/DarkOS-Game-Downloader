@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.app import main
-from dw_cli.config import Config
-from dw_cli.downloader import download_files
-from dw_cli.library import delete_game, replace_game, scan_library
-from dw_cli.models import DownloadResult
-from dw_cli.organizer import detect_roms_directories, move_to_arkos
-from dw_cli.platforms import PLATFORMS, resolve_platform
-from dw_cli.vimm_store import VimmStore
+from ph.app import main
+from ph.config import Config
+from ph.downloader import download_files
+from ph.library import delete_game, replace_game, scan_library
+from ph.models import DownloadResult
+from ph.organizer import detect_roms_directories, install_downloads
+from ph.platforms import DARKOS_PLATFORMS, resolve_platform
+from ph.vimm_store import VimmStore
 from scripts.local_vault_server import build_server
 from scripts.run_local_demo import prepare_demo_environment
 
@@ -42,11 +42,11 @@ def local_vault() -> Iterator[str]:
 
 def test_demo_environment_creates_two_safe_local_cards(tmp_path: Path) -> None:
     environment = prepare_demo_environment(tmp_path / "demo", "http://127.0.0.1:9999")
-    roots = tuple(Path(value) for value in environment["DW_ROMS_DIRS"].split(os.pathsep))
+    roots = tuple(Path(value) for value in environment["PH_ROMS_DIRS"].split(os.pathsep))
 
     assert (roots[0] / "gba").is_dir()
     assert (roots[1] / "gba").is_dir()
-    assert environment["DW_STORES"] == "vimm"
+    assert environment["PH_STORES"] == "vimm"
 
 
 @pytest.mark.e2e
@@ -62,9 +62,9 @@ def test_search_caches_full_catalogue_for_prefix_empty_and_offline_replay(
     (card / "gba").mkdir(parents=True)
     config = Config.from_environment(
         {
-            "DW_BASE_URL": local_vault,
-            "DW_DOWNLOAD_DIR": str(staging),
-            "DW_ROMS_DIR": str(card),
+            "PH_BASE_URL": local_vault,
+            "PH_DOWNLOAD_DIR": str(staging),
+            "PH_ROMS_DIR": str(card),
         }
     )
 
@@ -133,9 +133,9 @@ def test_dual_card_install_update_and_delete_workflow(
     (card_two / "gba").mkdir(parents=True)
     config = Config.from_environment(
         {
-            "DW_BASE_URL": local_vault,
-            "DW_DOWNLOAD_DIR": str(staging),
-            "DW_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
+            "PH_BASE_URL": local_vault,
+            "PH_DOWNLOAD_DIR": str(staging),
+            "PH_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
         }
     )
     assert config.roms_directories == (card_one, card_two)
@@ -147,11 +147,11 @@ def test_dual_card_install_update_and_delete_workflow(
     matches = client.search(platform.code, "advance wars")
     original = next(result for result in matches if result.version == "1.0")
     original_download = _download(client, original.link, staging, local_vault)
-    installed = move_to_arkos([original_download], platform, card_two)[0]
+    installed = install_downloads([original_download], platform, card_two)[0]
     assert installed.path == card_two / "gba" / "Advance Wars (USA).zip"
     assert installed.path.read_bytes() == b"demo-v1"
 
-    installed_games = scan_library(config.roms_directories, PLATFORMS)
+    installed_games = scan_library(config.roms_directories, DARKOS_PLATFORMS)
     game = next(item for item in installed_games if item.primary_file == installed.path)
     replacement = next(result for result in matches if result.version == "Rev 2")
     replacement_download = _download(client, replacement.link, staging, local_vault)
@@ -162,12 +162,12 @@ def test_dual_card_install_update_and_delete_workflow(
 
     updated_game = next(
         item
-        for item in scan_library(config.roms_directories, PLATFORMS)
+        for item in scan_library(config.roms_directories, DARKOS_PLATFORMS)
         if item.primary_file == updated.path
     )
     delete_game(updated_game)
     assert not updated.path.exists()
-    assert not scan_library(config.roms_directories, PLATFORMS)
+    assert not scan_library(config.roms_directories, DARKOS_PLATFORMS)
 
 
 def _download(

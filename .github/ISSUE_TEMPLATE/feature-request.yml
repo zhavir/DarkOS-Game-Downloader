@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a user-facing improvement or supported integration.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Explain the workflow that is difficult or unavailable today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the TUI flow and expected result, without implementation-only detail.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Device, store, or storage scope
+      placeholder: DarkOS, a proposed Linux target, store endpoints, storage layouts, or all users
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: This request does not require distributing unauthorized ROMs or BIOS files.
+          required: true

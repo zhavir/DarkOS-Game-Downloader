@@ -8,24 +8,27 @@ from typing import cast
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import BitTorrentSettings
-from dw_cli.compatibility import CompatibilityInfo
-from dw_cli.config import Config
-from dw_cli.downloader import DownloadCancelled
-from dw_cli.gamepad import InputAction
-from dw_cli.models import DownloadResult, InstalledGame, MediaDownload, SearchResult
-from dw_cli.platforms import resolve_platform
-from dw_cli.preferences import Preferences, load_preferences
-from dw_cli.store_catalog import StoreCatalog
-from dw_cli.tui import (
+from ph.bittorrent import BitTorrentSettings
+from ph.compatibility import CompatibilityInfo
+from ph.config import Config
+from ph.downloader import DownloadCancelled
+from ph.gamepad import InputAction
+from ph.models import DownloadResult, InstalledGame, MediaDownload, SearchResult
+from ph.platforms import resolve_platform
+from ph.preferences import Preferences, load_preferences
+from ph.store_catalog import StoreCatalog
+from ph.targets import DARKOS
+from ph.tui import (
     GAMEPAD_KEYS,
     GAMEPAD_NOOP_KEY,
     GAMEPAD_SEARCH_KEY,
     KEYBOARD_GAMEPAD_KEYS,
     DownloaderTui,
+    SettingInputKind,
+    _keyboard_rows,
 )
-from dw_cli.updater import ReleaseUpdate
-from dw_cli.vimm_store import VimmStore
+from ph.updater import ReleaseUpdate
+from ph.vimm_store import VimmStore
 
 
 class FakeScreen:
@@ -86,6 +89,45 @@ def test_keyboard_dpad_right_moves_to_next_key(mocker: MockerFixture) -> None:
     )
 
     assert tui._on_screen_keyboard("SEARCH") == "2"
+
+
+def test_numeric_keyboards_have_even_rows_and_restrict_physical_input(
+    mocker: MockerFixture,
+) -> None:
+    integer_rows = _keyboard_rows("letters", True, SettingInputKind.INTEGER)
+    float_rows = _keyboard_rows("letters", True, SettingInputKind.FLOAT)
+    assert all(sum(key.span for key in row) == 12 for row in integer_rows)
+    assert all(sum(key.span for key in row) == 12 for row in float_rows)
+    assert {key.value for row in integer_rows for key in row if key.value} == set("0123456789")
+    assert {key.value for row in float_rows for key in row if key.value} == set("0123456789.")
+
+    tui = keyboard_with_inputs(
+        mocker,
+        (ord("a"), ord("1"), ord("."), ord("2"), ord("."), GAMEPAD_SEARCH_KEY),
+    )
+    assert tui._on_screen_keyboard("INTEGER", input_kind=SettingInputKind.INTEGER) == "12"
+
+    tui = keyboard_with_inputs(
+        mocker,
+        (ord("a"), ord("1"), ord("."), ord("2"), ord("."), GAMEPAD_SEARCH_KEY),
+    )
+    assert tui._on_screen_keyboard("FLOAT", input_kind=SettingInputKind.FLOAT) == "1.2"
+
+
+def test_boolean_setting_uses_a_true_false_choice(mocker: MockerFixture) -> None:
+    tui = object.__new__(DownloaderTui)
+    selected = iter((0, 1, None))
+    options: list[tuple[str, ...]] = []
+
+    def menu(_title: str, choices: tuple[str, ...], _footer: str) -> int | None:
+        options.append(choices)
+        return next(selected)
+
+    mocker.patch.object(tui, "_menu", new=menu)
+    assert tui._edit_setting("BOOLEAN", "", SettingInputKind.BOOLEAN) is False
+    assert tui._edit_setting("BOOLEAN", "", SettingInputKind.BOOLEAN) is True
+    assert tui._edit_setting("BOOLEAN", "", SettingInputKind.BOOLEAN) is None
+    assert options[0] == ("False", "True")
 
 
 def test_store_picker_returns_registered_store(mocker: MockerFixture) -> None:
@@ -254,11 +296,11 @@ def test_application_update_is_staged_and_closes_tui(
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
-    install_directory = tmp_path / "tools" / "darkos-downloader"
+    install_directory = tmp_path / "tools" / "pocket-harbor"
     release = ReleaseUpdate(
         "1.2.0",
         "v1.2.0",
-        "darkos-downloader-1.2.0-r36s-arm64.zip",
+        "pocket-harbor-1.2.0-darkos-arm64.zip",
         "https://example.test/update.zip",
         100,
     )
@@ -267,6 +309,7 @@ def test_application_update_is_staged_and_closes_tui(
         install_directory=install_directory,
         update_api_url="https://api.example.test/releases/latest",
         timeout_seconds=1.0,
+        target=DARKOS,
     )
     tui.exit_after_update = False
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
@@ -278,8 +321,8 @@ def test_application_update_is_staged_and_closes_tui(
         "_stage_application_update",
         new=lambda update, directory: staged.append((update, directory)) or directory.parent,
     )
-    mocker.patch("dw_cli.tui.installed_version", lambda: "1.0.1")
-    mocker.patch("dw_cli.tui.find_update", lambda *_args: release)
+    mocker.patch("ph.tui.installed_version", lambda: "1.0.1")
+    mocker.patch("ph.tui.find_update", lambda *_args: release)
 
     tui._application_update_flow()
 
@@ -303,7 +346,7 @@ def test_back_cancels_active_download(mocker: MockerFixture, tmp_path: Path) -> 
     mocker.patch.object(tui, "_poll_input", new=lambda: 27)
     mocker.patch.object(tui, "_progress", new=lambda *_args: None)
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
-    mocker.patch("dw_cli.tui.download_files", fake_download_files)
+    mocker.patch("ph.tui.download_files", fake_download_files)
 
     with pytest.raises(DownloadCancelled):
         tui._download_media(["https://example.test/game.zip"], VimmStore("https://example.test"))
@@ -329,7 +372,7 @@ def test_minerva_download_uses_persisted_bittorrent_settings(
         captured.append(value)
         return []
 
-    mocker.patch("dw_cli.tui.download_files", fake_download_files)
+    mocker.patch("ph.tui.download_files", fake_download_files)
     store = SimpleNamespace(store_id="minerva", download_referrer="https://example.test/")
 
     assert tui._download_media([], store) == []  # type: ignore[arg-type]
@@ -368,7 +411,7 @@ def test_completed_download_defers_refresh_until_tui_exit(
     mocker.patch.object(tui, "_bios_followup", new=lambda *_args: 0)
     refresh_requests: list[bool] = []
     mocker.patch(
-        "dw_cli.tui.request_emulationstation_refresh",
+        "ph.tui.request_game_frontend_refresh",
         lambda: refresh_requests.append(True) or True,
     )
 
@@ -383,6 +426,7 @@ def test_completed_download_defers_refresh_until_tui_exit(
 def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> None:
     tui = object.__new__(DownloaderTui)
     tui.store_catalog = SimpleNamespace(stores=(object(),))
+    tui.config = Config("https://example.test", Path("downloads"), ())
     tui.selected_store = object()
     tui.refresh_on_exit = True
     tui.exit_after_update = False
@@ -391,8 +435,8 @@ def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> N
     mocker.patch.object(tui, "_menu", new=lambda *_args: next(choices))
     refresh_requests: list[bool] = []
     mocker.patch(
-        "dw_cli.tui.request_emulationstation_refresh",
-        lambda: refresh_requests.append(True) or True,
+        "ph.tui.request_game_frontend_refresh",
+        lambda *, target: refresh_requests.append(target is tui.config.target) or True,
     )
 
     tui.run()
@@ -412,10 +456,10 @@ def test_delete_defers_refresh_until_tui_exit(
     tui.refresh_on_exit = False
     mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: 1)
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
-    mocker.patch("dw_cli.tui.delete_game", lambda _game: None)
+    mocker.patch("ph.tui.delete_game", lambda _game: None)
     refresh_requests: list[bool] = []
     mocker.patch(
-        "dw_cli.tui.request_emulationstation_refresh",
+        "ph.tui.request_game_frontend_refresh",
         lambda: refresh_requests.append(True) or True,
     )
 

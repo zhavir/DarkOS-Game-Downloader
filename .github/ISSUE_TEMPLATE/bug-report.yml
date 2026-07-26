@@ -1,0 +1,81 @@
+name: Bug report
+description: Report reproducible Pocket Harbor behavior that is not working.
+title: "fix: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not attach ROMs, BIOS files, credentials, or copyrighted download links. Redact personal paths and addresses from logs.
+  - type: input
+    id: version
+    attributes:
+      label: Pocket Harbor version
+      description: Open Settings or use `ph --version`.
+      placeholder: 1.6.1
+    validations:
+      required: true
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Distribution
+      options:
+        - DarkOS
+        - Unsupported Linux distribution
+        - Local development environment
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and hardware revision
+      placeholder: Device model, board revision, and display resolution if known
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage layout
+      options:
+        - One ROM card
+        - Two ROM cards
+        - Local test directories
+        - Unknown
+    validations:
+      required: true
+  - type: input
+    id: store
+    attributes:
+      label: Selected store
+      placeholder: Vimm, Minerva, or not applicable
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: Describe each menu choice, controller input, and result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Paste the relevant text after removing private or copyrighted information.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and the troubleshooting guide.
+          required: true
+        - label: I have not attached ROMs, BIOS files, credentials, or unauthorized download links.
+          required: true

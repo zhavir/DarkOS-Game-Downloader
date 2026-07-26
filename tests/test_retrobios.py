@@ -9,10 +9,10 @@ from typing import Any
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import retrobios as retrobios_module
-from dw_cli.models import Platform
-from dw_cli.platforms import resolve_platform
-from dw_cli.retrobios import (
+from ph import retrobios as retrobios_module
+from ph.models import Platform
+from ph.platforms import resolve_platform
+from ph.retrobios import (
     MAX_FIRMWARE_BYTES,
     BiosDownloadCancelled,
     BiosError,

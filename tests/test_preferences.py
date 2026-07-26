@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import BitTorrentSettings
-from dw_cli.preferences import (
+from ph.bittorrent import BitTorrentSettings
+from ph.preferences import (
     Preferences,
     PreferencesError,
     load_preferences,
@@ -55,11 +55,19 @@ def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> Non
         catalogue_ttl_days=14,
         log_level="DEBUG",
         log_to_file=False,
+        language="it",
     )
 
     save_preferences(path, preferences)
 
     assert load_preferences(path) == preferences
+
+
+def test_preferences_default_invalid_languages_to_english(tmp_path: Path) -> None:
+    path = preference_path(tmp_path)
+    path.write_text('{"language": "fr"}', encoding="utf-8")
+
+    assert load_preferences(path).language == "en"
 
 
 @pytest.mark.parametrize(

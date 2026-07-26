@@ -1,4 +1,4 @@
-"""Entry point used exclusively by the frozen R36S executable."""
+"""Entry point used by self-contained Linux target executables."""
 
 import os
 import sys
@@ -10,7 +10,7 @@ if ca_bundle.is_file():
 
 
 def run() -> int:
-    from dw_cli.app import main
+    from ph.app import main
 
     return main()
 

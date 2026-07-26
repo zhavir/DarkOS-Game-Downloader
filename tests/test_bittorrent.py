@@ -6,7 +6,7 @@ from time import sleep
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.bittorrent import (
+from ph.bittorrent import (
     BValue,
     TorrentFile,
     TorrentMetadata,
@@ -66,9 +66,9 @@ def test_native_selective_download_recovers_from_changed_catalogue_order(
     payload = b"abcHELLOxyz"
     torrent = build_torrent(payload)
     progress: list[tuple[int, int]] = []
-    mocker.patch("dw_cli.bittorrent._read_url", lambda *_args: torrent)
+    mocker.patch("ph.bittorrent._read_url", lambda *_args: torrent)
     mocker.patch(
-        "dw_cli.bittorrent.discover_peers",
+        "ph.bittorrent.discover_peers",
         lambda *_args: (("127.0.0.1", 6881),),
     )
 
@@ -85,7 +85,7 @@ def test_native_selective_download_recovers_from_changed_catalogue_order(
         start = piece_index * metadata.piece_length
         return payload[start : start + piece_length]
 
-    mocker.patch("dw_cli.bittorrent._download_piece_from_peers", piece)
+    mocker.patch("ph.bittorrent._download_piece_from_peers", piece)
     destination = tmp_path / "Game.zip"
 
     download_torrent_file(
@@ -110,7 +110,7 @@ def test_selective_download_requests_a_choice_when_game_is_missing(
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
-    mocker.patch("dw_cli.bittorrent._read_url", lambda *_args: build_torrent())
+    mocker.patch("ph.bittorrent._read_url", lambda *_args: build_torrent())
 
     with pytest.raises(TorrentSelectionRequired, match="unambiguous") as raised:
         download_torrent_file(
@@ -198,7 +198,7 @@ def test_peer_attempts_are_bounded_and_raced(mocker: MockerFixture) -> None:
             active -= 1
         return b"abcH"
 
-    mocker.patch("dw_cli.bittorrent._download_piece", peer_download)
+    mocker.patch("ph.bittorrent._download_piece", peer_download)
 
     data = _download_piece_from_peers(
         metadata,
@@ -234,7 +234,7 @@ def test_peer_discovery_merges_multiple_trackers(mocker: MockerFixture) -> None:
         "http://three.example/announce": (("1.1.1.1", 6881), ("9.9.9.9", 6881)),
     }
     mocker.patch(
-        "dw_cli.bittorrent._announce_http",
+        "ph.bittorrent._announce_http",
         lambda tracker, *_args: responses[tracker],
     )
 

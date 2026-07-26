@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.library import (
+from ph.library import (
     LibraryError,
     _is_game_candidate,
     _referenced_files,
@@ -13,8 +13,8 @@ from dw_cli.library import (
     scan_library,
     search_title,
 )
-from dw_cli.models import DownloadResult, InstalledGame
-from dw_cli.platforms import PLATFORMS, resolve_platform
+from ph.models import DownloadResult, InstalledGame
+from ph.platforms import DARKOS_PLATFORMS, resolve_platform
 
 
 def test_scan_library_groups_cue_members(tmp_path: Path) -> None:
@@ -25,7 +25,7 @@ def test_scan_library_groups_cue_members(tmp_path: Path) -> None:
     cue.write_text('FILE "Example Game (Track 1).bin" BINARY\n', encoding="utf-8")
     track.write_bytes(b"track")
 
-    games = scan_library([tmp_path], PLATFORMS)
+    games = scan_library([tmp_path], DARKOS_PLATFORMS)
 
     assert len(games) == 1
     assert games[0].primary_file == cue
@@ -40,7 +40,7 @@ def test_delete_game_removes_grouped_files(tmp_path: Path) -> None:
     track = psx / "Game.bin"
     cue.write_text('FILE "Game.bin" BINARY\n', encoding="utf-8")
     track.write_bytes(b"old")
-    game = scan_library([tmp_path], PLATFORMS)[0]
+    game = scan_library([tmp_path], DARKOS_PLATFORMS)[0]
 
     delete_game(game)
 
@@ -57,7 +57,7 @@ def test_replace_game_keeps_old_file_until_replacement_exists(tmp_path: Path) ->
     old.write_bytes(b"old")
     replacement = staging / "Game (Rev 1).zip"
     replacement.write_bytes(b"new")
-    game = scan_library([tmp_path], PLATFORMS)[0]
+    game = scan_library([tmp_path], DARKOS_PLATFORMS)[0]
 
     result = replace_game(game, DownloadResult("https://example.net/file", replacement))
 
@@ -75,7 +75,7 @@ def test_failed_update_keeps_existing_game(tmp_path: Path) -> None:
     gba.mkdir()
     old = gba / "Game.zip"
     old.write_bytes(b"old")
-    game = scan_library([tmp_path], PLATFORMS)[0]
+    game = scan_library([tmp_path], DARKOS_PLATFORMS)[0]
 
     with pytest.raises(LibraryError):
         replace_game(game, DownloadResult("https://example.net/file", tmp_path / "missing.zip"))
@@ -98,7 +98,7 @@ def test_platform_navigation_hides_empty_folders_and_prunes_media(tmp_path: Path
     (tmp_path / "gba" / "images" / "covers" / "not-a-rom.zip").write_bytes(b"image")
     (tmp_path / "gba" / "Game.zip").write_bytes(b"game")
 
-    platforms = platforms_with_installed_games(tmp_path, PLATFORMS)
+    platforms = platforms_with_installed_games(tmp_path, DARKOS_PLATFORMS)
     games = scan_library((tmp_path,), platforms)
 
     assert [platform.alias for platform in platforms] == ["GBA"]
@@ -120,7 +120,7 @@ def test_m3u_groups_nested_playlists_and_ignores_unsafe_members(tmp_path: Path) 
     )
     (tmp_path / "outside.zip").write_bytes(b"outside")
 
-    game = scan_library((tmp_path,), PLATFORMS)[0]
+    game = scan_library((tmp_path,), DARKOS_PLATFORMS)[0]
 
     assert game.primary_file == playlist.resolve()
     assert set(game.files) == {playlist.resolve(), disc.resolve(), cue.resolve(), track.resolve()}

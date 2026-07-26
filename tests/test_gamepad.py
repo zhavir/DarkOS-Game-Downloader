@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-import dw_cli.gamepad as gamepad_module
-from dw_cli.gamepad import (
+import ph.gamepad as gamepad_module
+from ph.gamepad import (
     BTN_DPAD_DOWN,
     BTN_DPAD_LEFT,
     BTN_DPAD_RIGHT,
@@ -29,7 +29,7 @@ def joystick() -> LinuxJoystick:
     return LinuxJoystick(Path(os.devnull), descriptor)
 
 
-def test_common_r36s_buttons() -> None:
+def test_common_handheld_buttons() -> None:
     device = joystick()
     try:
         assert device.decode_event(1, JS_EVENT_BUTTON, 0) == InputAction.BACK
@@ -101,7 +101,7 @@ def test_dpad_axes_emit_once_until_released() -> None:
         device.close()
 
 
-def test_r36s_dpad_buttons_map_to_all_four_directions() -> None:
+def test_alternate_dpad_buttons_map_to_all_four_directions() -> None:
     device = joystick()
     try:
         assert device.decode_event(0, JS_EVENT_BUTTON | JS_EVENT_INIT, 17) is None
@@ -126,7 +126,7 @@ def test_standard_dpad_button_layout_is_detected_from_initialization() -> None:
         device.close()
 
 
-def test_r36s_sticks_support_standard_rx_and_ry_axes() -> None:
+def test_handheld_sticks_support_standard_rx_and_ry_axes() -> None:
     device = joystick()
     try:
         assert device.decode_event(32_767, JS_EVENT_AXIS, 0) == InputAction.RIGHT

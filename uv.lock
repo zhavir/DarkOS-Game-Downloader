@@ -128,7 +128,7 @@ wheels = [
 ]
 
 [[package]]
-name = "darkos-downloader"
+name = "pocket-harbor"
 version = "1.6.2"
 source = { editable = "." }
 dependencies = [

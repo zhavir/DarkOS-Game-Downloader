@@ -6,7 +6,7 @@ import threading
 from collections.abc import Sequence
 from pathlib import Path
 
-from dw_cli.app import main as run_downloader
+from ph.app import main as run_pocket_harbor
 from scripts.local_vault_server import build_server
 
 
@@ -20,11 +20,11 @@ def prepare_demo_environment(workspace: Path, base_url: str) -> dict[str, str]:
     for directory in (downloads, card_one / "gba", card_two / "gba"):
         directory.mkdir(parents=True, exist_ok=True)
     return {
-        "DW_BASE_URL": base_url,
-        "DW_DOWNLOAD_DIR": str(downloads),
-        "DW_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
-        "DW_STORES": "vimm",
-        "DW_TIMEOUT": "5",
+        "PH_BASE_URL": base_url,
+        "PH_DOWNLOAD_DIR": str(downloads),
+        "PH_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
+        "PH_STORES": "vimm",
+        "PH_TIMEOUT": "5",
     }
 
 
@@ -46,7 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     environment = prepare_demo_environment(arguments.workspace, f"http://{host}:{port}")
     os.environ.update(environment)
     try:
-        return run_downloader([])
+        return run_pocket_harbor([])
     finally:
         server.shutdown()
         server.server_close()

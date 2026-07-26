@@ -1,1 +1,1 @@
-"""Development and release helpers for dArkOS Downloader."""
+"""Development and release helpers for Pocket Harbor."""

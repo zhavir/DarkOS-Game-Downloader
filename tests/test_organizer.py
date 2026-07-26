@@ -3,8 +3,8 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from dw_cli.models import DownloadResult, Platform
-from dw_cli.organizer import (
+from ph.models import DownloadResult, Platform
+from ph.organizer import (
     OrganizeError,
     _bios_destinations,
     _bundled_bios_members,
@@ -12,13 +12,13 @@ from dw_cli.organizer import (
     detect_roms_directories,
     detect_roms_directory,
     install_bundled_bios,
-    move_to_arkos,
+    install_downloads,
     unique_destination,
 )
-from dw_cli.platforms import PLATFORMS, discover_platforms, resolve_platform
+from ph.platforms import DARKOS_PLATFORMS, discover_platforms, resolve_platform
 
 
-def test_move_to_arkos_uses_platform_folder_and_preserves_duplicates(tmp_path: Path) -> None:
+def test_install_downloads_uses_platform_folder_and_preserves_duplicates(tmp_path: Path) -> None:
     staging = tmp_path / "staging"
     roms = tmp_path / "roms"
     staging.mkdir()
@@ -31,7 +31,7 @@ def test_move_to_arkos_uses_platform_folder_and_preserves_duplicates(tmp_path: P
     platform = resolve_platform("GBA")
     assert platform is not None
 
-    results = move_to_arkos(
+    results = install_downloads(
         [DownloadResult("https://example.net/file", downloaded)], platform, roms
     )
 
@@ -49,8 +49,8 @@ def test_both_memory_cards_are_detected(tmp_path: Path) -> None:
     assert available_roms_directories((card_two, card_one)) == (card_two, card_one)
 
 
-def test_r36s_profile_has_complete_arkos_folder_set() -> None:
-    folders = {folder for platform in PLATFORMS for folder in platform.arkos_folders}
+def test_darkos_profile_has_complete_rom_folder_set() -> None:
+    folders = {folder for platform in DARKOS_PLATFORMS for folder in platform.rom_folders}
 
     assert len(folders) >= 90
     assert {"amiga", "arcade", "dreamcast", "nds", "pcenginecd", "psx", "zxspectrum"} <= folders
@@ -66,7 +66,9 @@ def test_existing_alternate_folder_is_used_as_destination(tmp_path: Path) -> Non
     platform = resolve_platform("NES")
     assert platform is not None
 
-    result = move_to_arkos([DownloadResult("https://example.net/file", downloaded)], platform, roms)
+    result = install_downloads(
+        [DownloadResult("https://example.net/file", downloaded)], platform, roms
+    )
 
     assert result[0].path.parent == roms / "famicom"
 
@@ -77,9 +79,9 @@ def test_image_specific_folder_is_discovered(tmp_path: Path) -> None:
 
     platforms = discover_platforms([tmp_path])
 
-    assert any(platform.arkos_folder == "futureconsole" for platform in platforms)
+    assert any(platform.rom_folder == "futureconsole" for platform in platforms)
     assert not any(
-        platform.arkos_folder == "bios" and platform.name.startswith("Detected")
+        platform.rom_folder == "bios" and platform.name.startswith("Detected")
         for platform in platforms
     )
 
@@ -91,7 +93,7 @@ def test_unsupported_modern_console_folders_are_not_discovered(tmp_path: Path) -
 
     platforms = discover_platforms([tmp_path])
     detected = {
-        platform.arkos_folder for platform in platforms if platform.name.startswith("Detected")
+        platform.rom_folder for platform in platforms if platform.name.startswith("Detected")
     }
 
     assert detected == {"futureconsole"}
@@ -110,7 +112,7 @@ def test_game_zip_installs_explicit_bios_tree_and_keeps_game_archive(tmp_path: P
     assert platform is not None
     bios_files: list[Path] = []
 
-    result = move_to_arkos(
+    result = install_downloads(
         [DownloadResult("https://example.net/game", archive)],
         platform,
         roms,
@@ -134,7 +136,7 @@ def test_neogeo_bios_is_installed_shared_and_beside_roms(tmp_path: Path) -> None
     platform = resolve_platform("NEOGEO")
     assert platform is not None
 
-    move_to_arkos([DownloadResult("https://example.net/game", archive)], platform, roms)
+    install_downloads([DownloadResult("https://example.net/game", archive)], platform, roms)
 
     assert (roms / "bios" / "neogeo.zip").read_bytes() == b"bios archive"
     assert (roms / "neogeo" / "neogeo.zip").read_bytes() == b"bios archive"
@@ -153,7 +155,7 @@ def test_existing_bios_is_never_overwritten(tmp_path: Path) -> None:
     platform = resolve_platform("GBA")
     assert platform is not None
 
-    move_to_arkos([DownloadResult("https://example.net/game", archive)], platform, roms)
+    install_downloads([DownloadResult("https://example.net/game", archive)], platform, roms)
 
     assert existing.read_bytes() == b"keep-me"
 
@@ -169,7 +171,7 @@ def test_unsafe_bios_archive_path_is_rejected_before_game_move(tmp_path: Path) -
     assert platform is not None
 
     with pytest.raises(OrganizeError, match="Unsafe bundled BIOS path"):
-        move_to_arkos([DownloadResult("https://example.net/game", archive)], platform, roms)
+        install_downloads([DownloadResult("https://example.net/game", archive)], platform, roms)
 
     assert archive.is_file()
     assert not (tmp_path / "escape.bin").exists()
@@ -187,17 +189,17 @@ def test_configured_rom_roots_and_preferred_root_are_preserved(tmp_path: Path) -
 def test_move_reports_unsupported_platform_missing_file_and_invalid_root(tmp_path: Path) -> None:
     unsupported = Platform("Unsupported", "unsupported", "", "NONE", None)
     with pytest.raises(OrganizeError, match="does not have"):
-        move_to_arkos([], unsupported, tmp_path)
+        install_downloads([], unsupported, tmp_path)
 
     gba = resolve_platform("GBA")
     assert gba is not None
     with pytest.raises(OrganizeError, match="not found"):
-        move_to_arkos([DownloadResult("url", tmp_path / "missing.zip")], gba, tmp_path)
+        install_downloads([DownloadResult("url", tmp_path / "missing.zip")], gba, tmp_path)
 
     occupied = tmp_path / "occupied"
     occupied.write_text("not a directory", encoding="utf-8")
     with pytest.raises(OrganizeError, match="Cannot create"):
-        move_to_arkos([], gba, occupied)
+        install_downloads([], gba, occupied)
 
 
 def test_non_zip_has_no_bundled_bios_and_advision_bios_is_rom_local(tmp_path: Path) -> None:

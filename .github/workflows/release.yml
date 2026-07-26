@@ -46,7 +46,7 @@ jobs:
         run: mkdir -p coverage-reports
       - name: Run unit, integration, and offline E2E tests
         run: >-
-          uv run --frozen pytest -v -m "not live" --cov=dw_cli --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
+          uv run --frozen pytest -v -m "not live" --cov=ph --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v7.0.1
@@ -96,7 +96,7 @@ jobs:
       - name: Verify released lock file
         if: steps.release.outputs.released == 'true'
         run: uv lock --check
-      - name: Install dArkOS build prerequisites
+      - name: Install device build prerequisites
         if: steps.release.outputs.released == 'true'
         run: |
           sudo apt-get update
@@ -105,7 +105,7 @@ jobs:
         if: steps.release.outputs.released == 'true'
         env:
           NEW_VERSION: ${{ steps.release.outputs.version }}
-        run: sh scripts/build_artifacts.sh
+        run: sh scripts/build_artifacts.sh darkos
       - name: Upload artifacts to GitHub release
         if: steps.release.outputs.released == 'true'
         uses: python-semantic-release/publish-action@v10.6.1

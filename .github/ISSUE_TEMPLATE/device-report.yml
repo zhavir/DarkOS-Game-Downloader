@@ -1,0 +1,52 @@
+name: Device compatibility report
+description: Confirm a working device or report a controller, display, or storage incompatibility.
+title: "device: "
+labels:
+  - compatibility
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Exact device and hardware revision
+    validations:
+      required: true
+  - type: input
+    id: distribution
+    attributes:
+      label: Distribution and image version
+      placeholder: DarkOS version, or the Linux distribution being proposed
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pocket Harbor version
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Fully working
+        - Controller mapping problem
+        - Display or terminal layout problem
+        - ROM card or folder detection problem
+        - Application does not start
+        - Other incompatibility
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Test details
+      description: Include controls tested, display resolution, one/two-card layout, and relevant logs.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed private data and did not attach ROMs or BIOS files.
+          required: true

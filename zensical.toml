@@ -1,17 +1,18 @@
 [project]
-site_name = "dArkOS Downloader"
-site_description = "Install, search, update, and manage games on an RK3326 R36S running dArkOS."
+site_name = "Pocket Harbor"
+site_description = "Install, search, update, and manage games on Linux handhelds with Pocket Harbor."
 site_author = "Andrea Aramini"
-site_url = "https://zhavir.github.io/DarkOS-Game-Downloader/"
-repo_url = "https://github.com/zhavir/DarkOS-Game-Downloader"
-repo_name = "zhavir/DarkOS-Game-Downloader"
+site_url = "https://zhavir.github.io/PoketHarbor/"
+repo_url = "https://github.com/zhavir/PoketHarbor"
+repo_name = "zhavir/PoketHarbor"
 edit_uri = "edit/main/docs/"
 copyright = "Copyright &copy; 2026 Andrea Aramini"
 nav = [
   { "Home" = "index.md" },
-  { "Install on R36S" = "install.md" },
+  { "Install" = "install.md" },
   { "Using the TUI" = "usage.md" },
   { "Compatibility" = "compatibility.md" },
+  { "Linux targets" = "linux-targets.md" },
   { "Troubleshooting" = "troubleshooting.md" },
 ]
 

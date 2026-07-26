@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.config import Config
-from dw_cli.minerva_store import MinervaStore
-from dw_cli.models import Platform, SearchResult
-from dw_cli.store import CatalogProgress, GameStore, StoreError
-from dw_cli.store_catalog import StoreCatalog
-from dw_cli.vimm_store import VimmStore
+from ph.config import Config
+from ph.minerva_store import MinervaStore
+from ph.models import Platform, SearchResult
+from ph.store import CatalogProgress, GameStore, StoreError
+from ph.store_catalog import StoreCatalog
+from ph.vimm_store import VimmStore
 
 
 class FutureStore(GameStore):

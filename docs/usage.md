@@ -2,7 +2,7 @@
 
 ## Controls
 
-| R36S control | Action |
+| Handheld control | Action |
 | --- | --- |
 | D-pad/stick up or down | Move selection; hold to scroll continuously |
 | D-pad/stick left | Back (B) |
@@ -52,15 +52,15 @@ The default cache lifetime is seven days. After it expires, the next search trie
 catalogue. If the store cannot be reached, the previous valid cache remains available for offline
 searching. Open **Settings → Refresh store game catalogue** to choose a store and platform and force
 an immediate refresh. Open **Settings → Catalogue cache lifetime** to set the expiry period from 1
-to 3650 days; the change applies to store catalogues, R36S compatibility metadata, and RetroBIOS
+to 3650 days; the change applies to store catalogues, compatibility metadata, and RetroBIOS
 metadata.
 
 ## Compatibility catalogue
 
-The first compatible-platform search downloads the frontend game index from R36S Game List and
-stores it in `.downloads/.r36s-game-list-cache.json`. Later searches use that local copy without a
-network request to the compatibility site. Open **Settings → Update R36S Game List** to fetch a new
-copy explicitly.
+The first compatible-platform search downloads the frontend game index from the compatibility data
+source and stores it in `.downloads/.game-compatibility-cache.json`. Later searches use that local
+copy without a network request to the source. Open **Settings → Update compatibility catalogue** to
+fetch a new copy explicitly.
 
 Once it is older than the configured catalogue lifetime, Settings labels it **stale**, while
 searches continue using the available offline copy until you decide to refresh it. A failed refresh
@@ -78,12 +78,12 @@ position, size, and title-match score. Review and explicitly confirm one file, o
 cancel without installing anything.
 
 When Minerva is the selected store, open **Settings → Minerva BitTorrent settings** to edit the
-native client's advanced values. They are saved in `.darkos-downloader.json` beside the staging
+native client's advanced values. They are saved in `.pocket-harbor.json` beside the staging
 downloads and used by the next Minerva download. **Reset all to defaults** restores this table:
 
 | Setting | Default |
 | --- | ---: |
-| UDP protocol ID | `0x41727101980` |
+| UDP protocol ID | `4497486125440` |
 | Block size | 16,384 bytes |
 | Maximum torrent metadata | 16,777,216 bytes |
 | Maximum tracker response | 2,097,152 bytes |
@@ -114,15 +114,16 @@ After a successful install, update, or deletion, acknowledge the completion mess
 using the TUI if desired. The game-list refresh remains queued until you choose **Exit** and confirm.
 The Tools launcher refreshes EmulationStation after the TUI closes and does not reopen it.
 
-## Update dArkOS Downloader
+## Update Pocket Harbor
 
 Open **Settings → Check for application update**. The installed semantic version is compared with
-the latest GitHub release. Confirming a newer release downloads the matching R36S ARM64 ZIP; press
+the latest GitHub release. Confirming a newer release downloads the matching DarkOS ARM64 ZIP;
+press
 B/Escape to cancel without changing the installed application. After validation, the TUI exits and
 the Tools launcher replaces the application while preserving `.downloads`, then returns directly to
 EmulationStation. Reopen the tool to verify the update. The previous version is deleted only after
 the updated TUI exits successfully; a crash during that first launch restores the previous version
-without losing preferences. Automatic application updates are available in the self-contained R36S
+without losing preferences. Automatic application updates are available in the self-contained
 package.
 
 ## BIOS requirements and downloads
@@ -153,10 +154,20 @@ Known ROM-local exceptions are installed automatically, including Neo Geo firmwa
 the ROM set. Some emulator cores have different optional firmware choices; use the manual search if
 the core configured on your image needs a file that was not offered automatically.
 
+## Language and typed settings
+
+Open **Settings → Language** to select English, German, Spanish, Italian, or Portuguese. English is
+used on first launch. The interface changes immediately, and the saved choice survives application
+updates.
+
+Settings use an editor suited to the value: booleans show only **False** and **True**, integers use
+a digits-only keyboard, floating-point values add a decimal point, and text uses the full keyboard.
+This avoids entering unsupported characters into transfer limits or other numeric fields.
+
 ## Logging settings
 
 Open **Settings → Application log level** to choose `DEBUG`, `INFO`, `WARNING`, or `ERROR`. Open
 **Settings → Write logs to file** to turn application file logging on or off. Both changes apply
-immediately and are saved in `.darkos-downloader.json`. When file logging is enabled on the R36S,
-records go to `tools/darkos-downloader/darkos-downloader.log`; for local runs without
-`DW_LOG_FILE`, they go to `darkos-downloader.log` inside the configured download directory.
+immediately and are saved in `.pocket-harbor.json`. When file logging is enabled on a handheld,
+records go to `tools/pocket-harbor/pocket-harbor.log`; for local runs without
+`PH_LOG_FILE`, they go to `pocket-harbor.log` inside the configured download directory.

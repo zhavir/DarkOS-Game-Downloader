@@ -1,16 +1,19 @@
-# dArkOS Downloader
+# Pocket Harbor
 
-[![Latest release](https://img.shields.io/github/v/release/zhavir/DarkOS-Game-Downloader?display_name=tag&sort=semver)](https://github.com/zhavir/DarkOS-Game-Downloader/releases/latest)
-[![Coverage](https://raw.githubusercontent.com/zhavir/DarkOS-Game-Downloader/gh-pages/badges/coverage.svg)](https://zhavir.github.io/DarkOS-Game-Downloader/coverage/)
+[![Latest release](https://img.shields.io/github/v/release/zhavir/PoketHarbor?display_name=tag&sort=semver)](https://github.com/zhavir/PoketHarbor/releases/latest)
+[![Coverage](https://raw.githubusercontent.com/zhavir/PoketHarbor/gh-pages/badges/coverage.svg)](https://zhavir.github.io/PoketHarbor/coverage/)
 
-dArkOS Downloader is a controller-first game library manager for RK3326 R36S handhelds running
-dArkOS or dArkOSRE. It searches supported stores, downloads games into the correct ROM directory,
-and manages installed games on one-card and two-card systems.
+Pocket Harbor is a controller-first game library manager for Linux handhelds. The portable core is
+designed for multiple operating-system targets; the current release target is **DarkOS ARM64**, the
+only environment tested end to end so far. It searches supported stores, installs games into the
+target's ROM directory, and manages one-card and two-card libraries.
 
-The R36S release is self-contained. Python, uv, a torrent client, and a package manager are not
+The device release is self-contained. Python, uv, a torrent client, and a package manager are not
 required on the handheld.
 
-[Read the user documentation](https://zhavir.github.io/DarkOS-Game-Downloader/)
+[Read the user documentation](https://zhavir.github.io/PoketHarbor/)
+
+[Contributing](CONTRIBUTING.md) explains development setup, project rules, and required checks.
 
 ## Main features
 
@@ -18,9 +21,9 @@ required on the handheld.
 - Search one platform or all platforms supported by the selected store.
 - Choose Vimm or Minerva Archive once and change the preferred store later in **Settings**.
 - Cache complete store catalogues by store and platform for fast offline empty and prefix searches.
-- Download to the correct dArkOS ROM folder on SD1 or SD2.
-- Show R36S compatibility information before downloading when a reliable match is available.
-- Cache the R36S Game List locally and refresh it only when requested from **Settings**.
+- Download to the correct target ROM folder on SD1 or SD2.
+- Show game compatibility information before downloading when a reliable catalogue match exists.
+- Cache compatibility metadata locally and refresh it only when requested from **Settings**.
 - Install BIOS files bundled with a game first, then check required firmware across both SD cards.
 - Offer required missing BIOS through RetroBIOS, plus a manual BIOS search from the main menu.
 - Scan, update, and delete installed games, including grouped `.cue` and `.m3u` files.
@@ -31,33 +34,35 @@ required on the handheld.
 - Use Minerva torrents through the built-in Python BitTorrent client; no external downloader is
   needed.
 
-## Install on an R36S
+## Install on DarkOS
 
-1. Download `darkos-downloader-<version>-r36s-arm64.zip` from the
-   [latest release](https://github.com/zhavir/DarkOS-Game-Downloader/releases/latest).
+1. Download `pocket-harbor-<version>-darkos-arm64.zip` from the
+   [latest release](https://github.com/zhavir/PoketHarbor/releases/latest).
 2. Extract the ZIP on your computer.
 3. Copy everything inside its `tools` directory into the ROM card's `tools` directory.
-4. Put the card back into the R36S.
-5. Open **Options → Tools → dArkOS Downloader** in EmulationStation.
+4. Put the card back into the handheld.
+5. Open the downloader from **Options → Tools** in EmulationStation.
 
 The card must contain:
 
 ```text
 tools/
-├── dArkOS Downloader.sh
-└── darkos-downloader/
-    ├── darkos-downloader
+├── Pocket Harbor.sh
+└── pocket-harbor/
+    ├── pocket-harbor
     ├── ca-certificates.crt
     └── _internal/
 ```
 
-Replacing an older installation is safe. Keep the existing
-`tools/darkos-downloader/.downloads` directory if copying files manually because it contains the
-preferred store, Minerva settings, and cached data.
+> [!IMPORTANT]
+> Versions before 2.0 used different internal package and storage paths. They cannot update to this
+> release in place. Remove the earlier installation, copy the complete new `tools` tree, and
+> configure the application again. Releases starting with 2.0 preserve
+> `tools/pocket-harbor/.downloads` during normal updates.
 
 ## Controls
 
-| R36S control | Action |
+| Handheld control | Action |
 | --- | --- |
 | D-pad or stick up/down | Move through menus; hold to scroll |
 | D-pad or stick left | Back |
@@ -104,8 +109,8 @@ optional files, and install one manually. The RetroBIOS catalogue is downloaded 
 operation and cached under `.downloads/retrobios`. It is not refreshed automatically; use
 **Settings → Update RetroBIOS catalogue** when you want the latest upstream metadata.
 
-The R36S Game List used for compatibility scores follows the same policy: it is fetched on first
-use, stored locally, and refreshed only through **Settings → Update R36S Game List**. Settings marks
+The game compatibility catalogue follows the same policy: it is fetched on first use, stored
+locally, and refreshed only through **Settings → Update compatibility catalogue**. Settings marks
 RetroBIOS and compatibility metadata stale after the configured catalogue lifetime, which defaults
 to seven days. Their saved copies remain usable until you choose to update them.
 
@@ -159,7 +164,7 @@ recommended on Windows.
 
 ```sh
 uv sync --frozen
-uv run dw
+uv run ph
 ```
 
 Use the offline demonstration when you do not want to contact a real store or modify a ROM library:
@@ -174,10 +179,10 @@ files from localhost.
 Useful automation commands:
 
 ```sh
-uv run dw search GBA "advance"
-uv run dw search GBA
-uv run dw --store minerva search ALL "mario"
-uv run dw download --platform GBA --roms-directory .local-test/sd1 DETAIL_URL
+uv run ph search GBA "advance"
+uv run ph search GBA
+uv run ph --store minerva search ALL "mario"
+uv run ph download --platform GBA --roms-directory .local-test/sd1 DETAIL_URL
 ```
 
 The live RetroBIOS integration test downloads current metadata and one small firmware file from the
@@ -193,30 +198,36 @@ Run it only where outbound GitHub access is available. The ordinary test suite r
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `DW_BASE_URL` | Vimm service root | `https://vimm.net` |
-| `DW_MINERVA_BASE_URL` | Minerva browse service root | `https://minerva-archive.org` |
-| `DW_MINERVA_TORRENT_BASE_URL` | Minerva torrent metadata root | Minerva CDN |
-| `DW_STORES` | Comma-separated enabled stores | `vimm,minerva` |
-| `DW_DOWNLOAD_DIR` | Temporary downloads and preferences | Current directory; private application directory on R36S |
-| `DW_ROMS_DIR` | One explicit ROM root | Auto-detect |
-| `DW_ROMS_DIRS` | Multiple ROM roots separated by the OS path separator | Auto-detect `/roms2`, then `/roms` |
-| `DW_TIMEOUT` | Network timeout in seconds | `30` |
-| `DW_LOG_FILE` | Diagnostic log destination | Set by the R36S launcher |
-| `DW_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` | `INFO` |
+| `PH_BASE_URL` | Vimm service root | `https://vimm.net` |
+| `PH_MINERVA_BASE_URL` | Minerva browse service root | `https://minerva-archive.org` |
+| `PH_MINERVA_TORRENT_BASE_URL` | Minerva torrent metadata root | Minerva CDN |
+| `PH_STORES` | Comma-separated enabled stores | `vimm,minerva` |
+| `PH_DOWNLOAD_DIR` | Temporary downloads and preferences | Current directory; private application directory on device |
+| `PH_ROMS_DIR` | One explicit ROM root | Auto-detect |
+| `PH_ROMS_DIRS` | Multiple ROM roots separated by the OS path separator | Auto-detect `/roms2`, then `/roms` |
+| `PH_TIMEOUT` | Network timeout in seconds | `30` |
+| `PH_LOG_FILE` | Diagnostic log destination | Set by the device launcher |
+| `PH_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` | `INFO` |
+| `PH_TARGET_OS` | Linux integration profile | `darkos` |
+
+Only `darkos` is currently registered. An unknown value fails at startup rather than silently using
+paths or update packages from the wrong operating system. See [Linux target support](https://zhavir.github.io/PoketHarbor/linux-targets/).
 
 Minerva-specific transfer limits can be edited from **Settings → Minerva BitTorrent settings**
 when Minerva is selected.
 
-The catalogue cache lifetime, application log level, and application file logging can also be
-changed from **Settings**. These choices apply immediately and are saved for later launches. The
-default catalogue lifetime is seven days.
+The interface language, catalogue cache lifetime, application log level, and application file
+logging can also be changed from **Settings**. English is the default; German, Spanish, Italian,
+and Portuguese are included. Boolean settings use a True/False picker, numeric settings use a
+number-only keyboard, and text settings use the full keyboard. Choices apply immediately and are
+saved for later launches. The default catalogue lifetime is seven days.
 
 ## Diagnostics
 
 On the handheld, structured application logs and launcher diagnostics are stored in:
 
 ```text
-tools/darkos-downloader/darkos-downloader.log
+tools/pocket-harbor/pocket-harbor.log
 ```
 
 The log rotates automatically so repeated use does not grow one file indefinitely. Use
@@ -228,7 +239,7 @@ Common problems:
 
 - **The tool immediately returns to EmulationStation:** copy the complete release again and inspect
   the diagnostic log.
-- **No ROM partition is found:** verify that `/roms` or `/roms2` is mounted, or set `DW_ROMS_DIR` for
+- **No ROM partition is found:** verify that `/roms` or `/roms2` is mounted, or set `PH_ROMS_DIR` for
   local use.
 - **Minerva reports no peers:** public seeders may be offline, or the network may block tracker UDP
   or peer TCP traffic. Try again later or switch to Vimm.

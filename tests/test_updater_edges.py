@@ -2,6 +2,7 @@ import io
 import json
 import stat
 import zipfile
+from dataclasses import replace
 from email.message import Message
 from pathlib import Path
 from types import TracebackType
@@ -10,8 +11,9 @@ from urllib.error import HTTPError, URLError
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli import updater
-from dw_cli.updater import (
+from ph import updater
+from ph.targets import DARKOS
+from ph.updater import (
     READY_MARKER,
     ReleaseUpdate,
     UpdateCancelled,
@@ -72,7 +74,7 @@ def test_parse_version_requires_stable_semver(value: str) -> None:
                     "tag_name": "v2.0.0",
                     "assets": [
                         {
-                            "name": "darkos-downloader-2.0.0-r36s-arm64.zip",
+                            "name": "pocket-harbor-2.0.0-darkos-arm64.zip",
                             "browser_download_url": "",
                             "size": 1,
                         }
@@ -100,7 +102,7 @@ def test_find_update_normalizes_unknown_size_and_rejects_large_metadata(
         "tag_name": "v2.0.0",
         "assets": [
             {
-                "name": "darkos-downloader-2.0.0-r36s-arm64.zip",
+                "name": "pocket-harbor-2.0.0-darkos-arm64.zip",
                 "browser_download_url": "https://example.test/bundle",
                 "size": True,
             }
@@ -144,7 +146,7 @@ def test_find_update_rejects_large_release_asset(mocker: MockerFixture) -> None:
         "tag_name": "v2.0.0",
         "assets": [
             {
-                "name": "darkos-downloader-2.0.0-r36s-arm64.zip",
+                "name": "pocket-harbor-2.0.0-darkos-arm64.zip",
                 "browser_download_url": "https://example.test/bundle",
                 "size": 11,
             }
@@ -165,9 +167,9 @@ def test_stage_update_requires_packaged_layout_and_translates_os_errors(
     release = ReleaseUpdate("2.0.0", "v2.0.0", "bundle.zip", "url", None)
     with pytest.raises(UpdateError, match="self-contained"):
         stage_update(release, tmp_path / "wrong")
-    install = tmp_path / "darkos-downloader"
+    install = tmp_path / "pocket-harbor"
     install.mkdir()
-    (install / "darkos-downloader").write_bytes(b"current")
+    (install / "pocket-harbor").write_bytes(b"current")
     mocker.patch.object(updater, "_download_release", lambda *_args: None)
     mocker.patch.object(
         Path, "mkdir", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("read only"))
@@ -180,9 +182,9 @@ def test_stage_update_cleans_up_unexpected_exceptions(
     tmp_path: Path,
     mocker: MockerFixture,
 ) -> None:
-    install = tmp_path / "tools" / "darkos-downloader"
+    install = tmp_path / "tools" / "pocket-harbor"
     install.mkdir(parents=True)
-    (install / "darkos-downloader").write_bytes(b"current")
+    (install / "pocket-harbor").write_bytes(b"current")
     release = ReleaseUpdate("2.0.0", "v2.0.0", "bundle.zip", "url", None)
     mocker.patch.object(updater, "_download_release", lambda *_args: None)
     mocker.patch.object(
@@ -190,7 +192,7 @@ def test_stage_update_cleans_up_unexpected_exceptions(
     )
     with pytest.raises(RuntimeError, match="bug"):
         stage_update(release, install)
-    assert not (tmp_path / "tools" / ".darkos-downloader-update.incomplete").exists()
+    assert not (tmp_path / "tools" / ".pocket-harbor-update.incomplete").exists()
 
 
 def test_download_release_reports_progress_cancellation_size_and_network_errors(
@@ -264,10 +266,10 @@ def test_safe_bundle_path_rejects_links_and_validate_bundle_errors(tmp_path: Pat
     destination.mkdir()
     with pytest.raises(UpdateError, match="launcher"):
         _validate_staged_bundle(destination, "2.0.0")
-    (destination / "dArkOS Downloader.sh").write_text("launcher")
+    (destination / "Pocket Harbor.sh").write_text("launcher")
     with pytest.raises(UpdateError, match="executable"):
         _validate_staged_bundle(destination, "2.0.0")
-    executable = destination / "darkos-downloader" / "darkos-downloader"
+    executable = destination / "pocket-harbor" / "pocket-harbor"
     executable.parent.mkdir()
     executable.write_bytes(b"not arm64")
     with pytest.raises(UpdateError, match="not Linux ARM64"):
@@ -277,9 +279,9 @@ def test_safe_bundle_path_rejects_links_and_validate_bundle_errors(tmp_path: Pat
 def test_validate_bundle_sets_permissions_and_remove_staging_path(tmp_path: Path) -> None:
     destination = tmp_path / "expanded"
     destination.mkdir()
-    launcher = destination / "dArkOS Downloader.sh"
+    launcher = destination / "Pocket Harbor.sh"
     launcher.write_text("launcher")
-    executable = destination / "darkos-downloader" / "darkos-downloader"
+    executable = destination / "pocket-harbor" / "pocket-harbor"
     executable.parent.mkdir()
     executable.write_bytes(b"\x7fELF" + bytes((2, 1)) + b"\0" * 12 + (183).to_bytes(2, "little"))
     _validate_staged_bundle(destination, "2.0.0")
@@ -292,6 +294,35 @@ def test_validate_bundle_sets_permissions_and_remove_staging_path(tmp_path: Path
     file_path.write_text("x")
     _remove_staging_path(file_path)
     assert not file_path.exists()
+
+
+def test_bundle_validation_uses_the_selected_target_contract(tmp_path: Path) -> None:
+    target = replace(
+        DARKOS,
+        target_id="future",
+        display_name="Future Linux",
+        architecture="x86_64",
+        elf_machine=62,
+        tools_directory="apps",
+        launcher_name="Pocket Harbor",
+        application_directory="pocket-harbor",
+        executable_name="pocket-harbor",
+    )
+    assert _safe_bundle_path(zipfile.ZipInfo("apps/pocket-harbor/file"), target) == Path(
+        "pocket-harbor/file"
+    )
+    with pytest.raises(UpdateError, match="Unsafe path"):
+        _safe_bundle_path(zipfile.ZipInfo("tools/pocket-harbor/file"), target)
+
+    destination = tmp_path / "expanded"
+    executable = destination / "pocket-harbor" / "pocket-harbor"
+    executable.parent.mkdir(parents=True)
+    (destination / "Pocket Harbor").write_text("launcher")
+    executable.write_bytes(b"\x7fELF" + bytes((2, 1)) + b"\0" * 12 + (62).to_bytes(2, "little"))
+
+    _validate_staged_bundle(destination, "2.0.0", target)
+
+    assert (destination / READY_MARKER).read_text() == "2.0.0\n"
 
 
 def test_update_cancel_callback() -> None:

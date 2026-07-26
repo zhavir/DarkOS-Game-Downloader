@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from dw_cli.logging_config import configure_logging
+from ph.logging_config import configure_logging
 
 
 def test_logging_can_be_disabled_without_writing_to_the_terminal() -> None:
@@ -13,7 +13,7 @@ def test_logging_can_be_disabled_without_writing_to_the_terminal() -> None:
 
 
 def test_logging_writes_structured_records_to_the_requested_file(tmp_path: Path) -> None:
-    log_file = tmp_path / "logs" / "darkos-downloader.log"
+    log_file = tmp_path / "logs" / "pocket-harbor.log"
     logger = configure_logging(log_file, "not-a-level")
 
     logger.info("download completed")
@@ -21,7 +21,7 @@ def test_logging_writes_structured_records_to_the_requested_file(tmp_path: Path)
         handler.flush()
 
     content = log_file.read_text(encoding="utf-8")
-    assert "INFO dw_cli: download completed" in content
+    assert "INFO ph: download completed" in content
     assert logger.level == logging.INFO
 
 

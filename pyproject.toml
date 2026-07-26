@@ -3,9 +3,9 @@ build-backend = "uv_build"
 requires = [ "uv-build>=0.11.32,<0.12" ]
 
 [project]
-name = "darkos-downloader"
+name = "pocket-harbor"
 version = "1.6.2"
-description = "Controller-friendly dArkOS R36S game library manager"
+description = "Pocket Harbor controller-first game library manager"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [ "pyyaml>=6.0.3" ]
 optional-dependencies.release = [ "uv==0.11.32" ]
-scripts.dw = "dw_cli.app:main"
+scripts.ph = "ph.app:main"
 
 [dependency-groups]
 dev = [
@@ -36,7 +36,7 @@ dev = [
 ]
 
 [tool.uv]
-build-backend.module-name = "dw_cli"
+build-backend.module-name = "ph"
 build-backend.source-include = [
   ".python-version",
   "darkos/**",
@@ -64,7 +64,7 @@ ini_options.markers = [
 
 [tool.coverage]
 run.branch = true
-run.source = [ "dw_cli" ]
+run.source = [ "ph" ]
 report.fail_under = 95
 report.precision = 1
 report.show_missing = true
@@ -84,7 +84,7 @@ branches.main.prerelease = false
 publish.dist_glob_patterns = [
   "dist/*.whl",
   "dist/*.tar.gz",
-  "dist/*-r36s-arm64.zip",
+  "dist/pocket-harbor-*-*-*.zip",
 ]
 publish.upload_to_vcs_release = true
 changelog.default_templates.changelog_file = "CHANGELOG.md"

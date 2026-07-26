@@ -7,10 +7,10 @@ from urllib.error import HTTPError, URLError
 import pytest
 from pytest_mock import MockerFixture
 
-from dw_cli.minerva_store import RA_DIRECTORIES, MinervaEntry, MinervaStore, parse_directory
-from dw_cli.models import MediaDownload
-from dw_cli.platforms import resolve_platform
-from dw_cli.store import StoreError
+from ph.minerva_store import RA_DIRECTORIES, MinervaEntry, MinervaStore, parse_directory
+from ph.models import MediaDownload
+from ph.platforms import resolve_platform
+from ph.store import StoreError
 
 GBA_DIRECTORY = "RA - Nintendo Game Boy Advance"
 HTML = (
@@ -171,10 +171,10 @@ def test_store_properties_all_platform_search_progress_and_cache(
     assert gba is not None and all_platform is not None
     entries = (MinervaEntry("Game (USA) (Rev 2) (En,Fr).zip", "detail", 1),)
     directories = RA_DIRECTORIES[:2]
-    mocker.patch("dw_cli.minerva_store.RA_DIRECTORIES", directories)
+    mocker.patch("ph.minerva_store.RA_DIRECTORIES", directories)
     fetched = mocker.patch.object(store, "_get_text", return_value=HTML)
     progress: list[tuple[int, int]] = []
-    mocker.patch("dw_cli.minerva_store.parse_directory", return_value=list(entries))
+    mocker.patch("ph.minerva_store.parse_directory", return_value=list(entries))
 
     results = store.search("", "game", lambda *args: progress.append(args))
 
@@ -210,7 +210,7 @@ def test_store_rejects_unknown_platform_detail_and_missing_catalogue(
         store.download_request(detail)
 
     empty_store = MinervaStore("https://minerva.test", "https://torrent.test")
-    mocker.patch("dw_cli.minerva_store.parse_directory", return_value=[])
+    mocker.patch("ph.minerva_store.parse_directory", return_value=[])
     mocker.patch.object(empty_store, "_get_text", return_value="empty")
     with pytest.raises(StoreError, match="empty catalogue"):
         empty_store._entries(GBA_DIRECTORY)
@@ -255,10 +255,10 @@ class Response(io.BytesIO):
 def test_get_text_decodes_response_and_retries_transient_errors(mocker: MockerFixture) -> None:
     store = MinervaStore("https://minerva.test", "https://torrent.test")
     opened = mocker.patch(
-        "dw_cli.minerva_store.urlopen",
+        "ph.minerva_store.urlopen",
         side_effect=(URLError("temporary"), Response(b"catalogue")),
     )
-    sleep = mocker.patch("dw_cli.minerva_store.time.sleep")
+    sleep = mocker.patch("ph.minerva_store.time.sleep")
 
     assert store._get_text("https://minerva.test/browse") == "catalogue"
     assert opened.call_count == 2
@@ -268,7 +268,7 @@ def test_get_text_decodes_response_and_retries_transient_errors(mocker: MockerFi
 def test_get_text_reports_permanent_and_exhausted_errors(mocker: MockerFixture) -> None:
     store = MinervaStore("https://minerva.test", "https://torrent.test")
     mocker.patch(
-        "dw_cli.minerva_store.urlopen",
+        "ph.minerva_store.urlopen",
         side_effect=HTTPError("url", 404, "missing", Message(), None),
     )
     with pytest.raises(StoreError, match="HTTP 404") as caught:
@@ -276,10 +276,10 @@ def test_get_text_reports_permanent_and_exhausted_errors(mocker: MockerFixture) 
     assert caught.value.status_code == 404
 
     mocker.patch(
-        "dw_cli.minerva_store.urlopen",
+        "ph.minerva_store.urlopen",
         side_effect=HTTPError("url", 503, "down", Message(), None),
     )
-    sleep = mocker.patch("dw_cli.minerva_store.time.sleep")
+    sleep = mocker.patch("ph.minerva_store.time.sleep")
     with pytest.raises(StoreError, match="after 3 attempts"):
         store._get_text("https://minerva.test/browse")
     assert sleep.call_count == 2

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from dw_cli.platforms import resolve_platform
-from dw_cli.retrobios import RetroBiosRepository, install_bios, verify_bios_file
+from ph.platforms import resolve_platform
+from ph.retrobios import RetroBiosRepository, install_bios, verify_bios_file
 
 
 @pytest.mark.e2e
