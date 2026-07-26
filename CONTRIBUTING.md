@@ -66,6 +66,14 @@ The command above builds the default DarkOS target. Target selection is explicit
 sh scripts/build_artifacts.sh darkos
 ```
 
+Release automation builds the platform-independent Python distributions and every registered target
+bundle in separate jobs. The same build modes are available locally:
+
+```sh
+sh scripts/build_artifacts.sh --python
+sh scripts/build_artifacts.sh --platform darkos
+```
+
 To add another Linux distribution, implement both sides of the target boundary:
 
 1. Register a `LinuxTarget` in `src/ph/targets.py`.
@@ -74,8 +82,9 @@ To add another Linux distribution, implement both sides of the target boundary:
 3. Add `packaging/targets/<target>.conf` and reuse an architecture Dockerfile when its ABI is
    suitable; otherwise add a new architecture/ABI Dockerfile.
 4. Add the target launcher and make its layout match the runtime profile exactly.
-5. Add target, updater, offline workflow, launcher, and clean-runtime smoke coverage.
-6. Mark it supported only after physical OS/device verification and documentation.
+5. Add the target to the release workflow build matrix so it receives an independent parallel job.
+6. Add target, updater, offline workflow, launcher, and clean-runtime smoke coverage.
+7. Mark it supported only after physical OS/device verification and documentation.
 
 ## Commits and pull requests
 

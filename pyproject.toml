@@ -81,11 +81,5 @@ commit_message = "chore(release): {version} [skip ci]"
 commit_parser = "conventional"
 branches.main.match = "main"
 branches.main.prerelease = false
-publish.dist_glob_patterns = [
-  "dist/*.whl",
-  "dist/*.tar.gz",
-  "dist/pocket-harbor-*-*-*.zip",
-]
-publish.upload_to_vcs_release = true
 changelog.default_templates.changelog_file = "CHANGELOG.md"
 changelog.default_templates.mask_initial_release = false

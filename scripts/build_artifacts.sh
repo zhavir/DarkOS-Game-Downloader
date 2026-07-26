@@ -1,9 +1,70 @@
 #!/bin/sh
-# Replace and rebuild uv distributions and one target-specific Linux bundle.
+# Build Python distributions, one target bundle, or both.
 set -eu
 
 PROJECT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
-REQUESTED_TARGET=${1:-${POCKET_HARBOR_TARGET:-darkos}}
+BUILD_MODE=all
+REQUESTED_TARGET=${POCKET_HARBOR_TARGET:-darkos}
+case "${1:-}" in
+    --python)
+        if [ "$#" -ne 1 ]; then
+            printf '%s\n' "Usage: $0 --python" >&2
+            exit 2
+        fi
+        BUILD_MODE=python
+        ;;
+    --platform)
+        if [ "$#" -ne 2 ]; then
+            printf '%s\n' "Usage: $0 --platform TARGET" >&2
+            exit 2
+        fi
+        BUILD_MODE=platform
+        REQUESTED_TARGET=$2
+        ;;
+    '')
+        ;;
+    *)
+        if [ "$#" -ne 1 ]; then
+            printf '%s\n' "Usage: $0 [TARGET | --python | --platform TARGET]" >&2
+            exit 2
+        fi
+        REQUESTED_TARGET=$1
+        ;;
+esac
+
+CONFIGURED_VERSION=$(
+    sed -n 's/^version = "\([^"]*\)"/\1/p' "$PROJECT_DIR/pyproject.toml" | head -n 1
+)
+RELEASE_VERSION=${NEW_VERSION:-$CONFIGURED_VERSION}
+WHEEL="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION-py3-none-any.whl"
+SDIST="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION.tar.gz"
+
+if [ -z "$CONFIGURED_VERSION" ]; then
+    printf '%s\n' "Could not read the project version from pyproject.toml." >&2
+    exit 1
+fi
+if [ "$CONFIGURED_VERSION" != "$RELEASE_VERSION" ]; then
+    printf '%s\n' \
+        "Semantic release requested $RELEASE_VERSION but pyproject.toml contains $CONFIGURED_VERSION." \
+        >&2
+    exit 1
+fi
+
+mkdir -p "$PROJECT_DIR/dist"
+cd "$PROJECT_DIR"
+
+if [ "$BUILD_MODE" = python ]; then
+    rm -f "$WHEEL" "$SDIST"
+    uv lock --check
+    uv build
+    if [ ! -f "$WHEEL" ] || [ ! -f "$SDIST" ]; then
+        printf '%s\n' "The Python release distributions were not created." >&2
+        exit 1
+    fi
+    printf '%s\n' "Python release distributions created in $PROJECT_DIR/dist"
+    exit 0
+fi
+
 case "$REQUESTED_TARGET" in
     '' | *[!a-z0-9-]*)
         printf 'Invalid build target: %s\n' "$REQUESTED_TARGET" >&2
@@ -20,27 +81,10 @@ if [ ! -f "$TARGET_PROFILE" ]; then
 fi
 # Profiles are version-controlled build configuration, not user input.
 . "$TARGET_PROFILE"
-CONFIGURED_VERSION=$(
-    sed -n 's/^version = "\([^"]*\)"/\1/p' "$PROJECT_DIR/pyproject.toml" | head -n 1
-)
-RELEASE_VERSION=${NEW_VERSION:-$CONFIGURED_VERSION}
-
-if [ -z "$CONFIGURED_VERSION" ]; then
-    printf '%s\n' "Could not read the project version from pyproject.toml." >&2
-    exit 1
-fi
-if [ "$CONFIGURED_VERSION" != "$RELEASE_VERSION" ]; then
-    printf '%s\n' \
-        "Semantic release requested $RELEASE_VERSION but pyproject.toml contains $CONFIGURED_VERSION." \
-        >&2
-    exit 1
-fi
 
 CACHE_DIR="$PROJECT_DIR/.build-cache"
 PYTHON_ARCHIVE="$CACHE_DIR/$PYTHON_ARCHIVE_NAME"
 BUNDLE="$PROJECT_DIR/dist/pocket-harbor-$RELEASE_VERSION-$TARGET_ID-$TARGET_ARCH.zip"
-WHEEL="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION-py3-none-any.whl"
-SDIST="$PROJECT_DIR/dist/pocket_harbor-$RELEASE_VERSION.tar.gz"
 WORK_DIR=$(mktemp -d "/tmp/pocket-harbor-$TARGET_ID-$TARGET_ARCH.XXXXXX")
 
 cleanup() {
@@ -48,12 +92,17 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-mkdir -p "$CACHE_DIR" "$PROJECT_DIR/dist"
-rm -f "$BUNDLE" "$WHEEL" "$SDIST"
+mkdir -p "$CACHE_DIR"
+rm -f "$BUNDLE" "$WHEEL"
 
-cd "$PROJECT_DIR"
-uv lock
-uv build
+if [ "$BUILD_MODE" = all ]; then
+    rm -f "$SDIST"
+    uv lock
+    uv build
+else
+    uv lock --check
+    uv build --wheel
+fi
 
 printf 'Downloading a fresh %s Python build for %s...\n' "$TARGET_ARCH" "$TARGET_DISPLAY_NAME"
 if command -v curl >/dev/null 2>&1; then
@@ -117,10 +166,14 @@ chmod +x \
 
 (cd "$WORK_DIR/bundle" && zip -qr "$BUNDLE" "$TOOLS_DIRECTORY")
 
-if [ ! -f "$WHEEL" ] || [ ! -f "$SDIST" ] || [ ! -f "$BUNDLE" ]; then
-    printf '%s\n' "One or more expected release artifacts were not created." >&2
+if [ ! -f "$BUNDLE" ]; then
+    printf '%s\n' "The $TARGET_DISPLAY_NAME release artifact was not created." >&2
+    exit 1
+fi
+if [ "$BUILD_MODE" = all ] && { [ ! -f "$WHEEL" ] || [ ! -f "$SDIST" ]; }; then
+    printf '%s\n' "One or more Python release distributions were not created." >&2
     exit 1
 fi
 
-printf '%s\n' "Release artifacts created in $PROJECT_DIR/dist"
+printf '%s\n' "$TARGET_DISPLAY_NAME release artifact created in $PROJECT_DIR/dist"
 file "$EXECUTABLE"
