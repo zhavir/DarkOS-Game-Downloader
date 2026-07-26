@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.0.1 (2026-07-26)
+
+### Bug Fixes
+
+- Cover translation 100%
+  ([`81b4c6a`](https://github.com/zhavir/PoketHarbor/commit/81b4c6a92790e6a564bcad7504fe393e463b6e4c))
+
+### Continuous Integration
+
+- Automatically set up issue templates
+  ([`b37adbe`](https://github.com/zhavir/PoketHarbor/commit/b37adbe03a906fec69242f8e01200d18a12876b5))
+
+
 ## v2.0.0 (2026-07-26)
 
 ### Features
