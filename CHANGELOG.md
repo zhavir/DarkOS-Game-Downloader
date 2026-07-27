@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.0.1 (2026-07-27)
+
+### Bug Fixes
+
+- **build**: Bundle translation catalogues with PyInstaller
+  ([`a06242d`](https://github.com/zhavir/PoketHarbor/commit/a06242dcc8044fb0796fc9490b1125a9d19c40b1))
+
+
 ## v3.0.0 (2026-07-27)
 
 ### Continuous Integration
