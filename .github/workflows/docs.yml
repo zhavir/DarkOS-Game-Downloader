@@ -25,7 +25,7 @@ jobs:
           # The coverage badge action performs its own authenticated gh-pages
           # checkout. Do not leave a second Authorization header behind.
           persist-credentials: false
-          ref: main
+          ref: ${{ github.event.client_payload.sha }}
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6.0.0
       - name: Install uv
@@ -40,7 +40,7 @@ jobs:
       - name: Download released revision coverage
         uses: actions/download-artifact@v8.0.1
         with:
-          name: coverage-main-${{ github.event.client_payload.sha }}
+          artifact-ids: ${{ github.event.client_payload.coverage_artifact_id }}
           path: coverage-reports
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}

@@ -30,6 +30,8 @@ jobs:
     name: All tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      coverage_artifact_id: ${{ steps.coverage_artifact.outputs.artifact-id }}
     steps:
       - name: Check out pushed revision
         uses: actions/checkout@v7.0.1
@@ -48,6 +50,7 @@ jobs:
         run: >-
           uv run --frozen pytest -v -m "not live" --cov=ph --cov-branch --cov-report=term-missing --cov-report=xml:coverage-reports/coverage.xml --cov-report=json:coverage-reports/coverage.json --cov-report=html:coverage-reports/html --cov-report=markdown-append:${GITHUB_STEP_SUMMARY}
       - name: Upload coverage reports
+        id: coverage_artifact
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -64,6 +67,7 @@ jobs:
       id-token: write
     outputs:
       commit_sha: ${{ steps.release.outputs.commit_sha }}
+      coverage_artifact_id: ${{ needs.tests.outputs.coverage_artifact_id }}
       released: ${{ steps.release.outputs.released }}
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
@@ -198,7 +202,8 @@ jobs:
         run: gh release upload "${RELEASE_TAG}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
       - name: Request documentation deployment
         env:
+          COVERAGE_ARTIFACT_ID: ${{ needs.release.outputs.coverage_artifact_id }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ needs.release.outputs.commit_sha }}
         run: >-
-          gh api --method POST repos/${GITHUB_REPOSITORY}/dispatches -f event_type=release-documentation -F "client_payload[run_id]=${GITHUB_RUN_ID}" -f "client_payload[sha]=${RELEASE_SHA}"
+          gh api --method POST repos/${GITHUB_REPOSITORY}/dispatches -f event_type=release-documentation -F "client_payload[coverage_artifact_id]=${COVERAGE_ARTIFACT_ID}" -F "client_payload[run_id]=${GITHUB_RUN_ID}" -f "client_payload[sha]=${RELEASE_SHA}"
