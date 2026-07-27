@@ -268,6 +268,19 @@ class DownloadQueue:
             job = self._jobs.get(job_id)
             return job.snapshot() if job is not None else None
 
+    def dismiss_completed(self, job_id: str) -> bool:
+        """Remove a completed job after the interface has acknowledged it."""
+
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.state is not DownloadState.COMPLETED:
+                return False
+            del self._jobs[job_id]
+            self._futures.pop(job_id, None)
+            self._save_locked()
+        LOGGER.debug("Removed acknowledged completed download id=%s", job_id)
+        return True
+
     def pause(self, job_id: str) -> bool:
         """Pause a queued or active job while keeping its verified partial data."""
 

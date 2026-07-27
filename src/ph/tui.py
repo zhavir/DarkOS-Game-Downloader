@@ -644,10 +644,15 @@ class DownloaderTui:
                 4,
                 wait=True,
             )
+            self.download_queue.dismiss_completed(job.job_id)
 
     def _download_queue_screen(self) -> None:
         while True:
-            jobs = self.download_queue.jobs()
+            jobs = tuple(
+                job
+                for job in self.download_queue.jobs()
+                if job.state is not DownloadState.COMPLETED
+            )
             if not jobs:
                 self._draw_message(
                     self._t(TranslationKey.DOWNLOAD_QUEUE_EMPTY),

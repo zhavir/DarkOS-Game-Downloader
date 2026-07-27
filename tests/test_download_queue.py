@@ -105,6 +105,13 @@ def test_queue_runs_multiple_downloads_concurrently_and_captures_store(
     assert snapshot.store_name == "Captured Store"
     assert snapshot.completed_path == tmp_path / "roms" / "gba" / "first.zip"
     assert queue.refresh_required is True
+    assert queue.dismiss_completed("missing") is False
+    assert queue.dismiss_completed(first) is True
+    assert queue.find(first) is None
+    assert [job.job_id for job in queue.jobs()] == [second]
+    persisted = json.loads(queue.queue_path.read_text(encoding="utf-8"))
+    assert [job["id"] for job in persisted["jobs"]] == [second]
+    assert persisted["refresh_required"] is True
     queue.shutdown()
 
 

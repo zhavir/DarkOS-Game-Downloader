@@ -678,6 +678,7 @@ def test_completed_background_download_runs_bios_followup_once(
 
     bios.assert_called_once_with(completed.platform, completed.roms_directory, "USA", "bios")
     assert "required BIOS" in messages[0]
+    queue.dismiss_completed.assert_called_once_with(completed.job_id)
 
 
 def test_empty_download_queue_and_progress_variants(mocker: MockerFixture) -> None:
@@ -698,6 +699,25 @@ def test_empty_download_queue_and_progress_variants(mocker: MockerFixture) -> No
     assert "waiting" in instance._download_job_label(waiting)
     assert instance._download_progress_detail(size_only) == "2.0 KiB"
     assert instance._download_progress_detail(waiting) == "waiting"
+
+
+def test_completed_download_is_not_shown_in_queue(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.jobs.return_value = (queued_job(DownloadState.COMPLETED),)
+    instance.download_queue = queue
+    messages: list[str] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        side_effect=lambda title, *_args, **_kwargs: messages.append(title),
+    )
+    menu = mocker.patch.object(instance, "_menu")
+
+    instance._download_queue_screen()
+
+    assert messages == ["NO DOWNLOADS"]
+    menu.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -806,6 +826,7 @@ def test_completed_background_update_uses_update_message_and_bundled_bios(
 
     assert messages[0][0] == "GAME UPDATED"
     assert "bundled BIOS" in messages[0][1]
+    queue.dismiss_completed.assert_called_once_with(completed.job_id)
 
 
 def test_library_management_flows(tmp_path: Path, mocker: MockerFixture) -> None:
