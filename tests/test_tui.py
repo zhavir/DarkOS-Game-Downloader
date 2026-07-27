@@ -385,18 +385,19 @@ def test_completed_download_defers_refresh_until_tui_exit(
 ) -> None:
     platform = resolve_platform("GBA")
     assert platform is not None
-    downloaded = tmp_path / "download" / "Advance Wars.zip"
-    downloaded.parent.mkdir()
-    downloaded.write_bytes(b"game")
     store = VimmStore("https://example.test")
     tui = object.__new__(DownloaderTui)
     tui.refresh_on_exit = False
-    mocker.patch.object(tui, "_choose_roms_directory", new=lambda: tmp_path / "roms")
-    mocker.patch.object(
-        tui,
-        "_download_media",
-        new=lambda *_args: [DownloadResult("https://example.test/game.zip", downloaded)],
+    tui.config = Config("https://example.test", tmp_path, ())
+    tui.preferences = Preferences()
+    queue = mocker.Mock()
+    queue.enqueue.return_value = SimpleNamespace(
+        job_id="job-1",
+        title="Advance Wars",
+        store_name="Vimm",
     )
+    tui.download_queue = queue
+    mocker.patch.object(tui, "_choose_roms_directory", new=lambda: tmp_path / "roms")
     messages: list[str] = []
     mocker.patch.object(
         tui,
@@ -408,19 +409,17 @@ def test_completed_download_defers_refresh_until_tui_exit(
         "download_request",
         lambda _url: MediaDownload("https://example.test/game.zip"),
     )
-    mocker.patch.object(tui, "_bios_followup", new=lambda *_args: 0)
-    refresh_requests: list[bool] = []
-    mocker.patch(
-        "ph.tui.request_game_frontend_refresh",
-        lambda: refresh_requests.append(True) or True,
+    tui._download_detail(
+        "https://example.test/game",
+        platform,
+        store,
+        title="Advance Wars",
     )
 
-    tui._download_detail("https://example.test/game", platform, store)
-
-    assert (tmp_path / "roms" / "gba" / "Advance Wars.zip").is_file()
-    assert tui.refresh_on_exit is True
-    assert refresh_requests == []
-    assert "refresh when you exit" in messages[-1]
+    assert queue.enqueue.call_args.kwargs["store_id"] == "vimm"
+    assert queue.enqueue.call_args.kwargs["title"] == "Advance Wars"
+    assert tui.refresh_on_exit is False
+    assert "background" in messages[-1]
 
 
 def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> None:
@@ -431,7 +430,12 @@ def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> N
     tui.refresh_on_exit = True
     tui.exit_after_update = False
     tui.gamepad = None
-    choices = iter((6, 1))
+    queue = mocker.Mock()
+    queue.jobs.return_value = ()
+    queue.refresh_required = False
+    tui.download_queue = queue
+    tui._handled_completed_jobs = set()
+    choices = iter((7, 1))
     mocker.patch.object(tui, "_menu", new=lambda *_args: next(choices))
     refresh_requests: list[bool] = []
     mocker.patch(
@@ -442,6 +446,7 @@ def test_pending_refresh_is_requested_when_tui_exits(mocker: MockerFixture) -> N
     tui.run()
 
     assert refresh_requests == [True]
+    queue.shutdown.assert_called_once_with()
 
 
 def test_delete_defers_refresh_until_tui_exit(

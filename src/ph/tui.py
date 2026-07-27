@@ -5,7 +5,8 @@ import curses
 import locale
 import logging
 import textwrap
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -22,6 +23,11 @@ from ph.compatibility import (
     filter_supported_results,
 )
 from ph.config import Config
+from ph.download_queue import (
+    DownloadJob,
+    DownloadQueue,
+    DownloadState,
+)
 from ph.downloader import (
     DownloadCancelled,
     DownloadError,
@@ -36,17 +42,11 @@ from ph.library import (
     LibraryError,
     delete_game,
     platforms_with_installed_games,
-    replace_game,
     scan_library,
 )
-from ph.logging_config import configure_logging
+from ph.logging_config import active_log_file, configure_logging_with_fallback
 from ph.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
-from ph.organizer import (
-    OrganizeError,
-    detect_roms_directories,
-    install_bundled_bios,
-    install_downloads,
-)
+from ph.organizer import detect_roms_directories
 from ph.platforms import discover_platforms, platform_catalogue, resolve_platform
 from ph.preferences import (
     Preferences,
@@ -236,6 +236,12 @@ class DownloaderTui:
         self.selected_store = (
             self.store_catalog.find(preferences.store_id) if preferences.store_id else None
         )
+        self.download_queue = DownloadQueue(
+            config.download_directory,
+            max_concurrent=preferences.max_concurrent_downloads,
+            retry_settings=preferences.rate_limit_retry,
+        )
+        self._handled_completed_jobs: set[str] = set()
         self.refresh_on_exit = False
         self.exit_after_update = False
         self.compatibility_client = GameCompatibilityClient(
@@ -301,9 +307,11 @@ class DownloaderTui:
                 if self._confirm_exit():
                     return
             while True:
+                self._handle_download_completions()
                 options = (
                     self._t("search_library"),
                     self._t("direct_download"),
+                    self._t("download_queue"),
                     self._t("manage_games"),
                     self._t("search_bios"),
                     self._t("settings"),
@@ -315,7 +323,7 @@ class DownloaderTui:
                     options,
                     self._t("main_footer"),
                 )
-                if choice is None or choice == 6:
+                if choice is None or choice == 7:
                     if self._confirm_exit():
                         return
                     continue
@@ -324,19 +332,24 @@ class DownloaderTui:
                 elif choice == 1:
                     self._direct_download_flow()
                 elif choice == 2:
-                    self._manage_library_flow()
+                    self._download_queue_screen()
                 elif choice == 3:
-                    self._bios_search_flow()
+                    self._manage_library_flow()
                 elif choice == 4:
-                    self._settings_screen()
+                    self._bios_search_flow()
                 elif choice == 5:
+                    self._settings_screen()
+                elif choice == 6:
                     self._status_screen()
                 if self.exit_after_update:
                     return
         finally:
+            self.download_queue.shutdown()
+            self.refresh_on_exit = self.refresh_on_exit or self.download_queue.refresh_required
             if self.refresh_on_exit:
                 LOGGER.info("Requesting EmulationStation refresh on TUI exit")
-                request_game_frontend_refresh(target=self.config.target)
+                if request_game_frontend_refresh(target=self.config.target):
+                    self.download_queue.mark_refreshed()
             if self.gamepad is not None:
                 self.gamepad.close()
             LOGGER.info("TUI session finished")
@@ -476,6 +489,7 @@ class DownloaderTui:
                     result.link,
                     effective_platform,
                     store,
+                    title=result.title,
                     region=result.region,
                 )
             elif action is None or action == len(details) + 1:
@@ -500,7 +514,7 @@ class DownloaderTui:
         url = self._on_screen_keyboard(self._t("detail_url"), allow_lowercase=True)
         if not url:
             return
-        self._download_detail(url, platforms[choice], store)
+        self._download_detail(url, platforms[choice], store, title=url)
 
     def _download_detail(
         self,
@@ -508,6 +522,7 @@ class DownloaderTui:
         platform: Platform,
         store: GameStore,
         *,
+        title: str | None = None,
         region: str | None = None,
     ) -> None:
         if platform.rom_folder is None:
@@ -522,56 +537,237 @@ class DownloaderTui:
             self._t("retrieving_download_link"),
             1,
         )
-        installed_bios: list[Path] = []
         try:
-            media_url = store.download_request(detail_url)
-            downloads = self._download_media(
-                [media_url],
-                store,
+            media = store.download_request(detail_url)
+            job = self.download_queue.enqueue(
+                title=title or media.expected_filename or detail_url,
+                store_id=store.store_id,
+                store_name=store.display_name,
+                referrer=store.download_referrer,
+                media=(media,),
+                platform=platform,
+                roms_directory=roms_directory,
+                timeout_seconds=self.config.timeout_seconds,
+                bittorrent_settings=(
+                    self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
+                ),
+                region=region,
             )
-            completed = install_downloads(
-                downloads,
-                platform,
-                roms_directory,
-                installed_bios.append,
-            )
-        except DownloadCancelled:
-            LOGGER.info("Game download cancelled")
-            self._draw_message(
-                self._t("download_cancelled"),
-                self._t("no_game_installed"),
-                3,
-            )
-            return
-        except (StoreError, DownloadError, OrganizeError) as error:
-            LOGGER.error("Game download failed: %s", error)
+        except (StoreError, DownloadError) as error:
+            LOGGER.error("Could not queue game download: %s", error)
             self._operation_error(error)
             return
-        final_path = completed[0].path
-        retrobios_installed = self._bios_followup(platform, roms_directory, region)
-        self.refresh_on_exit = True
-        LOGGER.info("Game installed path=%s bios_files=%d", final_path, len(installed_bios))
-        bios_message = (
-            "\n" + self._t("installed_bundled_bios", count=len(installed_bios))
-            if installed_bios
-            else ""
-        )
-        if retrobios_installed:
-            bios_message += "\n" + self._t(
-                "installed_required_bios",
-                count=retrobios_installed,
-            )
+        LOGGER.info("Game download queued id=%s store=%s", job.job_id, store.store_id)
         self._draw_message(
-            self._t("download_complete"),
+            self._t("download_queued"),
             self._t(
-                "download_complete_message",
-                filename=final_path.name,
-                destination=final_path.parent,
-                bios=bios_message,
+                "download_queued_message",
+                title=job.title,
+                store=job.store_name,
             ),
             4,
             wait=True,
         )
+
+    def _handle_download_completions(self) -> None:
+        for job in self.download_queue.jobs():
+            if (
+                job.state is not DownloadState.COMPLETED
+                or job.job_id in self._handled_completed_jobs
+            ):
+                continue
+            self._handled_completed_jobs.add(job.job_id)
+            required_bios = self._bios_followup(job.platform, job.roms_directory, job.region)
+            bundled_message = (
+                "\n" + self._t("installed_bundled_bios", count=job.bundled_bios_count)
+                if job.bundled_bios_count
+                else ""
+            )
+            required_message = (
+                "\n" + self._t("installed_required_bios", count=required_bios)
+                if required_bios
+                else ""
+            )
+            destination = job.completed_path.parent if job.completed_path is not None else "-"
+            filename = job.completed_path.name if job.completed_path is not None else job.title
+            message = (
+                self._t(
+                    "game_updated_message",
+                    filename=filename,
+                    destination=destination,
+                    bundled=bundled_message,
+                    required=required_message,
+                )
+                if job.is_update
+                else self._t(
+                    "download_complete_message",
+                    filename=filename,
+                    destination=destination,
+                    bios=bundled_message + required_message,
+                )
+            )
+            self._draw_message(
+                self._t("game_updated" if job.is_update else "download_complete"),
+                message,
+                4,
+                wait=True,
+            )
+
+    def _download_queue_screen(self) -> None:
+        while True:
+            jobs = self.download_queue.jobs()
+            if not jobs:
+                self._draw_message(
+                    self._t("download_queue_empty"),
+                    self._t("download_queue_empty_message"),
+                    1,
+                    wait=True,
+                )
+                return
+            labels = [self._download_job_label(job) for job in jobs]
+            labels.append(self._t("refresh_download_status"))
+            choice = self._menu(
+                self._t("download_queue_title"),
+                labels,
+                self._t("download_queue_footer"),
+            )
+            if choice is None:
+                return
+            if choice == len(jobs):
+                continue
+            self._download_job_controls(jobs[choice])
+
+    def _download_job_label(self, job: DownloadJob) -> str:
+        state = self._t(f"download_state_{job.state.value}")
+        if job.total_bytes:
+            percent = min(100, int(job.downloaded_bytes * 100 / job.total_bytes))
+            progress = self._t("download_progress_percent", percent=percent)
+        elif job.downloaded_bytes:
+            progress = self._t(
+                "download_progress_size",
+                size=self._format_file_size(job.downloaded_bytes),
+            )
+        else:
+            progress = self._t("download_progress_waiting")
+        return self._t(
+            "download_job_row",
+            title=job.title,
+            state=state,
+            progress=progress,
+            store=job.store_name,
+        )
+
+    def _download_job_controls(self, job: DownloadJob) -> None:
+        current = self.download_queue.find(job.job_id)
+        if current is None:
+            return
+        details = [
+            current.title,
+            self._t("download_store_field", value=current.store_name),
+            self._t(
+                "download_status_field",
+                value=self._t(f"download_state_{current.state.value}"),
+            ),
+            self._t(
+                "download_progress_field",
+                value=self._download_progress_detail(current),
+            ),
+        ]
+        if current.error:
+            details.append(self._t("download_error_field", value=current.error))
+        if current.state is DownloadState.RATE_LIMITED and current.retry_at is not None:
+            seconds = max(0, int(current.retry_at - time.time() + 0.999))
+            details.append(
+                self._t(
+                    "download_retry_field",
+                    attempt=current.retry_attempt,
+                    seconds=seconds,
+                )
+            )
+        actions: list[str] = []
+        options = list(details)
+        if current.state in {
+            DownloadState.QUEUED,
+            DownloadState.DOWNLOADING,
+            DownloadState.RATE_LIMITED,
+        }:
+            options.extend((self._t("pause_download"), self._t("cancel_download")))
+            actions.extend(("pause", "cancel"))
+        elif current.state is DownloadState.PAUSED:
+            options.extend((self._t("resume_download"), self._t("cancel_download")))
+            actions.extend(("resume", "cancel"))
+        elif current.state in {DownloadState.FAILED, DownloadState.CANCELLED}:
+            if current.torrent_candidates:
+                options.append(self._t("choose_minerva_torrent_file"))
+                actions.append("choose_file")
+            options.extend((self._t("retry_download"), self._t("cancel_download")))
+            actions.extend(("retry", "cancel"))
+        options.append(self._t("back"))
+        actions.append("back")
+        choice = self._menu(
+            self._t("download_details_title"),
+            options,
+            self._t("download_controls_footer"),
+        )
+        if choice is None or choice < len(details):
+            return
+        action = actions[choice - len(details)]
+        if action == "pause":
+            self.download_queue.pause(current.job_id)
+        elif action == "resume":
+            self.download_queue.resume(current.job_id)
+        elif action == "retry":
+            self.download_queue.retry(current.job_id)
+        elif action == "cancel":
+            if self._confirm_download_cancel(current):
+                self.download_queue.cancel(current.job_id)
+        elif action == "choose_file":
+            choice = self._choose_queued_torrent_file(current)
+            if choice is not None and self.download_queue.choose_torrent_file(
+                current.job_id,
+                choice,
+            ):
+                self.download_queue.retry(current.job_id)
+
+    def _download_progress_detail(self, job: DownloadJob) -> str:
+        if job.total_bytes:
+            return self._t(
+                "download_progress_bytes",
+                current=self._format_file_size(job.downloaded_bytes),
+                total=self._format_file_size(job.total_bytes),
+            )
+        if job.downloaded_bytes:
+            return self._format_file_size(job.downloaded_bytes)
+        return self._t("download_progress_waiting")
+
+    def _confirm_download_cancel(self, job: DownloadJob) -> bool:
+        choice = self._menu(
+            self._t("confirm_download_cancel"),
+            (
+                self._t("keep_downloading", title=job.title),
+                self._t("cancel_and_remove_partial"),
+            ),
+            self._t("cancel_download_warning"),
+        )
+        return choice == 1
+
+    def _choose_queued_torrent_file(self, job: DownloadJob) -> TorrentFileChoice | None:
+        choice = self._menu(
+            self._t("choose_minerva_torrent_file"),
+            [
+                self._t(
+                    "minerva_candidate",
+                    index=candidate.index,
+                    filename=candidate.filename,
+                    size=self._format_file_size(candidate.length),
+                    score=round(candidate.match_score * 100),
+                    path="/".join(candidate.path),
+                )
+                for candidate in job.torrent_candidates
+            ],
+            self._t("minerva_candidates_footer"),
+        )
+        return job.torrent_candidates[choice] if choice is not None else None
 
     def _manage_library_flow(self) -> None:
         if not self.roms_directories:
@@ -730,57 +926,38 @@ class DownloaderTui:
         if confirmation != 1:
             return False
         try:
-            media_url = store.download_request(selected.link)
-            downloads = self._download_media(
-                [media_url],
-                store,
+            media = store.download_request(selected.link)
+            job = self.download_queue.enqueue(
+                title=selected.title,
+                store_id=store.store_id,
+                store_name=store.display_name,
+                referrer=store.download_referrer,
+                media=(media,),
+                platform=game.platform,
+                roms_directory=game.roms_directory,
+                timeout_seconds=self.config.timeout_seconds,
+                bittorrent_settings=(
+                    self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
+                ),
+                region=selected.region,
+                replacement_game=game,
             )
-            installed_bios = install_bundled_bios(
-                downloads[0].path,
-                game.platform,
-                game.roms_directory,
-            )
-            completed = replace_game(game, downloads[0])
-        except DownloadCancelled:
-            LOGGER.info("Game update cancelled title=%r", game.title)
-            self._draw_message(
-                self._t("update_cancelled"),
-                self._t("installed_game_unchanged"),
-                3,
-            )
-            return False
-        except (StoreError, DownloadError, LibraryError, OrganizeError) as error:
-            LOGGER.error("Game update failed title=%r: %s", game.title, error)
+        except (StoreError, DownloadError) as error:
+            LOGGER.error("Could not queue game update title=%r: %s", game.title, error)
             self._operation_error(error)
             return False
-        self.refresh_on_exit = True
-        retrobios_installed = self._bios_followup(
-            game.platform,
-            game.roms_directory,
-            selected.region,
-        )
-        LOGGER.info("Game updated title=%r path=%s", game.title, completed.path)
+        LOGGER.info("Game update queued id=%s title=%r", job.job_id, game.title)
         self._draw_message(
-            self._t("game_updated"),
+            self._t("update_queued"),
             self._t(
-                "game_updated_message",
-                filename=completed.path.name,
-                destination=game.roms_directory,
-                bundled=(
-                    "\n" + self._t("installed_bundled_bios", count=len(installed_bios))
-                    if installed_bios
-                    else ""
-                ),
-                required=(
-                    "\n" + self._t("installed_required_bios", count=retrobios_installed)
-                    if retrobios_installed
-                    else ""
-                ),
+                "update_queued_message",
+                title=selected.title,
+                store=store.display_name,
             ),
             4,
             wait=True,
         )
-        return True
+        return False
 
     def _choose_roms_directory(self) -> Path | None:
         return self._choose_from_roots(
@@ -845,6 +1022,11 @@ class DownloaderTui:
                 self._t("update_compatibility", status=compatibility_status),
                 self._t("cache_lifetime", days=self.preferences.catalogue_ttl_days),
                 self._t(
+                    "max_concurrent_downloads",
+                    count=self.preferences.max_concurrent_downloads,
+                ),
+                self._t("rate_limit_retry_settings"),
+                self._t(
                     "log_level",
                     value=self.preferences.log_level or self.config.log_level,
                 ),
@@ -860,6 +1042,8 @@ class DownloaderTui:
                 "retrobios_update",
                 "compatibility_update",
                 "catalogue_ttl",
+                "max_concurrent_downloads",
+                "rate_limit_retry",
                 "log_level",
                 "log_file",
             ]
@@ -893,6 +1077,10 @@ class DownloaderTui:
                 self._update_compatibility_catalogue()
             elif action == "catalogue_ttl":
                 self._configure_catalogue_ttl()
+            elif action == "max_concurrent_downloads":
+                self._configure_max_concurrent_downloads()
+            elif action == "rate_limit_retry":
+                self._rate_limit_retry_settings_screen()
             elif action == "log_level":
                 self._configure_log_level()
             elif action == "log_file":
@@ -977,6 +1165,92 @@ class DownloaderTui:
             self._t("cache_lifetime_saved_message", days=days),
         )
 
+    def _configure_max_concurrent_downloads(self) -> None:
+        raw_value = self._edit_setting(
+            self._t("max_concurrent_downloads_title"),
+            self._t(
+                "max_concurrent_downloads_hint",
+                current=self.preferences.max_concurrent_downloads,
+            ),
+            SettingInputKind.INTEGER,
+        )
+        if raw_value is None:
+            return
+        assert isinstance(raw_value, str)
+        try:
+            count = int(raw_value)
+        except ValueError:
+            self._error(self._t("max_concurrent_downloads_range"))
+            return
+        if not 1 <= count <= 8:
+            self._error(self._t("max_concurrent_downloads_range"))
+            return
+        self._save_runtime_preferences(
+            replace(self.preferences, max_concurrent_downloads=count),
+            self._t("max_concurrent_downloads_saved"),
+            self._t("max_concurrent_downloads_saved_message", count=count),
+        )
+
+    def _rate_limit_retry_settings_screen(self) -> None:
+        while True:
+            settings = self.preferences.rate_limit_retry
+            options = (
+                self._t("rate_limit_retry_base", value=settings.base_seconds),
+                self._t("rate_limit_retry_max", value=settings.max_seconds),
+                self._t("rate_limit_retry_jitter", value=settings.jitter_ratio * 100),
+                self._t("back"),
+            )
+            choice = self._menu(
+                self._t("rate_limit_retry_title"),
+                options,
+                self._t("rate_limit_retry_footer"),
+            )
+            if choice is None or choice == 3:
+                return
+            title_key = (
+                "rate_limit_retry_base_seconds_title",
+                "rate_limit_retry_max_seconds_title",
+                "rate_limit_retry_jitter_ratio_title",
+            )[choice]
+            current = (
+                settings.base_seconds,
+                settings.max_seconds,
+                settings.jitter_ratio * 100,
+            )[choice]
+            raw_value = self._edit_setting(
+                self._t(title_key),
+                str(current),
+                SettingInputKind.FLOAT,
+            )
+            if raw_value is None:
+                continue
+            assert isinstance(raw_value, str)
+            try:
+                value = float(raw_value)
+            except ValueError:
+                self._error(self._t("rate_limit_retry_invalid"))
+                continue
+            try:
+                if choice == 0:
+                    updated_settings = replace(settings, base_seconds=value)
+                elif choice == 1:
+                    updated_settings = replace(settings, max_seconds=value)
+                else:
+                    updated_settings = replace(settings, jitter_ratio=value / 100)
+                if updated_settings.base_seconds > 3600:
+                    raise ValueError
+                if updated_settings.max_seconds > 24 * 60 * 60:
+                    raise ValueError
+            except ValueError:
+                self._error(self._t("rate_limit_retry_invalid"))
+                continue
+            if self._save_runtime_preferences(
+                replace(self.preferences, rate_limit_retry=updated_settings),
+                self._t("rate_limit_retry_saved"),
+                self._t("rate_limit_retry_saved_message"),
+            ):
+                self.download_queue.update_retry_settings(updated_settings)
+
     def _configure_log_level(self) -> None:
         levels = ("DEBUG", "INFO", "WARNING", "ERROR")
         choice = self._menu(
@@ -1005,14 +1279,14 @@ class DownloaderTui:
         self._save_runtime_preferences(
             replace(self.preferences, log_to_file=enabled),
             self._t("file_logging_saved"),
-            self._t("file_logging_enabled" if enabled else "file_logging_disabled"),
+            self._file_logging_message if enabled else self._t("file_logging_disabled"),
         )
 
     def _save_runtime_preferences(
         self,
         preferences: Preferences,
         title: str,
-        message: str,
+        message: str | Callable[[], str],
     ) -> bool:
         try:
             save_preferences(self.preferences_path, preferences)
@@ -1021,7 +1295,8 @@ class DownloaderTui:
             return False
         self.preferences = preferences
         self._apply_runtime_preferences()
-        self._draw_message(title, message, 4, wait=True)
+        rendered_message = message if isinstance(message, str) else message()
+        self._draw_message(title, rendered_message, 4, wait=True)
         return True
 
     def _apply_runtime_preferences(self) -> None:
@@ -1044,7 +1319,17 @@ class DownloaderTui:
         log_file = None
         if self._file_logging_enabled():
             log_file = self.config.log_file or self.config.download_directory / "pocket-harbor.log"
-        configure_logging(log_file, self.preferences.log_level or self.config.log_level)
+        configure_logging_with_fallback(
+            log_file,
+            self.preferences.log_level or self.config.log_level,
+            self.config.download_directory / "pocket-harbor.log" if log_file is not None else None,
+        )
+
+    def _file_logging_message(self) -> str:
+        path = active_log_file()
+        if path is None:
+            return self._t("file_logging_failed")
+        return self._t("file_logging_enabled", path=path)
 
     def _refresh_store_catalogue(self) -> None:
         stores = self.store_catalog.stores

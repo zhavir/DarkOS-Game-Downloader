@@ -308,6 +308,8 @@ def download_torrent_file(
     cancelled: CancelCallback | None = None,
     settings: BitTorrentSettings | None = None,
     selected_path: tuple[str, ...] | None = None,
+    *,
+    resume: bool = False,
 ) -> None:
     """Download one expected file, treating its catalogue position only as a hint."""
 
@@ -339,6 +341,15 @@ def download_torrent_file(
     start_piece = selected.offset // metadata.piece_length
     end_piece = (selected.offset + selected.length - 1) // metadata.piece_length
     piece_indices = tuple(range(start_piece, end_piece + 1))
+    selected_end = selected.offset + selected.length
+
+    def selected_piece_bounds(piece_index: int, piece_size: int) -> tuple[int, int]:
+        piece_start = piece_index * metadata.piece_length
+        piece_end = piece_start + piece_size
+        return (
+            max(selected.offset, piece_start) - piece_start,
+            min(selected_end, piece_end) - piece_start,
+        )
 
     def fetch_piece(piece_index: int) -> tuple[int, bytes]:
         _raise_if_cancelled(cancelled)
@@ -360,33 +371,55 @@ def download_torrent_file(
 
     partial = destination.with_name(destination.name + ".part")
     written = 0
+    remaining_indices = piece_indices
+    if resume and partial.is_file():
+        existing = partial.stat().st_size
+        complete = 0
+        skipped = 0
+        for piece_index in piece_indices:
+            piece_size = min(
+                metadata.piece_length,
+                metadata.total_length - piece_index * metadata.piece_length,
+            )
+            copy_start, copy_end = selected_piece_bounds(piece_index, piece_size)
+            contribution = copy_end - copy_start
+            if complete + contribution > existing:
+                break
+            complete += contribution
+            skipped += 1
+        if complete != existing:
+            with partial.open("r+b") as output:
+                output.truncate(complete)
+        written = complete
+        remaining_indices = piece_indices[skipped:]
+        if progress is not None and written:
+            progress(written, selected.length)
     try:
-        with partial.open("wb") as output:
-            selected_end = selected.offset + selected.length
-            with ThreadPoolExecutor(
-                max_workers=min(4, len(piece_indices)),
+        with (
+            partial.open("ab" if resume and written else "wb") as output,
+            ThreadPoolExecutor(
+                max_workers=min(4, len(remaining_indices)) or 1,
                 thread_name_prefix="torrent-piece",
-            ) as executor:
-                for piece_index, data in executor.map(
-                    fetch_piece,
-                    piece_indices,
-                    buffersize=4,
-                ):
-                    _raise_if_cancelled(cancelled)
-                    piece_start = piece_index * metadata.piece_length
-                    piece_end = piece_start + len(data)
-                    copy_start = max(selected.offset, piece_start) - piece_start
-                    copy_end = min(selected_end, piece_end) - piece_start
-                    block = data[copy_start:copy_end]
-                    output.write(block)
-                    written += len(block)
-                    if progress is not None:
-                        progress(written, selected.length)
+            ) as executor,
+        ):
+            for piece_index, data in executor.map(
+                fetch_piece,
+                remaining_indices,
+                buffersize=4,
+            ):
+                _raise_if_cancelled(cancelled)
+                copy_start, copy_end = selected_piece_bounds(piece_index, len(data))
+                block = data[copy_start:copy_end]
+                output.write(block)
+                written += len(block)
+                if progress is not None:
+                    progress(written, selected.length)
         if written != selected.length:
             raise BitTorrentError("The selected torrent file was truncated.")
         partial.replace(destination)
     except BaseException:
-        partial.unlink(missing_ok=True)
+        if not resume:
+            partial.unlink(missing_ok=True)
         raise
 
 

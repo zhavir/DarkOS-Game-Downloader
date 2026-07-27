@@ -35,11 +35,45 @@ only while the keyboard is open; they do not accidentally submit or cancel the s
 5. Press **X** to search. Empty text is valid and lists the complete catalogue.
 6. Review the compatibility badge and match confidence in the results list, then the source detail
    on the title screen.
-7. Select **Download**, then choose SD1 or SD2 when both are available. Press B/Escape during a
-   download to cancel it and remove the partial file.
+7. Select **Download**, then choose SD1 or SD2 when both are available. The transfer is added to the
+   background queue, so you can immediately search for and queue another game.
 
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
+
+## Background downloads
+
+Open **Downloads** from the main menu to see queued, active, paused, failed, cancelled, and recently
+completed transfers. Each row shows the source store and current byte or percentage progress. Select
+a transfer to pause, resume, retry, or cancel it. Cancelling asks for confirmation and removes its
+partial data; pausing keeps verified data so the transfer can continue later.
+
+By default, up to three games can download concurrently. Each job captures the chosen store,
+download metadata, destination card, and Minerva settings when it is queued. Changing the preferred
+store in Settings therefore affects new searches and downloads only; an existing job continues with
+its original source.
+
+Change the global limit under **Settings → Concurrent downloads**. Values from 1 through 8 are
+accepted; 3 is the default. The new limit applies on the next launch so active jobs are not
+interrupted when the setting changes.
+
+Some stores limit one connection to a single active file. An HTTP 429 response moves that job to
+**Waiting to retry** instead of failing it. Pocket Harbor uses an increasing delay with random
+jitter, shows the next retry in Download details, and keeps other store workers available.
+
+Use **Settings → Rate-limit retry settings** to edit the initial delay, maximum delay, and random
+jitter percentage. Defaults are 15 seconds, 3,600 seconds (one hour), and 20%. Changes affect retry
+delays scheduled after saving; a timer that is already waiting keeps its existing deadline.
+
+Unfinished active jobs are saved under the application's download directory. When Pocket Harbor is
+closed, they stop safely and resume automatically the next time it opens. Explicitly paused jobs stay
+paused until you resume them. HTTP downloads continue from the saved byte when the server supports
+ranges, and Minerva continues after the last completely verified torrent piece.
+
+Completed and cancelled rows remain visible for the current session so you can inspect the result or
+retry. They are removed from the list when Pocket Harbor exits. Failed and paused jobs remain until
+you retry, resume, or cancel them. A completed installation still triggers the normal BIOS check,
+and EmulationStation is refreshed once when you exit the TUI.
 
 ## Store catalogue cache
 
@@ -101,8 +135,9 @@ overall network timeout.
 
 Open **Manage installed games**, choose the memory card and platform, then select the game. **Update
 from remote** searches the configured default store by the installed title and asks which remote
-result should replace it. The old copy remains untouched until the new download completes
-successfully. If the configured store does not support that platform, change it through
+result should replace it. The update joins the same background queue and captures that store, so the
+old copy remains untouched until the new download completes successfully even if the preferred store
+changes afterward. If the configured store does not support that platform, change it through
 **Settings** first.
 
 ## Delete an installed game
@@ -170,4 +205,6 @@ Open **Settings → Application log level** to choose `DEBUG`, `INFO`, `WARNING`
 **Settings → Write logs to file** to turn application file logging on or off. Both changes apply
 immediately and are saved in `.pocket-harbor.json`. When file logging is enabled on a handheld,
 records go to `tools/pocket-harbor/pocket-harbor.log`; for local runs without
-`PH_LOG_FILE`, they go to `pocket-harbor.log` inside the configured download directory.
+`PH_LOG_FILE`, they go to `pocket-harbor.log` inside the configured download directory. The saved
+confirmation shows the absolute active path. If the preferred path cannot be opened, logging falls
+back to `.downloads/pocket-harbor.log` and writes the original path error into that file.

@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from ph.logging_config import configure_logging
+from ph.logging_config import active_log_file, configure_logging, configure_logging_with_fallback
 
 
 def test_logging_can_be_disabled_without_writing_to_the_terminal() -> None:
@@ -32,3 +32,18 @@ def test_logging_failure_falls_back_without_crashing(tmp_path: Path) -> None:
     logger = configure_logging(parent_file / "application.log")
 
     assert isinstance(logger.handlers[0], logging.NullHandler)
+
+
+def test_logging_uses_and_reports_writable_fallback(tmp_path: Path) -> None:
+    parent_file = tmp_path / "not-a-directory"
+    parent_file.write_text("occupied", encoding="utf-8")
+    fallback = tmp_path / "persistent" / "pocket-harbor.log"
+
+    logger = configure_logging_with_fallback(parent_file / "application.log", "DEBUG", fallback)
+    for handler in logger.handlers:
+        handler.flush()
+
+    assert active_log_file(logger) == fallback.resolve()
+    content = fallback.read_text(encoding="utf-8")
+    assert "using fallback=" in content
+    assert "File logging active" in content

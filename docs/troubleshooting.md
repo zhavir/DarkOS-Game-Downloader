@@ -12,6 +12,13 @@ tools/pocket-harbor/pocket-harbor.log
 Application messages include a timestamp, severity, module, and description. The launcher adds
 startup and update-recovery diagnostics to the same file.
 
+When you enable **Settings → Write logs to file**, the confirmation shows the exact active path. If
+the path above is not writable, check the persistent fallback at:
+
+```text
+tools/pocket-harbor/.downloads/pocket-harbor.log
+```
+
 ## No ROM partition is found
 
 The handheld normally exposes `/roms`, `/roms2`, or both. Shut down the device, check that the ROM

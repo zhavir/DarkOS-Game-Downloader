@@ -1,5 +1,6 @@
 import curses
 import locale
+import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from itertools import pairwise
@@ -13,13 +14,13 @@ from ph import tui as tui_module
 from ph.bittorrent import BitTorrentSettings, TorrentFileChoice, TorrentSelectionRequired
 from ph.compatibility import CompatibilityError, CompatibilityInfo, GameCompatibilityClient
 from ph.config import Config
+from ph.download_queue import DownloadJob, DownloadState, RateLimitRetrySettings
 from ph.downloader import DownloadCancelled, DownloadError, DownloadSelectionRequired
 from ph.gamepad import InputAction, LinuxJoystick
 from ph.hardware import DeviceTreeInput, DeviceTreeKey, HardwareProfile
 from ph.i18n import LanguageCode, translate
 from ph.library import LibraryError
 from ph.models import DownloadResult, InstalledGame, MediaDownload, Platform, SearchResult
-from ph.organizer import OrganizeError
 from ph.platforms import platform_catalogue, resolve_platform
 from ph.preferences import Preferences, PreferencesError, load_preferences
 from ph.retrobios import (
@@ -132,6 +133,19 @@ class FakeStore(GameStore):
         return detail_url + "/download"
 
 
+class EmptyDownloadQueue:
+    refresh_required = False
+
+    def jobs(self) -> tuple[DownloadJob, ...]:
+        return ()
+
+    def shutdown(self) -> None:
+        pass
+
+    def mark_refreshed(self) -> None:
+        pass
+
+
 def bare_tui(screen: RecordingScreen | None = None) -> DownloaderTui:
     instance = object.__new__(SilentDownloaderTui)
     instance.screen = screen or RecordingScreen()
@@ -145,7 +159,46 @@ def bare_tui(screen: RecordingScreen | None = None) -> DownloaderTui:
     instance.roms_directories = ()
     instance.platforms = platform_catalogue(instance.config.target)
     instance.retrobios_catalog = None
+    instance.download_queue = EmptyDownloadQueue()  # type: ignore[assignment]
+    instance._handled_completed_jobs = set()
     return instance
+
+
+def queued_job(
+    state: DownloadState,
+    *,
+    error: str | None = None,
+    candidates: tuple[TorrentFileChoice, ...] = (),
+    downloaded: int = 50,
+    total: int | None = 100,
+    bundled_bios: int = 0,
+    is_update: bool = False,
+    retry_attempt: int = 0,
+    retry_at: float | None = None,
+) -> DownloadJob:
+    platform = resolve_platform("GBA")
+    assert platform is not None
+    return DownloadJob(
+        "job-1",
+        "Advance Wars",
+        "vimm",
+        "Vimm",
+        state,
+        "Advance Wars.zip",
+        downloaded,
+        total,
+        error,
+        1.0,
+        Path("roms/gba/Advance Wars.zip") if state is DownloadState.COMPLETED else None,
+        candidates,
+        platform,
+        Path("roms"),
+        "USA",
+        bundled_bios,
+        is_update,
+        retry_attempt,
+        retry_at,
+    )
 
 
 def bios_catalog_fixture() -> RetroBiosCatalog:
@@ -209,6 +262,8 @@ def test_constructor_detects_runtime_and_sets_up_screen(
     )
     mocker.patch.object(tui_module, "detect_hardware_profile", lambda: profile)
     mocker.patch.object(tui_module.LinuxJoystick, "open_first", lambda: joystick)
+    queue = mocker.Mock()
+    queue_factory = mocker.patch.object(tui_module, "DownloadQueue", return_value=queue)
     mocker.patch.object(curses, "has_colors", lambda: False)
     mocker.patch.object(curses, "curs_set", lambda _value: None)
 
@@ -216,6 +271,12 @@ def test_constructor_detects_runtime_and_sets_up_screen(
 
     assert instance.selected_store is store
     assert instance.hardware is profile
+    assert instance.download_queue is queue
+    queue_factory.assert_called_once_with(
+        tmp_path,
+        max_concurrent=3,
+        retry_settings=RateLimitRetrySettings(),
+    )
     assert screen.keypad_value is True and screen.timeout_value == 50
 
 
@@ -252,11 +313,12 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
     closed: list[bool] = []
     instance.gamepad = mocker.Mock(spec=LinuxJoystick)
     instance.gamepad.close.side_effect = lambda: closed.append(True)
-    choices = iter((0, 1, 2, 3, 4, 5, 6, 0, 6, 1))
+    choices = iter((0, 1, 2, 3, 4, 5, 6, 7, 1))
     mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
     actions: list[str] = []
     mocker.patch.object(instance, "_search_flow", new=lambda: actions.append("search"))
     mocker.patch.object(instance, "_direct_download_flow", new=lambda: actions.append("direct"))
+    mocker.patch.object(instance, "_download_queue_screen", new=lambda: actions.append("downloads"))
     mocker.patch.object(instance, "_manage_library_flow", new=lambda: actions.append("manage"))
     mocker.patch.object(instance, "_bios_search_flow", new=lambda: actions.append("bios"))
     mocker.patch.object(instance, "_settings_screen", new=lambda: actions.append("settings"))
@@ -271,7 +333,7 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
 
     instance.run()
 
-    assert actions == ["search", "direct", "manage", "bios", "settings", "status"]
+    assert actions == ["search", "direct", "downloads", "manage", "bios", "settings", "status"]
     assert closed == [True] and refreshed == [True]
 
 
@@ -281,7 +343,7 @@ def test_main_menu_is_retranslated_after_language_changes(
     instance = bare_tui()
     instance.store_catalog = StoreCatalog((FakeStore(),))
     instance.selected_store = FakeStore()
-    choices = iter((4, 6))
+    choices = iter((5, 7))
     menus: list[tuple[str, ...]] = []
 
     def menu(_title: str, options: Sequence[str], _footer: str) -> int:
@@ -450,7 +512,7 @@ def test_catalog_progress_and_results_flow_resolve_all_platform(
     instance._results_flow([result], all_platform, [info], store)
 
     assert downloads[0][1] == gba
-    assert downloads[0][-1] == {"region": "USA"}
+    assert downloads[0][-1] == {"title": "Advance Wars", "region": "USA"}
 
 
 def test_direct_download_flow_handles_store_platform_and_url_choices(
@@ -472,7 +534,11 @@ def test_direct_download_flow_handles_store_platform_and_url_choices(
     instance._direct_download_flow()
     calls: list[tuple[Any, ...]] = []
     mocker.patch.object(instance, "_on_screen_keyboard", new=lambda *_args, **_kwargs: "detail")
-    mocker.patch.object(instance, "_download_detail", new=lambda *args: calls.append(args))
+    mocker.patch.object(
+        instance,
+        "_download_detail",
+        new=lambda *args, **kwargs: calls.append((*args, kwargs)),
+    )
     instance._direct_download_flow()
     assert calls[0][:2] == ("detail", gba)
 
@@ -482,10 +548,8 @@ def test_direct_download_flow_handles_store_platform_and_url_choices(
     [
         (Platform("All", "ALL", "", ""), Path("roms"), None, "no ROM folder"),
         (resolve_platform("GBA"), None, None, "No ROM partition"),
-        (resolve_platform("GBA"), Path("roms"), DownloadCancelled("cancel"), "DOWNLOAD CANCELLED"),
         (resolve_platform("GBA"), Path("roms"), DownloadError("broken"), "broken"),
         (resolve_platform("GBA"), Path("roms"), StoreError("store"), "store"),
-        (resolve_platform("GBA"), Path("roms"), OrganizeError("move"), "move"),
     ],
 )
 def test_download_detail_reports_failures(
@@ -510,15 +574,216 @@ def test_download_detail_reports_failures(
             store, "download_request", new=lambda _url: (_ for _ in ()).throw(exception)
         )
     elif exception is not None:
-        mocker.patch.object(
-            instance, "_download_media", new=lambda *_args: (_ for _ in ()).throw(exception)
-        )
-    else:
-        mocker.patch.object(instance, "_download_media", new=lambda *_args: [])
+        queue = mocker.Mock()
+        queue.enqueue.side_effect = exception
+        instance.download_queue = queue
 
     instance._download_detail("detail", platform, store)
 
     assert expected in " ".join(errors + messages)
+
+
+def test_download_queue_screen_and_job_controls(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    active = queued_job(DownloadState.DOWNLOADING)
+    queue = mocker.Mock()
+    queue.jobs.return_value = (active,)
+    queue.find.return_value = active
+    instance.download_queue = queue
+    choices = iter((0, 4, None))
+    mocker.patch.object(instance, "_menu", side_effect=lambda *_args: next(choices))
+
+    instance._download_queue_screen()
+
+    queue.pause.assert_called_once_with("job-1")
+    assert "50%" in instance._download_job_label(active)
+
+
+def test_download_queue_status_can_be_refreshed(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    active = queued_job(DownloadState.DOWNLOADING)
+    queue = mocker.Mock()
+    queue.jobs.return_value = (active,)
+    instance.download_queue = queue
+    # The extra row after the jobs is the explicit status refresh.
+    mocker.patch.object(instance, "_menu", side_effect=(1, None))
+
+    instance._download_queue_screen()
+
+    assert queue.jobs.call_count == 2
+
+
+def test_failed_torrent_job_can_choose_file_and_retry(mocker: MockerFixture) -> None:
+    candidate = TorrentFileChoice(4, ("renamed.zip",), 1024, 0.9)
+    failed = queued_job(
+        DownloadState.FAILED,
+        error="Torrent changed",
+        candidates=(candidate,),
+    )
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.find.return_value = failed
+    queue.choose_torrent_file.return_value = True
+    instance.download_queue = queue
+    # Five detail rows precede the choose-file action.
+    mocker.patch.object(instance, "_menu", return_value=5)
+    mocker.patch.object(instance, "_choose_queued_torrent_file", return_value=candidate)
+
+    instance._download_job_controls(failed)
+
+    queue.choose_torrent_file.assert_called_once_with("job-1", candidate)
+    queue.retry.assert_called_once_with("job-1")
+
+
+def test_completed_background_download_runs_bios_followup_once(
+    mocker: MockerFixture,
+) -> None:
+    completed = queued_job(DownloadState.COMPLETED)
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.jobs.return_value = (completed,)
+    instance.download_queue = queue
+    bios = mocker.patch.object(instance, "_bios_followup", return_value=1)
+    messages: list[str] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        side_effect=lambda _title, message, *_args, **_kwargs: messages.append(message),
+    )
+
+    instance._handle_download_completions()
+    instance._handle_download_completions()
+
+    bios.assert_called_once_with(completed.platform, completed.roms_directory, "USA")
+    assert "required BIOS" in messages[0]
+
+
+def test_empty_download_queue_and_progress_variants(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    messages: list[str] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        side_effect=lambda title, *_args, **_kwargs: messages.append(title),
+    )
+
+    instance._download_queue_screen()
+
+    assert messages == ["NO DOWNLOADS"]
+    size_only = queued_job(DownloadState.DOWNLOADING, downloaded=2048, total=None)
+    waiting = queued_job(DownloadState.QUEUED, downloaded=0, total=None)
+    assert "2.0 KiB" in instance._download_job_label(size_only)
+    assert "waiting" in instance._download_job_label(waiting)
+    assert instance._download_progress_detail(size_only) == "2.0 KiB"
+    assert instance._download_progress_detail(waiting) == "waiting"
+
+
+@pytest.mark.parametrize(
+    ("state", "choice", "method"),
+    [
+        (DownloadState.PAUSED, 4, "resume"),
+        (DownloadState.FAILED, 5, "retry"),
+        (DownloadState.CANCELLED, 4, "retry"),
+    ],
+)
+def test_download_job_state_actions(
+    state: DownloadState,
+    choice: int,
+    method: str,
+    mocker: MockerFixture,
+) -> None:
+    job = queued_job(state, error="failed" if state is DownloadState.FAILED else None)
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.find.return_value = job
+    instance.download_queue = queue
+    mocker.patch.object(instance, "_menu", return_value=choice)
+
+    instance._download_job_controls(job)
+
+    getattr(queue, method).assert_called_once_with("job-1")
+
+
+def test_rate_limited_download_shows_retry_details_and_can_be_paused(
+    mocker: MockerFixture,
+) -> None:
+    job = queued_job(
+        DownloadState.RATE_LIMITED,
+        error="HTTP 429 Too Many Requests",
+        retry_attempt=2,
+        retry_at=time.time() + 30,
+    )
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.find.return_value = job
+    instance.download_queue = queue
+    shown_options: list[str] = []
+
+    def menu(_title: str, options: list[str], *_args: object) -> int:
+        shown_options.extend(options)
+        return 6
+
+    mocker.patch.object(instance, "_menu", new=menu)
+
+    instance._download_job_controls(job)
+
+    assert any("Automatic retry 2" in option for option in shown_options)
+    queue.pause.assert_called_once_with("job-1")
+
+
+def test_download_job_cancel_confirmation_and_missing_snapshot(
+    mocker: MockerFixture,
+) -> None:
+    job = queued_job(DownloadState.DOWNLOADING)
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.find.return_value = None
+    instance.download_queue = queue
+    instance._download_job_controls(job)
+    queue.cancel.assert_not_called()
+
+    queue.find.return_value = job
+    # Four detail rows, then pause and cancel.
+    mocker.patch.object(instance, "_menu", side_effect=(5, 0, 5, 1))
+    instance._download_job_controls(job)
+    queue.cancel.assert_not_called()
+    instance._download_job_controls(job)
+    queue.cancel.assert_called_once_with("job-1")
+
+
+def test_queued_torrent_choice_can_be_cancelled(mocker: MockerFixture) -> None:
+    candidate = TorrentFileChoice(1, ("game.zip",), 100, 1.0)
+    job = queued_job(DownloadState.FAILED, candidates=(candidate,))
+    instance = bare_tui()
+    mocker.patch.object(instance, "_menu", return_value=None)
+
+    assert instance._choose_queued_torrent_file(job) is None
+
+
+def test_completed_background_update_uses_update_message_and_bundled_bios(
+    mocker: MockerFixture,
+) -> None:
+    completed = queued_job(
+        DownloadState.COMPLETED,
+        bundled_bios=2,
+        is_update=True,
+    )
+    instance = bare_tui()
+    queue = mocker.Mock()
+    queue.jobs.return_value = (completed,)
+    instance.download_queue = queue
+    mocker.patch.object(instance, "_bios_followup", return_value=0)
+    messages: list[tuple[str, str]] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        side_effect=lambda title, message, *_args, **_kwargs: messages.append((title, message)),
+    )
+
+    instance._handle_download_completions()
+
+    assert messages[0][0] == "GAME UPDATED"
+    assert "bundled BIOS" in messages[0][1]
 
 
 def test_library_management_flows(tmp_path: Path, mocker: MockerFixture) -> None:
@@ -642,31 +907,26 @@ def test_update_game_covers_selection_cancel_errors_and_success(
 
     choices = iter((0, 1))
     mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
-    mocker.patch.object(
-        instance,
-        "_download_media",
-        new=lambda *_args: (_ for _ in ()).throw(DownloadCancelled("cancel")),
-    )
+    queue = mocker.Mock()
+    queue.enqueue.side_effect = DownloadError("broken")
+    instance.download_queue = queue
     assert instance._update_game(game) is False
+
     choices = iter((0, 1))
     mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    queue.enqueue.side_effect = None
+    queue.enqueue.return_value = mocker.Mock(job_id="update-job")
+    messages: list[str] = []
     mocker.patch.object(
         instance,
-        "_download_media",
-        new=lambda *_args: (_ for _ in ()).throw(DownloadError("broken")),
+        "_draw_message",
+        side_effect=lambda title, *_args, **_kwargs: messages.append(title),
     )
     assert instance._update_game(game) is False
 
-    downloaded = DownloadResult("file", tmp_path / "new.zip")
-    completed = DownloadResult("file", tmp_path / "gba" / "new.zip")
-    choices = iter((0, 1))
-    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
-    mocker.patch.object(instance, "_download_media", new=lambda *_args: [downloaded])
-    mocker.patch.object(tui_module, "install_bundled_bios", lambda *_args: (tmp_path / "bios.bin",))
-    mocker.patch.object(tui_module, "replace_game", lambda *_args: completed)
-    mocker.patch.object(instance, "_bios_followup", new=lambda *_args: 0)
-    assert instance._update_game(game) is True
-    assert instance.refresh_on_exit is True
+    assert queue.enqueue.call_args.kwargs["replacement_game"] is game
+    assert queue.enqueue.call_args.kwargs["store_id"] == "fake"
+    assert messages[-1] == "UPDATE QUEUED"
 
 
 def test_store_and_root_choices_and_configuration(
@@ -751,6 +1011,16 @@ def test_settings_and_minerva_settings_actions(
     )
     mocker.patch.object(
         instance,
+        "_configure_max_concurrent_downloads",
+        new=lambda: actions.append("concurrency"),
+    )
+    mocker.patch.object(
+        instance,
+        "_rate_limit_retry_settings_screen",
+        new=lambda: actions.append("rate_limit_retry"),
+    )
+    mocker.patch.object(
+        instance,
         "_configure_log_level",
         new=lambda: actions.append("log_level"),
     )
@@ -759,8 +1029,8 @@ def test_settings_and_minerva_settings_actions(
         "_configure_file_logging",
         new=lambda: actions.append("log_file"),
     )
-    for choice in (None, *range(11)):
-        menu_choices = iter((choice,) if choice in (None, 10) else (choice, None))
+    for choice in (None, *range(13)):
+        menu_choices = iter((choice,) if choice in (None, 12) else (choice, None))
         mocker.patch.object(
             instance,
             "_menu",
@@ -774,6 +1044,8 @@ def test_settings_and_minerva_settings_actions(
         "retrobios",
         "compatibility",
         "ttl",
+        "concurrency",
+        "rate_limit_retry",
         "log_level",
         "log_file",
         "minerva",
@@ -803,7 +1075,7 @@ def test_settings_submenu_back_returns_to_settings_before_main_menu(
 ) -> None:
     instance = bare_tui()
     instance.selected_store = FakeStore()
-    choices = iter((6, None))
+    choices = iter((8, None))
     titles: list[str] = []
 
     def menu(title: str, *_args: object) -> int | None:
@@ -850,7 +1122,7 @@ def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
     store = FakeStore()
     instance.store_catalog = StoreCatalog((store,))
     set_store_ttl = mocker.patch.object(store, "set_catalogue_ttl")
-    configure_logging = mocker.patch.object(tui_module, "configure_logging")
+    configure_logging = mocker.patch.object(tui_module, "configure_logging_with_fallback")
 
     mocker.patch.object(instance, "_on_screen_keyboard", return_value="14")
     instance._configure_catalogue_ttl()
@@ -866,22 +1138,92 @@ def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
     mocker.patch.object(instance, "_menu", return_value=0)
     instance._configure_log_level()
     assert instance.preferences.log_level == "DEBUG"
-    configure_logging.assert_called_with(None, "DEBUG")
+    configure_logging.assert_called_with(None, "DEBUG", None)
 
     mocker.patch.object(instance, "_menu", return_value=1)
     instance._configure_file_logging()
     assert instance.preferences.log_to_file is True
-    configure_logging.assert_called_with(tmp_path / "pocket-harbor.log", "DEBUG")
+    configure_logging.assert_called_with(
+        tmp_path / "pocket-harbor.log",
+        "DEBUG",
+        tmp_path / "pocket-harbor.log",
+    )
     assert load_preferences(instance.preferences_path).log_to_file is True
 
     mocker.patch.object(instance, "_menu", return_value=0)
     instance._configure_file_logging()
     assert instance.preferences.log_to_file is False
-    configure_logging.assert_called_with(None, "DEBUG")
+    configure_logging.assert_called_with(None, "DEBUG", None)
 
     mocker.patch.object(instance, "_menu", return_value=None)
     instance._configure_log_level()
     instance._configure_file_logging()
+
+
+def test_concurrent_download_setting_validates_and_saves_for_next_launch(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    save = mocker.patch.object(instance, "_save_runtime_preferences", return_value=True)
+    editor = mocker.patch.object(instance, "_edit_setting", return_value="5")
+
+    instance._configure_max_concurrent_downloads()
+
+    assert save.call_args.args[0].max_concurrent_downloads == 5
+    assert "restarted" in save.call_args.args[2]
+
+    errors: list[str] = []
+    mocker.patch.object(instance, "_error", new=errors.append)
+    editor.side_effect = ("0", "many", None)
+    instance._configure_max_concurrent_downloads()
+    instance._configure_max_concurrent_downloads()
+    instance._configure_max_concurrent_downloads()
+    assert len(errors) == 2
+
+
+def test_rate_limit_retry_settings_validate_save_and_update_queue(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    queue = mocker.Mock()
+    instance.download_queue = queue
+    save = mocker.patch.object(instance, "_save_runtime_preferences", return_value=True)
+    choices = iter((0, 3))
+    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    mocker.patch.object(instance, "_edit_setting", return_value="30")
+
+    instance._rate_limit_retry_settings_screen()
+
+    settings = save.call_args.args[0].rate_limit_retry
+    assert settings == RateLimitRetrySettings(30, 3600, 0.2)
+    queue.update_retry_settings.assert_called_once_with(settings)
+
+    errors: list[str] = []
+    instance.download_queue = mocker.Mock()
+    mocker.patch.object(instance, "_error", new=errors.append)
+    choices = iter((2, 1, 0, 3))
+    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    editor = mocker.patch.object(
+        instance,
+        "_edit_setting",
+        side_effect=("150", "10", "many"),
+    )
+    instance._rate_limit_retry_settings_screen()
+    assert editor.call_count == 3
+    assert len(errors) == 3
+
+
+def test_file_logging_confirmation_reports_active_path_or_write_failure(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    active = mocker.patch.object(tui_module, "active_log_file", return_value=None)
+
+    assert "could not be enabled" in instance._file_logging_message()
+
+    active.return_value = tmp_path / "pocket-harbor.log"
+    assert str(tmp_path / "pocket-harbor.log") in instance._file_logging_message()
 
 
 def test_runtime_settings_reject_invalid_cache_days_and_handle_save_errors(

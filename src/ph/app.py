@@ -15,7 +15,7 @@ from ph.compatibility import filter_supported_results
 from ph.config import Config
 from ph.downloader import DownloadError, download_files
 from ph.frontend import request_game_frontend_refresh
-from ph.logging_config import configure_logging
+from ph.logging_config import configure_logging_with_fallback
 from ph.models import SearchResult
 from ph.organizer import OrganizeError, detect_roms_directory, install_downloads
 from ph.platforms import platform_catalogue, resolve_platform
@@ -97,7 +97,11 @@ def main(
     log_file = (
         config.log_file or config.download_directory / "pocket-harbor.log" if log_to_file else None
     )
-    configure_logging(log_file, preferences.log_level or config.log_level)
+    configure_logging_with_fallback(
+        log_file,
+        preferences.log_level or config.log_level,
+        config.download_directory / "pocket-harbor.log" if log_to_file else None,
+    )
     LOGGER.info("Starting Pocket Harbor command=%s", arguments.command or "tui")
     LOGGER.debug(
         "Runtime configuration target=%s stores=%s download_directory=%s "

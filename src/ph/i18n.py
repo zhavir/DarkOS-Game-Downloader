@@ -29,6 +29,7 @@ _ENGLISH: dict[str, str] = {
     "app_title": "POCKET HARBOR",
     "search_library": "Search the library",
     "direct_download": "Download from a detail link",
+    "download_queue": "Downloads",
     "manage_games": "Manage installed games",
     "search_bios": "Search and download BIOS",
     "settings": "Settings",
@@ -75,6 +76,29 @@ _ENGLISH: dict[str, str] = {
     "update_bios_catalogue": "Update RetroBIOS catalogue  [{status}]",
     "update_compatibility": "Update compatibility catalogue  [{status}]",
     "cache_lifetime": "Catalogue cache lifetime  [{days} days]",
+    "max_concurrent_downloads": "Concurrent downloads  [{count}]",
+    "max_concurrent_downloads_title": "MAXIMUM CONCURRENT DOWNLOADS",
+    "max_concurrent_downloads_hint": "Current value: {current}; allowed range: 1-8",
+    "max_concurrent_downloads_range": "Enter a whole number from 1 to 8.",
+    "max_concurrent_downloads_saved": "DOWNLOAD LIMIT SAVED",
+    "max_concurrent_downloads_saved_message": (
+        "Up to {count} downloads will run at once after Pocket Harbor is restarted."
+    ),
+    "rate_limit_retry_settings": "Rate-limit retry settings",
+    "rate_limit_retry_title": "RATE-LIMIT RETRY SETTINGS",
+    "rate_limit_retry_footer": "Changes apply to retry delays scheduled from now on",
+    "rate_limit_retry_base": "Initial delay  [{value:g} seconds]",
+    "rate_limit_retry_max": "Maximum delay  [{value:g} seconds]",
+    "rate_limit_retry_jitter": "Random jitter  [{value:g}%]",
+    "rate_limit_retry_base_seconds_title": "INITIAL RETRY DELAY (SECONDS)",
+    "rate_limit_retry_max_seconds_title": "MAXIMUM RETRY DELAY (SECONDS)",
+    "rate_limit_retry_jitter_ratio_title": "RETRY JITTER (PERCENT)",
+    "rate_limit_retry_invalid": (
+        "Use 1-3600 seconds initially, up to 86400 seconds maximum, and 0-100% jitter. "
+        "The maximum must not be shorter than the initial delay."
+    ),
+    "rate_limit_retry_saved": "RETRY SETTINGS SAVED",
+    "rate_limit_retry_saved_message": "New rate-limit retries will use these values.",
     "log_level": "Application log level  [{value}]",
     "file_logging": "Write logs to file  [{value}]",
     "minerva_settings": "Minerva BitTorrent settings",
@@ -94,7 +118,10 @@ _ENGLISH: dict[str, str] = {
     "file_logging_title": "WRITE LOGS TO FILE?",
     "file_logging_footer": "Changes apply immediately and are saved for the next launch",
     "file_logging_saved": "FILE LOGGING SAVED",
-    "file_logging_enabled": "File logging is enabled.",
+    "file_logging_enabled": "File logging is enabled at:\n{path}",
+    "file_logging_failed": (
+        "File logging could not be enabled. Check write access to the tool folder."
+    ),
     "file_logging_disabled": "File logging is disabled.",
     "integer_keyboard": "Numbers only",
     "float_keyboard": "Numbers and decimal point only",
@@ -136,6 +163,7 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "app_title": "POCKET HARBOR",
         "search_library": "Spielebibliothek durchsuchen",
         "direct_download": "Über einen Detaillink herunterladen",
+        "download_queue": "Downloads",
         "manage_games": "Installierte Spiele verwalten",
         "search_bios": "BIOS suchen und herunterladen",
         "settings": "Einstellungen",
@@ -184,6 +212,29 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "update_bios_catalogue": "RetroBIOS-Katalog aktualisieren  [{status}]",
         "update_compatibility": "Kompatibilitätskatalog aktualisieren  [{status}]",
         "cache_lifetime": "Katalog-Cache-Dauer  [{days} Tage]",
+        "max_concurrent_downloads": "Gleichzeitige Downloads  [{count}]",
+        "max_concurrent_downloads_title": "MAXIMALE GLEICHZEITIGE DOWNLOADS",
+        "max_concurrent_downloads_hint": "Aktueller Wert: {current}; erlaubter Bereich: 1-8",
+        "max_concurrent_downloads_range": "Geben Sie eine ganze Zahl von 1 bis 8 ein.",
+        "max_concurrent_downloads_saved": "DOWNLOAD-LIMIT GESPEICHERT",
+        "max_concurrent_downloads_saved_message": (
+            "Nach dem Neustart laufen bis zu {count} Downloads gleichzeitig."
+        ),
+        "rate_limit_retry_settings": "Einstellungen für Rate-Limit-Wiederholungen",
+        "rate_limit_retry_title": "RATE-LIMIT-WIEDERHOLUNGEN",
+        "rate_limit_retry_footer": "Änderungen gelten für neu geplante Versuche",
+        "rate_limit_retry_base": "Anfangsverzögerung  [{value:g} Sekunden]",
+        "rate_limit_retry_max": "Maximale Verzögerung  [{value:g} Sekunden]",
+        "rate_limit_retry_jitter": "Zufällige Streuung  [{value:g}%]",
+        "rate_limit_retry_base_seconds_title": "ANFANGSVERZÖGERUNG (SEKUNDEN)",
+        "rate_limit_retry_max_seconds_title": "MAXIMALE VERZÖGERUNG (SEKUNDEN)",
+        "rate_limit_retry_jitter_ratio_title": "ZUFÄLLIGE STREUUNG (PROZENT)",
+        "rate_limit_retry_invalid": (
+            "Anfang 1-3600 Sekunden, Maximum bis 86400 Sekunden und Streuung 0-100%. "
+            "Das Maximum darf nicht kürzer als der Anfang sein."
+        ),
+        "rate_limit_retry_saved": "WIEDERHOLUNGSEINSTELLUNGEN GESPEICHERT",
+        "rate_limit_retry_saved_message": "Neue Rate-Limit-Versuche verwenden diese Werte.",
         "log_level": "Protokollstufe  [{value}]",
         "file_logging": "In Datei protokollieren  [{value}]",
         "minerva_settings": "Minerva-BitTorrent-Einstellungen",
@@ -203,7 +254,10 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "file_logging_title": "PROTOKOLL IN DATEI SCHREIBEN?",
         "file_logging_footer": "Die Änderung gilt sofort und wird gespeichert",
         "file_logging_saved": "DATEIPROTOKOLL GESPEICHERT",
-        "file_logging_enabled": "Dateiprotokollierung ist aktiviert.",
+        "file_logging_enabled": "Dateiprotokollierung ist hier aktiviert:\n{path}",
+        "file_logging_failed": (
+            "Das Dateiprotokoll konnte nicht aktiviert werden. Prüfen Sie die Schreibrechte."
+        ),
         "file_logging_disabled": "Dateiprotokollierung ist deaktiviert.",
         "integer_keyboard": "Nur Zahlen",
         "float_keyboard": "Nur Zahlen und Dezimalpunkt",
@@ -249,6 +303,7 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "app_title": "POCKET HARBOR",
         "search_library": "Buscar en la biblioteca",
         "direct_download": "Descargar desde un enlace",
+        "download_queue": "Descargas",
         "manage_games": "Gestionar juegos instalados",
         "search_bios": "Buscar y descargar BIOS",
         "settings": "Ajustes",
@@ -297,6 +352,29 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "update_bios_catalogue": "Actualizar catálogo RetroBIOS  [{status}]",
         "update_compatibility": "Actualizar catálogo de compatibilidad  [{status}]",
         "cache_lifetime": "Duración de caché  [{days} días]",
+        "max_concurrent_downloads": "Descargas simultáneas  [{count}]",
+        "max_concurrent_downloads_title": "MÁXIMO DE DESCARGAS SIMULTÁNEAS",
+        "max_concurrent_downloads_hint": "Valor actual: {current}; intervalo permitido: 1-8",
+        "max_concurrent_downloads_range": "Introduce un número entero del 1 al 8.",
+        "max_concurrent_downloads_saved": "LÍMITE DE DESCARGAS GUARDADO",
+        "max_concurrent_downloads_saved_message": (
+            "Tras reiniciar, se ejecutarán hasta {count} descargas simultáneas."
+        ),
+        "rate_limit_retry_settings": "Ajustes de reintento por límite",
+        "rate_limit_retry_title": "REINTENTOS POR LÍMITE",
+        "rate_limit_retry_footer": "Los cambios se aplican a los nuevos reintentos",
+        "rate_limit_retry_base": "Espera inicial  [{value:g} segundos]",
+        "rate_limit_retry_max": "Espera máxima  [{value:g} segundos]",
+        "rate_limit_retry_jitter": "Variación aleatoria  [{value:g}%]",
+        "rate_limit_retry_base_seconds_title": "ESPERA INICIAL (SEGUNDOS)",
+        "rate_limit_retry_max_seconds_title": "ESPERA MÁXIMA (SEGUNDOS)",
+        "rate_limit_retry_jitter_ratio_title": "VARIACIÓN ALEATORIA (PORCENTAJE)",
+        "rate_limit_retry_invalid": (
+            "Usa 1-3600 segundos al inicio, hasta 86400 segundos como máximo y 0-100% de "
+            "variación. El máximo no puede ser menor que el inicial."
+        ),
+        "rate_limit_retry_saved": "AJUSTES DE REINTENTO GUARDADOS",
+        "rate_limit_retry_saved_message": "Los nuevos reintentos usarán estos valores.",
         "log_level": "Nivel de registro  [{value}]",
         "file_logging": "Guardar registro en archivo  [{value}]",
         "minerva_settings": "Ajustes BitTorrent de Minerva",
@@ -316,7 +394,10 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "file_logging_title": "¿GUARDAR REGISTRO EN ARCHIVO?",
         "file_logging_footer": "El cambio se aplica ahora y se guarda",
         "file_logging_saved": "REGISTRO GUARDADO",
-        "file_logging_enabled": "El registro en archivo está activado.",
+        "file_logging_enabled": "El registro está activado en:\n{path}",
+        "file_logging_failed": (
+            "No se pudo activar el registro. Comprueba los permisos de escritura."
+        ),
         "file_logging_disabled": "El registro en archivo está desactivado.",
         "integer_keyboard": "Solo números",
         "float_keyboard": "Solo números y punto decimal",
@@ -359,6 +440,7 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "app_title": "POCKET HARBOR",
         "search_library": "Cerca nella libreria",
         "direct_download": "Scarica da un link",
+        "download_queue": "Download",
         "manage_games": "Gestisci i giochi installati",
         "search_bios": "Cerca e scarica BIOS",
         "settings": "Impostazioni",
@@ -405,6 +487,29 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "update_bios_catalogue": "Aggiorna catalogo RetroBIOS  [{status}]",
         "update_compatibility": "Aggiorna catalogo compatibilità  [{status}]",
         "cache_lifetime": "Durata cache cataloghi  [{days} giorni]",
+        "max_concurrent_downloads": "Download simultanei  [{count}]",
+        "max_concurrent_downloads_title": "NUMERO MASSIMO DI DOWNLOAD SIMULTANEI",
+        "max_concurrent_downloads_hint": "Valore attuale: {current}; intervallo consentito: 1-8",
+        "max_concurrent_downloads_range": "Inserisci un numero intero da 1 a 8.",
+        "max_concurrent_downloads_saved": "LIMITE DOWNLOAD SALVATO",
+        "max_concurrent_downloads_saved_message": (
+            "Dopo il riavvio verranno eseguiti fino a {count} download simultanei."
+        ),
+        "rate_limit_retry_settings": "Impostazioni tentativi per limite",
+        "rate_limit_retry_title": "TENTATIVI PER LIMITE",
+        "rate_limit_retry_footer": "Le modifiche valgono per i nuovi tentativi",
+        "rate_limit_retry_base": "Ritardo iniziale  [{value:g} secondi]",
+        "rate_limit_retry_max": "Ritardo massimo  [{value:g} secondi]",
+        "rate_limit_retry_jitter": "Variazione casuale  [{value:g}%]",
+        "rate_limit_retry_base_seconds_title": "RITARDO INIZIALE (SECONDI)",
+        "rate_limit_retry_max_seconds_title": "RITARDO MASSIMO (SECONDI)",
+        "rate_limit_retry_jitter_ratio_title": "VARIAZIONE CASUALE (PERCENTUALE)",
+        "rate_limit_retry_invalid": (
+            "Usa 1-3600 secondi iniziali, fino a 86400 secondi massimi e 0-100% di "
+            "variazione. Il massimo non può essere inferiore al valore iniziale."
+        ),
+        "rate_limit_retry_saved": "IMPOSTAZIONI TENTATIVI SALVATE",
+        "rate_limit_retry_saved_message": "I nuovi tentativi useranno questi valori.",
         "log_level": "Livello log  [{value}]",
         "file_logging": "Scrivi log su file  [{value}]",
         "minerva_settings": "Impostazioni BitTorrent Minerva",
@@ -424,7 +529,10 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "file_logging_title": "SCRIVERE I LOG SU FILE?",
         "file_logging_footer": "La modifica è immediata e viene salvata",
         "file_logging_saved": "LOG SU FILE SALVATO",
-        "file_logging_enabled": "Il log su file è attivo.",
+        "file_logging_enabled": "Il log su file è attivo in:\n{path}",
+        "file_logging_failed": (
+            "Impossibile attivare il log su file. Controlla i permessi di scrittura."
+        ),
         "file_logging_disabled": "Il log su file è disattivato.",
         "integer_keyboard": "Solo numeri",
         "float_keyboard": "Solo numeri e punto decimale",
@@ -465,6 +573,7 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "app_title": "POCKET HARBOR",
         "search_library": "Pesquisar na biblioteca",
         "direct_download": "Transferir a partir de uma ligação",
+        "download_queue": "Transferências",
         "manage_games": "Gerir jogos instalados",
         "search_bios": "Pesquisar e transferir BIOS",
         "settings": "Definições",
@@ -511,6 +620,29 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "update_bios_catalogue": "Atualizar catálogo RetroBIOS  [{status}]",
         "update_compatibility": "Atualizar catálogo de compatibilidade  [{status}]",
         "cache_lifetime": "Duração da cache  [{days} dias]",
+        "max_concurrent_downloads": "Transferências simultâneas  [{count}]",
+        "max_concurrent_downloads_title": "MÁXIMO DE TRANSFERÊNCIAS SIMULTÂNEAS",
+        "max_concurrent_downloads_hint": "Valor atual: {current}; intervalo permitido: 1-8",
+        "max_concurrent_downloads_range": "Introduza um número inteiro de 1 a 8.",
+        "max_concurrent_downloads_saved": "LIMITE DE TRANSFERÊNCIAS GUARDADO",
+        "max_concurrent_downloads_saved_message": (
+            "Após reiniciar, serão executadas até {count} transferências simultâneas."
+        ),
+        "rate_limit_retry_settings": "Definições de repetição por limite",
+        "rate_limit_retry_title": "REPETIÇÕES POR LIMITE",
+        "rate_limit_retry_footer": "As alterações aplicam-se a novas tentativas",
+        "rate_limit_retry_base": "Espera inicial  [{value:g} segundos]",
+        "rate_limit_retry_max": "Espera máxima  [{value:g} segundos]",
+        "rate_limit_retry_jitter": "Variação aleatória  [{value:g}%]",
+        "rate_limit_retry_base_seconds_title": "ESPERA INICIAL (SEGUNDOS)",
+        "rate_limit_retry_max_seconds_title": "ESPERA MÁXIMA (SEGUNDOS)",
+        "rate_limit_retry_jitter_ratio_title": "VARIAÇÃO ALEATÓRIA (PERCENTAGEM)",
+        "rate_limit_retry_invalid": (
+            "Use 1-3600 segundos inicialmente, até 86400 segundos no máximo e 0-100% de "
+            "variação. O máximo não pode ser inferior ao valor inicial."
+        ),
+        "rate_limit_retry_saved": "DEFINIÇÕES DE REPETIÇÃO GUARDADAS",
+        "rate_limit_retry_saved_message": "As novas tentativas usarão estes valores.",
         "log_level": "Nível de registo  [{value}]",
         "file_logging": "Guardar registo em ficheiro  [{value}]",
         "minerva_settings": "Definições BitTorrent do Minerva",
@@ -530,7 +662,10 @@ _TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "file_logging_title": "GUARDAR REGISTO EM FICHEIRO?",
         "file_logging_footer": "A alteração é imediata e fica guardada",
         "file_logging_saved": "REGISTO GUARDADO",
-        "file_logging_enabled": "O registo em ficheiro está ativo.",
+        "file_logging_enabled": "O registo está ativo em:\n{path}",
+        "file_logging_failed": (
+            "Não foi possível ativar o registo. Verifique as permissões de escrita."
+        ),
         "file_logging_disabled": "O registo em ficheiro está desativado.",
         "integer_keyboard": "Apenas números",
         "float_keyboard": "Apenas números e ponto decimal",
@@ -596,6 +731,42 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "compatibility_listed": "{level} - listed",
         "destination_platform": "DESTINATION PLATFORM",
         "destination_platform_footer": "The completed file is moved into this ROM folder",
+        "download_queued": "DOWNLOAD QUEUED",
+        "download_queued_message": (
+            "{title}\nDownloading from {store} in the background. "
+            "Open Downloads to monitor or control it."
+        ),
+        "download_queue_empty": "NO DOWNLOADS",
+        "download_queue_empty_message": "There are no active or recently completed downloads.",
+        "download_queue_title": "DOWNLOADS",
+        "download_queue_footer": "Select a download to pause, resume, retry, or cancel",
+        "refresh_download_status": "Refresh download status",
+        "download_state_queued": "Queued",
+        "download_state_downloading": "Downloading",
+        "download_state_rate_limited": "Waiting to retry",
+        "download_state_paused": "Paused",
+        "download_state_failed": "Failed",
+        "download_state_cancelled": "Cancelled",
+        "download_state_completed": "Completed",
+        "download_progress_percent": "{percent}%",
+        "download_progress_size": "{size}",
+        "download_progress_waiting": "waiting",
+        "download_job_row": "{title}  [{state} - {progress}]  {store}",
+        "download_store_field": "Store: {value}",
+        "download_status_field": "Status: {value}",
+        "download_progress_field": "Progress: {value}",
+        "download_error_field": "Error: {value}",
+        "download_retry_field": "Automatic retry {attempt} in about {seconds}s",
+        "pause_download": "Pause download",
+        "resume_download": "Resume download",
+        "retry_download": "Retry download",
+        "download_details_title": "DOWNLOAD DETAILS",
+        "download_controls_footer": "Background downloads keep their original store",
+        "download_progress_bytes": "{current} of {total}",
+        "confirm_download_cancel": "CANCEL DOWNLOAD?",
+        "keep_downloading": "No - keep downloading {title}",
+        "cancel_and_remove_partial": "Yes - cancel and remove partial data",
+        "cancel_download_warning": "Cancelled partial data cannot be resumed",
         "detail_url": "DETAIL URL",
         "platform_has_no_rom_folder": (
             "This platform has no ROM folder on the selected operating system."
@@ -657,6 +828,11 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "replace_with": "Replace with {title}",
         "confirm_choice_footer": "A/Enter: confirm choice",
         "update_cancelled": "UPDATE CANCELLED",
+        "update_queued": "UPDATE QUEUED",
+        "update_queued_message": (
+            "{title}\nThe replacement from {store} is downloading in the background. "
+            "The installed game stays unchanged until it completes."
+        ),
         "installed_game_unchanged": "The installed game was not changed.",
         "game_updated": "GAME UPDATED",
         "game_updated_message": (
@@ -856,6 +1032,44 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "compatibility_listed": "{level} - gelistet",
         "destination_platform": "ZIELPLATTFORM",
         "destination_platform_footer": "Die fertige Datei wird in diesen ROM-Ordner verschoben",
+        "download_queued": "DOWNLOAD EINGEREIHT",
+        "download_queued_message": (
+            "{title}\nWird im Hintergrund von {store} heruntergeladen. "
+            "Unter Downloads können Sie den Vorgang überwachen oder steuern."
+        ),
+        "download_queue_empty": "KEINE DOWNLOADS",
+        "download_queue_empty_message": "Keine aktiven oder kürzlich abgeschlossenen Downloads.",
+        "download_queue_title": "DOWNLOADS",
+        "download_queue_footer": (
+            "Download zum Pausieren, Fortsetzen, Wiederholen oder Abbrechen wählen"
+        ),
+        "refresh_download_status": "Downloadstatus aktualisieren",
+        "download_state_queued": "Eingereiht",
+        "download_state_downloading": "Wird geladen",
+        "download_state_rate_limited": "Wartet auf erneuten Versuch",
+        "download_state_paused": "Pausiert",
+        "download_state_failed": "Fehlgeschlagen",
+        "download_state_cancelled": "Abgebrochen",
+        "download_state_completed": "Abgeschlossen",
+        "download_progress_percent": "{percent}%",
+        "download_progress_size": "{size}",
+        "download_progress_waiting": "wartet",
+        "download_job_row": "{title}  [{state} - {progress}]  {store}",
+        "download_store_field": "Store: {value}",
+        "download_status_field": "Status: {value}",
+        "download_progress_field": "Fortschritt: {value}",
+        "download_error_field": "Fehler: {value}",
+        "download_retry_field": "Automatischer Versuch {attempt} in etwa {seconds}s",
+        "pause_download": "Download pausieren",
+        "resume_download": "Download fortsetzen",
+        "retry_download": "Download wiederholen",
+        "download_details_title": "DOWNLOAD-DETAILS",
+        "download_controls_footer": "Hintergrund-Downloads behalten ihren ursprünglichen Store",
+        "download_progress_bytes": "{current} von {total}",
+        "confirm_download_cancel": "DOWNLOAD ABBRECHEN?",
+        "keep_downloading": "Nein - {title} weiter herunterladen",
+        "cancel_and_remove_partial": "Ja - abbrechen und Teildaten löschen",
+        "cancel_download_warning": "Gelöschte Teildaten können nicht fortgesetzt werden",
         "detail_url": "DETAIL-URL",
         "platform_has_no_rom_folder": (
             "Diese Plattform hat auf dem gewählten Betriebssystem keinen ROM-Ordner."
@@ -922,6 +1136,11 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "replace_with": "Durch {title} ersetzen",
         "confirm_choice_footer": "A/Enter: Auswahl bestätigen",
         "update_cancelled": "UPDATE ABGEBROCHEN",
+        "update_queued": "UPDATE EINGEREIHT",
+        "update_queued_message": (
+            "{title}\nDer Ersatz von {store} wird im Hintergrund geladen. "
+            "Das installierte Spiel bleibt bis zum Abschluss unverändert."
+        ),
         "installed_game_unchanged": "Das installierte Spiel wurde nicht geändert.",
         "game_updated": "SPIEL AKTUALISIERT",
         "game_updated_message": (
@@ -1126,6 +1345,42 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "compatibility_listed": "{level} - incluido",
         "destination_platform": "PLATAFORMA DE DESTINO",
         "destination_platform_footer": "El archivo terminado se mueve a esta carpeta de ROM",
+        "download_queued": "DESCARGA EN COLA",
+        "download_queued_message": (
+            "{title}\nDescargando desde {store} en segundo plano. "
+            "Abre Descargas para supervisarla o controlarla."
+        ),
+        "download_queue_empty": "NO HAY DESCARGAS",
+        "download_queue_empty_message": "No hay descargas activas ni terminadas recientemente.",
+        "download_queue_title": "DESCARGAS",
+        "download_queue_footer": "Elige una descarga para pausar, reanudar, reintentar o cancelar",
+        "refresh_download_status": "Actualizar estado de descargas",
+        "download_state_queued": "En cola",
+        "download_state_downloading": "Descargando",
+        "download_state_rate_limited": "Esperando para reintentar",
+        "download_state_paused": "En pausa",
+        "download_state_failed": "Fallida",
+        "download_state_cancelled": "Cancelada",
+        "download_state_completed": "Completada",
+        "download_progress_percent": "{percent}%",
+        "download_progress_size": "{size}",
+        "download_progress_waiting": "esperando",
+        "download_job_row": "{title}  [{state} - {progress}]  {store}",
+        "download_store_field": "Tienda: {value}",
+        "download_status_field": "Estado: {value}",
+        "download_progress_field": "Progreso: {value}",
+        "download_error_field": "Error: {value}",
+        "download_retry_field": "Reintento automático {attempt} en unos {seconds}s",
+        "pause_download": "Pausar descarga",
+        "resume_download": "Reanudar descarga",
+        "retry_download": "Reintentar descarga",
+        "download_details_title": "DETALLES DE DESCARGA",
+        "download_controls_footer": "Las descargas conservan su tienda original",
+        "download_progress_bytes": "{current} de {total}",
+        "confirm_download_cancel": "¿CANCELAR DESCARGA?",
+        "keep_downloading": "No - seguir descargando {title}",
+        "cancel_and_remove_partial": "Sí - cancelar y borrar datos parciales",
+        "cancel_download_warning": "Los datos parciales borrados no se pueden reanudar",
         "detail_url": "URL DE DETALLES",
         "platform_has_no_rom_folder": (
             "Esta plataforma no tiene una carpeta de ROM en el sistema operativo seleccionado."
@@ -1191,6 +1446,11 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "replace_with": "Sustituir por {title}",
         "confirm_choice_footer": "A/Enter: confirmar opción",
         "update_cancelled": "ACTUALIZACIÓN CANCELADA",
+        "update_queued": "ACTUALIZACIÓN EN COLA",
+        "update_queued_message": (
+            "{title}\nEl reemplazo de {store} se descarga en segundo plano. "
+            "El juego instalado no cambia hasta que termine."
+        ),
         "installed_game_unchanged": "El juego instalado no ha cambiado.",
         "game_updated": "JUEGO ACTUALIZADO",
         "game_updated_message": (
@@ -1393,6 +1653,44 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "compatibility_listed": "{level} - presente",
         "destination_platform": "PIATTAFORMA DI DESTINAZIONE",
         "destination_platform_footer": "Il file completato viene spostato in questa cartella ROM",
+        "download_queued": "DOWNLOAD IN CODA",
+        "download_queued_message": (
+            "{title}\nDownload da {store} in background. "
+            "Apri Download per monitorarlo o controllarlo."
+        ),
+        "download_queue_empty": "NESSUN DOWNLOAD",
+        "download_queue_empty_message": "Non ci sono download attivi o completati di recente.",
+        "download_queue_title": "DOWNLOAD",
+        "download_queue_footer": (
+            "Seleziona un download per sospendere, riprendere, riprovare o annullare"
+        ),
+        "refresh_download_status": "Aggiorna stato download",
+        "download_state_queued": "In coda",
+        "download_state_downloading": "In download",
+        "download_state_rate_limited": "In attesa di riprovare",
+        "download_state_paused": "In pausa",
+        "download_state_failed": "Non riuscito",
+        "download_state_cancelled": "Annullato",
+        "download_state_completed": "Completato",
+        "download_progress_percent": "{percent}%",
+        "download_progress_size": "{size}",
+        "download_progress_waiting": "in attesa",
+        "download_job_row": "{title}  [{state} - {progress}]  {store}",
+        "download_store_field": "Store: {value}",
+        "download_status_field": "Stato: {value}",
+        "download_progress_field": "Progresso: {value}",
+        "download_error_field": "Errore: {value}",
+        "download_retry_field": "Tentativo automatico {attempt} tra circa {seconds}s",
+        "pause_download": "Sospendi download",
+        "resume_download": "Riprendi download",
+        "retry_download": "Riprova download",
+        "download_details_title": "DETTAGLI DOWNLOAD",
+        "download_controls_footer": "I download mantengono lo store originale",
+        "download_progress_bytes": "{current} di {total}",
+        "confirm_download_cancel": "ANNULLARE IL DOWNLOAD?",
+        "keep_downloading": "No - continua a scaricare {title}",
+        "cancel_and_remove_partial": "Sì - annulla e rimuovi i dati parziali",
+        "cancel_download_warning": "I dati parziali rimossi non possono essere ripresi",
         "detail_url": "URL DETTAGLI",
         "platform_has_no_rom_folder": (
             "Questa piattaforma non ha una cartella ROM sul sistema operativo selezionato."
@@ -1456,6 +1754,11 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "replace_with": "Sostituisci con {title}",
         "confirm_choice_footer": "A/Invio: conferma scelta",
         "update_cancelled": "AGGIORNAMENTO ANNULLATO",
+        "update_queued": "AGGIORNAMENTO IN CODA",
+        "update_queued_message": (
+            "{title}\nLa sostituzione da {store} viene scaricata in background. "
+            "Il gioco installato resta invariato fino al completamento."
+        ),
         "installed_game_unchanged": "Il gioco installato non è stato modificato.",
         "game_updated": "GIOCO AGGIORNATO",
         "game_updated_message": (
@@ -1656,6 +1959,42 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "compatibility_listed": "{level} - listado",
         "destination_platform": "PLATAFORMA DE DESTINO",
         "destination_platform_footer": "O ficheiro concluído é movido para esta pasta de ROM",
+        "download_queued": "TRANSFERÊNCIA EM FILA",
+        "download_queued_message": (
+            "{title}\nA transferir de {store} em segundo plano. "
+            "Abra Transferências para acompanhar ou controlar."
+        ),
+        "download_queue_empty": "SEM TRANSFERÊNCIAS",
+        "download_queue_empty_message": "Não há transferências ativas ou concluídas recentemente.",
+        "download_queue_title": "TRANSFERÊNCIAS",
+        "download_queue_footer": "Selecione para pausar, retomar, repetir ou cancelar",
+        "refresh_download_status": "Atualizar estado das transferências",
+        "download_state_queued": "Em fila",
+        "download_state_downloading": "A transferir",
+        "download_state_rate_limited": "A aguardar nova tentativa",
+        "download_state_paused": "Pausada",
+        "download_state_failed": "Falhou",
+        "download_state_cancelled": "Cancelada",
+        "download_state_completed": "Concluída",
+        "download_progress_percent": "{percent}%",
+        "download_progress_size": "{size}",
+        "download_progress_waiting": "a aguardar",
+        "download_job_row": "{title}  [{state} - {progress}]  {store}",
+        "download_store_field": "Loja: {value}",
+        "download_status_field": "Estado: {value}",
+        "download_progress_field": "Progresso: {value}",
+        "download_error_field": "Erro: {value}",
+        "download_retry_field": "Tentativa automática {attempt} dentro de cerca de {seconds}s",
+        "pause_download": "Pausar transferência",
+        "resume_download": "Retomar transferência",
+        "retry_download": "Repetir transferência",
+        "download_details_title": "DETALHES DA TRANSFERÊNCIA",
+        "download_controls_footer": "As transferências mantêm a loja original",
+        "download_progress_bytes": "{current} de {total}",
+        "confirm_download_cancel": "CANCELAR TRANSFERÊNCIA?",
+        "keep_downloading": "Não - continuar a transferir {title}",
+        "cancel_and_remove_partial": "Sim - cancelar e remover dados parciais",
+        "cancel_download_warning": "Os dados parciais removidos não podem ser retomados",
         "detail_url": "URL DE DETALHES",
         "platform_has_no_rom_folder": (
             "Esta plataforma não tem uma pasta de ROM no sistema operativo selecionado."
@@ -1721,6 +2060,11 @@ _TUI_FLOW_TRANSLATIONS: dict[LanguageCode, dict[str, str]] = {
         "replace_with": "Substituir por {title}",
         "confirm_choice_footer": "A/Enter: confirmar escolha",
         "update_cancelled": "ATUALIZAÇÃO CANCELADA",
+        "update_queued": "ATUALIZAÇÃO EM FILA",
+        "update_queued_message": (
+            "{title}\nA substituição de {store} é transferida em segundo plano. "
+            "O jogo instalado permanece inalterado até à conclusão."
+        ),
         "installed_game_unchanged": "O jogo instalado não foi alterado.",
         "game_updated": "JOGO ATUALIZADO",
         "game_updated_message": (

@@ -106,6 +106,51 @@ def test_native_selective_download_recovers_from_changed_catalogue_order(
     assert not (tmp_path / "Game.zip.part").exists()
 
 
+def test_native_selective_download_resumes_after_last_verified_piece(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    payload = b"abcHELLOxyz"
+    torrent = build_torrent(payload)
+    requested_pieces: list[int] = []
+    mocker.patch("ph.bittorrent._read_url", lambda *_args: torrent)
+    mocker.patch(
+        "ph.bittorrent.discover_peers",
+        lambda *_args: (("127.0.0.1", 6881),),
+    )
+
+    def piece(
+        metadata: TorrentMetadata,
+        _peer_id: bytes,
+        _peers: object,
+        piece_index: int,
+        piece_length: int,
+        _timeout: float,
+        _cancelled: object,
+        _settings: object,
+    ) -> bytes:
+        requested_pieces.append(piece_index)
+        start = piece_index * metadata.piece_length
+        return payload[start : start + piece_length]
+
+    mocker.patch("ph.bittorrent._download_piece_from_peers", piece)
+    destination = tmp_path / "Game.zip"
+    destination.with_name("Game.zip.part").write_bytes(b"H")
+
+    download_torrent_file(
+        "https://example.test/game.torrent",
+        2,
+        "Game.zip",
+        destination,
+        "https://example.test/",
+        10,
+        resume=True,
+    )
+
+    assert destination.read_bytes() == b"HELLO"
+    assert requested_pieces == [1]
+
+
 def test_selective_download_requests_a_choice_when_game_is_missing(
     tmp_path: Path,
     mocker: MockerFixture,

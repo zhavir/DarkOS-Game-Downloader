@@ -22,12 +22,13 @@ required on the handheld.
 - Choose Vimm or Minerva Archive once and change the preferred store later in **Settings**.
 - Cache complete store catalogues by store and platform for fast offline empty and prefix searches.
 - Download to the correct target ROM folder on SD1 or SD2.
+- Queue up to three background downloads, with persistent pause, resume, retry, and cancel controls.
 - Show game compatibility information before downloading when a reliable catalogue match exists.
 - Cache compatibility metadata locally and refresh it only when requested from **Settings**.
 - Install BIOS files bundled with a game first, then check required firmware across both SD cards.
 - Offer required missing BIOS through RetroBIOS, plus a manual BIOS search from the main menu.
 - Scan, update, and delete installed games, including grouped `.cue` and `.m3u` files.
-- Cancel active downloads with B or Escape and remove incomplete files.
+- Resume interrupted HTTP and Minerva downloads automatically after reopening the tool.
 - Refresh the EmulationStation game list once when the TUI closes after a library change.
 - Update the application from **Settings**, preserving preferences and rolling back if the new
   version fails its first launch.
@@ -68,7 +69,7 @@ tools/
 | D-pad or stick left | Back |
 | D-pad or stick right | Select |
 | A | Select |
-| B or Select | Go back one screen, or cancel an active download |
+| B or Select | Go back one screen |
 | L1 / R1 | Previous / next page |
 | X | Submit the on-screen keyboard, including an empty search |
 | Y | Delete the last character |
@@ -89,8 +90,12 @@ On first launch, choose the default store. Then:
 5. Review the game details and compatibility information.
 6. Select **Download** and choose a memory card when both SD1 and SD2 are available.
 
-Downloads are completed in a staging directory before being moved. Existing ROMs are not silently
-overwritten.
+Downloads run in the background and are completed in a staging directory before being moved.
+Open **Downloads** from the main menu to monitor progress or pause, resume, retry, and cancel jobs.
+Unfinished jobs resume after Pocket Harbor is reopened, while completed entries disappear after the
+TUI exits. Each queued job keeps its original store even if the preferred store changes. Existing
+ROMs are not silently overwritten. If a store responds with HTTP 429, the job waits and retries
+automatically with increasing randomized delays instead of failing or blocking another store.
 
 ## BIOS requirements and downloads
 
@@ -140,7 +145,7 @@ through **Settings → Change download store**.
 Open **Manage installed games**, choose the memory card and platform, then select a game.
 
 - **Update from remote** searches the preferred store using the installed title. The old files stay
-  in place until the replacement finishes downloading and is installed successfully.
+  in place until the queued background replacement finishes and is installed successfully.
 - **Delete from device** removes the selected game after confirmation. Files referenced by `.cue`
   and `.m3u` playlists are treated as one game group.
 
@@ -217,10 +222,12 @@ Minerva-specific transfer limits can be edited from **Settings → Minerva BitTo
 when Minerva is selected.
 
 The interface language, catalogue cache lifetime, application log level, and application file
-logging can also be changed from **Settings**. English is the default; German, Spanish, Italian,
-and Portuguese are included. Boolean settings use a True/False picker, numeric settings use a
-number-only keyboard, and text settings use the full keyboard. Choices apply immediately and are
-saved for later launches. The default catalogue lifetime is seven days.
+logging can also be changed from **Settings**. The global concurrent-download limit accepts 1-8,
+defaults to 3, and applies after restarting Pocket Harbor. English is the default; German, Spanish,
+Italian, and Portuguese are included. Boolean settings use a True/False picker, numeric settings
+use a number-only keyboard, and text settings use the full keyboard. The default catalogue lifetime
+is seven days. HTTP 429 retry settings expose the initial delay, maximum delay, and jitter; the
+maximum delay defaults to 3,600 seconds (one hour).
 
 ## Diagnostics
 
@@ -233,7 +240,9 @@ tools/pocket-harbor/pocket-harbor.log
 The log rotates automatically so repeated use does not grow one file indefinitely. Use
 **Settings → Application log level** to choose `DEBUG`, `INFO`, `WARNING`, or `ERROR`, and
 **Settings → Write logs to file** to enable or disable application records. Environment variables
-provide the initial local defaults; saved TUI preferences take precedence.
+provide the initial local defaults; saved TUI preferences take precedence. After logging is enabled,
+the confirmation screen shows the exact active path. If the launcher path is not writable, Pocket
+Harbor falls back to `tools/pocket-harbor/.downloads/pocket-harbor.log` and records the reason there.
 
 Common problems:
 

@@ -17,9 +17,12 @@ from ph.bittorrent import (
 from ph.downloader import (
     DownloadCancelled,
     DownloadError,
+    DownloadRateLimited,
     DownloadSelectionRequired,
+    _content_range_total,
     _download_with_urllib,
     _filename_from_headers,
+    _retry_after_seconds,
     _safe_filename,
     _unique_download_path,
     download_files,
@@ -34,10 +37,12 @@ class Response(io.BytesIO):
         *,
         headers: dict[str, str] | None = None,
         url: str = "https://example.test/file.zip",
+        status: int = 200,
     ) -> None:
         super().__init__(payload)
         self.headers = headers or {}
         self.url = url
+        self.status = status
 
     def __enter__(self) -> Response:
         return self
@@ -60,8 +65,9 @@ def test_torrent_download_uses_native_python_client(
 ) -> None:
     calls: list[tuple[object, ...]] = []
 
-    def native_download(*args: object) -> None:
+    def native_download(*args: object, **kwargs: object) -> None:
         calls.append(args)
+        assert kwargs == {"resume": False}
         destination = args[3]
         assert isinstance(destination, Path)
         destination.write_bytes(b"game")
@@ -178,6 +184,24 @@ def test_direct_download_translates_network_errors(
         _download_with_urllib(["https://example.test/file"], tmp_path, "", 1, None, None)
 
 
+def test_direct_download_reports_rate_limit_and_retry_after(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    headers = Message()
+    headers["Retry-After"] = "45"
+    mocker.patch(
+        "ph.downloader.urlopen",
+        side_effect=HTTPError("url", 429, "Too Many Requests", headers, None),
+    )
+
+    with pytest.raises(DownloadRateLimited) as raised:
+        _download_with_urllib(["https://example.test/file"], tmp_path, "", 1, None, None)
+
+    assert raised.value.retry_after_seconds == 45
+    assert "HTTP 429 Too Many Requests" in str(raised.value)
+
+
 def test_cancelled_direct_download_removes_partial_file(
     tmp_path: Path,
     mocker: MockerFixture,
@@ -199,6 +223,64 @@ def test_cancelled_direct_download_removes_partial_file(
     assert not (tmp_path / "file.zip.part").exists()
 
 
+def test_direct_download_resumes_a_preserved_http_partial(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    partial = tmp_path / "file.zip.part"
+    partial.write_bytes(b"abc")
+    opened = mocker.patch(
+        "ph.downloader.urlopen",
+        return_value=Response(
+            b"def",
+            headers={
+                "Content-Length": "3",
+                "Content-Range": "bytes 3-5/6",
+            },
+            status=206,
+        ),
+    )
+    progress: list[tuple[str, int, int | None]] = []
+
+    result = download_files(
+        ["https://example.test/file.zip"],
+        tmp_path,
+        "",
+        progress=lambda *values: progress.append(values),
+        resume=True,
+    )
+
+    request = opened.call_args.args[0]
+    assert request.get_header("Range") == "bytes=3-"
+    assert result[0].path.read_bytes() == b"abcdef"
+    assert progress == [("file.zip", 3, 6), ("file.zip", 6, 6)]
+
+
+def test_http_resume_restarts_cleanly_when_server_rejects_the_range(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    partial = tmp_path / "file.zip.part"
+    partial.write_bytes(b"stale")
+    mocker.patch(
+        "ph.downloader.urlopen",
+        side_effect=(
+            HTTPError("url", 416, "range rejected", Message(), None),
+            Response(b"fresh", headers={"Content-Length": "5"}),
+        ),
+    )
+
+    result = download_files(
+        ["https://example.test/file.zip"],
+        tmp_path,
+        "",
+        resume=True,
+    )
+
+    assert result[0].path.read_bytes() == b"fresh"
+    assert not partial.exists()
+
+
 def test_filename_safety_and_unique_path_variants(tmp_path: Path) -> None:
     assert _safe_filename("../bad:name?.zip") == "bad_name_.zip"
     assert _safe_filename("...") == "download.bin"
@@ -210,3 +292,14 @@ def test_filename_safety_and_unique_path_variants(tmp_path: Path) -> None:
     plain = tmp_path / "README"
     plain.write_text("one")
     assert _unique_download_path(plain).name == "README (2)"
+
+
+def test_content_range_totals_reject_missing_unknown_and_malformed_values() -> None:
+    assert _content_range_total(None) is None
+    assert _content_range_total("bytes 3-5/*") is None
+    assert _content_range_total("not a range") is None
+    assert _content_range_total("bytes 3-5/6") == 6
+    assert _retry_after_seconds(None) is None
+    assert _retry_after_seconds("invalid") is None
+    assert _retry_after_seconds("12") == 12
+    assert _retry_after_seconds("Wed, 21 Oct 2099 07:28:00") is not None

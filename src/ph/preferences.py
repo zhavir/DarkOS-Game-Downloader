@@ -7,6 +7,10 @@ from pathlib import Path
 
 from ph.bittorrent import BitTorrentSettings
 from ph.cache_policy import DEFAULT_CATALOGUE_TTL_DAYS
+from ph.download_queue import (
+    DEFAULT_CONCURRENT_DOWNLOADS,
+    RateLimitRetrySettings,
+)
 from ph.i18n import DEFAULT_LANGUAGE, LanguageCode, normalize_language
 
 PREFERENCES_FILENAME = ".pocket-harbor.json"
@@ -26,6 +30,8 @@ class Preferences:
     log_level: str | None = None
     log_to_file: bool | None = None
     language: LanguageCode = DEFAULT_LANGUAGE
+    max_concurrent_downloads: int = DEFAULT_CONCURRENT_DOWNLOADS
+    rate_limit_retry: RateLimitRetrySettings = field(default_factory=RateLimitRetrySettings)
 
 
 def preference_path(download_directory: Path) -> Path:
@@ -61,6 +67,38 @@ def load_preferences(path: Path) -> Preferences:
     raw_log_to_file = payload.get("log_to_file")
     log_to_file = raw_log_to_file if isinstance(raw_log_to_file, bool) else None
     language = normalize_language(payload.get("language"))
+    max_concurrent_downloads = _integer_setting(
+        payload,
+        "max_concurrent_downloads",
+        DEFAULT_CONCURRENT_DOWNLOADS,
+    )
+    if not 1 <= max_concurrent_downloads <= 8:
+        max_concurrent_downloads = DEFAULT_CONCURRENT_DOWNLOADS
+    retry_defaults = RateLimitRetrySettings()
+    retry_payload = payload.get("rate_limit_retry")
+    if isinstance(retry_payload, dict):
+        try:
+            rate_limit_retry = RateLimitRetrySettings(
+                base_seconds=_float_setting(
+                    retry_payload,
+                    "base_seconds",
+                    retry_defaults.base_seconds,
+                ),
+                max_seconds=_float_setting(
+                    retry_payload,
+                    "max_seconds",
+                    retry_defaults.max_seconds,
+                ),
+                jitter_ratio=_float_setting(
+                    retry_payload,
+                    "jitter_ratio",
+                    retry_defaults.jitter_ratio,
+                ),
+            )
+        except ValueError:
+            rate_limit_retry = retry_defaults
+    else:
+        rate_limit_retry = retry_defaults
     minerva_payload = payload.get("minerva_bittorrent")
     defaults = BitTorrentSettings()
     if not isinstance(minerva_payload, dict):
@@ -71,6 +109,8 @@ def load_preferences(path: Path) -> Preferences:
             log_level,
             log_to_file,
             language,
+            max_concurrent_downloads,
+            rate_limit_retry,
         )
     try:
         settings = BitTorrentSettings(
@@ -118,7 +158,16 @@ def load_preferences(path: Path) -> Preferences:
         )
     except ValueError:
         settings = defaults
-    return Preferences(normalized_store_id, settings, ttl_days, log_level, log_to_file, language)
+    return Preferences(
+        normalized_store_id,
+        settings,
+        ttl_days,
+        log_level,
+        log_to_file,
+        language,
+        max_concurrent_downloads,
+        rate_limit_retry,
+    )
 
 
 def save_preferences(path: Path, preferences: Preferences) -> None:
@@ -136,6 +185,12 @@ def save_preferences(path: Path, preferences: Preferences) -> None:
                     "log_level": preferences.log_level,
                     "log_to_file": preferences.log_to_file,
                     "language": preferences.language,
+                    "max_concurrent_downloads": preferences.max_concurrent_downloads,
+                    "rate_limit_retry": {
+                        "base_seconds": preferences.rate_limit_retry.base_seconds,
+                        "max_seconds": preferences.rate_limit_retry.max_seconds,
+                        "jitter_ratio": preferences.rate_limit_retry.jitter_ratio,
+                    },
                     "minerva_bittorrent": {
                         "udp_protocol_id": settings.udp_protocol_id,
                         "block_size": settings.block_size,

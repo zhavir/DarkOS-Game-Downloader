@@ -4,6 +4,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from ph.bittorrent import BitTorrentSettings
+from ph.download_queue import RateLimitRetrySettings
 from ph.preferences import (
     Preferences,
     PreferencesError,
@@ -56,6 +57,8 @@ def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> Non
         log_level="DEBUG",
         log_to_file=False,
         language="it",
+        max_concurrent_downloads=5,
+        rate_limit_retry=RateLimitRetrySettings(10, 3600, 0.3),
     )
 
     save_preferences(path, preferences)
@@ -99,6 +102,12 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
           "catalogue_ttl_days": 0,
           "log_level": "verbose",
           "log_to_file": "yes",
+          "max_concurrent_downloads": 99,
+          "rate_limit_retry": {
+            "base_seconds": 60,
+            "max_seconds": 30,
+            "jitter_ratio": 2
+          },
           "minerva_bittorrent": {
             "block_size": true,
             "max_peer_attempts": "many",
@@ -116,6 +125,8 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
     assert preferences.catalogue_ttl_days == 7
     assert preferences.log_level is None
     assert preferences.log_to_file is None
+    assert preferences.max_concurrent_downloads == 3
+    assert preferences.rate_limit_retry == RateLimitRetrySettings()
 
 
 def test_preferences_accept_integer_timeout(tmp_path: Path) -> None:
