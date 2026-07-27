@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.1.1 (2026-07-27)
+
+### Bug Fixes
+
+- Make coverage badge use published report
+  ([`0d1f449`](https://github.com/zhavir/PoketHarbor/commit/0d1f449cf091bb7023ad0b93da72da885a6c2cd5))
+
+### Continuous Integration
+
+- Pass coverage artifact id to docs
+  ([`54dc68d`](https://github.com/zhavir/PoketHarbor/commit/54dc68dbbbe9aff3ca181f1586d8a998eb7c0751))
+
+
 ## v2.1.0 (2026-07-27)
 
 ### Continuous Integration
