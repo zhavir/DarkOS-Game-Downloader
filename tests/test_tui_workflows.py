@@ -345,6 +345,20 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
     assert closed == [True] and refreshed == [True]
 
 
+def test_download_menu_is_always_visible_with_restored_job_count(
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    queue = mocker.Mock()
+    instance.download_queue = queue
+
+    queue.jobs.return_value = ()
+    assert instance._download_queue_menu_label() == "Downloads  [0]"
+
+    queue.jobs.return_value = (queued_job(DownloadState.DOWNLOADING),)
+    assert instance._download_queue_menu_label() == "Downloads  [1]"
+
+
 def test_main_menu_is_retranslated_after_language_changes(
     mocker: MockerFixture,
 ) -> None:

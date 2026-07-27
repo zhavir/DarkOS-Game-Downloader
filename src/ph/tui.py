@@ -315,7 +315,7 @@ class DownloaderTui:
                 options = (
                     self._t(TranslationKey.SEARCH_LIBRARY),
                     self._t(TranslationKey.DIRECT_DOWNLOAD),
-                    self._t(TranslationKey.DOWNLOAD_QUEUE),
+                    self._download_queue_menu_label(),
                     self._t(TranslationKey.MANAGE_GAMES),
                     self._t(TranslationKey.SEARCH_BIOS),
                     self._t(TranslationKey.SETTINGS),
@@ -357,6 +357,11 @@ class DownloaderTui:
             if self.gamepad is not None:
                 self.gamepad.close()
             LOGGER.info("TUI session finished")
+
+    def _download_queue_menu_label(self) -> str:
+        """Keep the Downloads entry visible with the current persisted job count."""
+
+        return f"{self._t(TranslationKey.DOWNLOAD_QUEUE)}  [{len(self.download_queue.jobs())}]"
 
     def _search_flow(self) -> None:
         store = self.selected_store
