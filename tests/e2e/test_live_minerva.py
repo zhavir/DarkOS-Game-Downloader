@@ -1,6 +1,7 @@
 """Live end-to-end checks for Minerva's real RetroAchievements catalogue."""
 
 import os
+import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -9,8 +10,10 @@ from pytest_mock import MockerFixture
 
 from ph.bittorrent import parse_torrent
 from ph.config import DEFAULT_MINERVA_BASE_URL, DEFAULT_MINERVA_TORRENT_BASE_URL
+from ph.download_queue import DownloadQueue, DownloadState
 from ph.minerva_store import MinervaStore
 from ph.models import MediaDownload
+from ph.platforms import resolve_platform
 
 GBA_DIRECTORY = "RA - Nintendo Game Boy Advance"
 ARDUBOY_DIRECTORY = "RA - Arduboy"
@@ -110,3 +113,69 @@ def test_real_minerva_downloads_and_validates_torrent_metadata(
     selected_file = torrent.files[request.torrent_file_index - 1]
     assert selected_file.path[-1] == request.expected_filename
     assert selected_file.length > 10_000
+
+
+@pytest.mark.e2e
+@pytest.mark.live
+def test_real_minerva_runs_two_native_downloads_concurrently(
+    tmp_path: Path,
+    live_minerva: MinervaStore,
+) -> None:
+    """Exercise two background workers against Minerva's real Arduboy swarm."""
+
+    catalogue = live_minerva.search(ARDUBOY_DIRECTORY, "")
+    torrent_request = live_minerva.download_request(catalogue[0].link)
+    with urlopen(_torrent_request(live_minerva, torrent_request.url), timeout=90) as response:
+        metadata = parse_torrent(response.read())
+    lengths = {item.path[-1]: item.length for item in metadata.files}
+    candidates = sorted(
+        (
+            (result, media, lengths.get(media.expected_filename or "", 0))
+            for result in catalogue
+            if (media := live_minerva.download_request(result.link)).expected_filename is not None
+        ),
+        key=lambda item: item[2],
+    )
+    selected = [item for item in candidates if 10_000 < item[2] < 2 * 1024 * 1024][:2]
+    assert len(selected) == 2
+    platform = resolve_platform("arduboy")
+    assert platform is not None
+
+    roms = tmp_path / "roms"
+    queue = DownloadQueue(tmp_path / "downloads", max_concurrent=2)
+    jobs = {
+        queue.enqueue(
+            title=result.title,
+            store_id=live_minerva.store_id,
+            store_name=live_minerva.display_name,
+            referrer=live_minerva.download_referrer,
+            media=(media,),
+            platform=platform,
+            roms_directory=roms,
+            timeout_seconds=90,
+        ).job_id
+        for result, media, _length in selected
+    }
+    try:
+        deadline = time.monotonic() + 10 * 60
+        while time.monotonic() < deadline:
+            snapshots = {job.job_id: job for job in queue.jobs()}
+            failures = {
+                job_id: snapshots[job_id].error
+                for job_id in jobs
+                if snapshots[job_id].state is DownloadState.FAILED
+            }
+            assert not failures, f"real parallel Minerva downloads failed: {failures}"
+            if all(snapshots[job_id].state is DownloadState.COMPLETED for job_id in jobs):
+                break
+            time.sleep(0.25)
+        else:
+            pytest.fail("real parallel Minerva downloads did not finish within ten minutes")
+    finally:
+        queue.shutdown()
+
+    installed = tuple(
+        roms / "arduboy" / (media.expected_filename or "") for _result, media, _length in selected
+    )
+    assert all(path.is_file() for path in installed)
+    assert [path.stat().st_size for path in installed] == [item[2] for item in selected]

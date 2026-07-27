@@ -10,13 +10,14 @@ import ssl
 import struct
 import time
 import unicodedata
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from math import isfinite
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -40,6 +41,16 @@ _PEER_RACE_WORKERS = 8
 _MAX_PEER_TIMEOUT_SECONDS = 8.0
 _MAX_TRACKER_QUERIES = 16
 _MAX_DISCOVERED_PEERS = 240
+
+
+@dataclass(slots=True)
+class _PeerGate:
+    lock: Lock
+    users: int = 0
+
+
+_PEER_GATES: dict[PeerAddress, _PeerGate] = {}
+_PEER_GATES_LOCK = Lock()
 
 
 class BitTorrentError(RuntimeError):
@@ -712,17 +723,20 @@ def _download_piece_from_peers(
         if completed.is_set():
             return None
         try:
-            data = _download_piece(
-                peer,
-                metadata.info_hash,
-                peer_id,
-                piece_index,
-                piece_length,
-                peer_timeout,
-                completed,
-                cancelled,
-                effective_settings,
-            )
+            with _peer_connection_slot(peer, completed, cancelled) as acquired:
+                if not acquired:
+                    return None
+                data = _download_piece(
+                    peer,
+                    metadata.info_hash,
+                    peer_id,
+                    piece_index,
+                    piece_length,
+                    peer_timeout,
+                    completed,
+                    cancelled,
+                    effective_settings,
+                )
         except BitTorrentCancelled:
             raise
         except BitTorrentError, OSError, TimeoutError:
@@ -752,6 +766,40 @@ def _download_piece_from_peers(
             pending.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
     raise BitTorrentError(f"Could not retrieve verified torrent piece {piece_index}.")
+
+
+@contextmanager
+def _peer_connection_slot(
+    peer: PeerAddress,
+    completed: Event,
+    cancelled: CancelCallback | None,
+) -> Iterator[bool]:
+    """Allow only one active torrent connection to a peer across all downloads."""
+
+    with _PEER_GATES_LOCK:
+        gate = _PEER_GATES.setdefault(peer, _PeerGate(Lock()))
+        gate.users += 1
+
+    acquired = False
+    try:
+        while not acquired:
+            _raise_if_cancelled(cancelled)
+            if completed.is_set():
+                yield False
+                return
+            acquired = gate.lock.acquire(timeout=0.1)
+        _raise_if_cancelled(cancelled)
+        if completed.is_set():
+            yield False
+            return
+        yield True
+    finally:
+        if acquired:
+            gate.lock.release()
+        with _PEER_GATES_LOCK:
+            gate.users -= 1
+            if gate.users == 0 and _PEER_GATES.get(peer) is gate:
+                del _PEER_GATES[peer]
 
 
 def _download_piece(
