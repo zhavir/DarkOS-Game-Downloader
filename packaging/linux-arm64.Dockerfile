@@ -33,6 +33,7 @@ RUN python3 -m PyInstaller \
     --onedir \
     --name "$EXECUTABLE_NAME" \
     --copy-metadata pocket-harbor \
+    --collect-all ph.translations \
     /work/packaging/frozen_entry.py && \
     "/work/dist/$EXECUTABLE_NAME/$EXECUTABLE_NAME" --version && \
     if [ "$EXECUTABLE_NAME" != "$APPLICATION_DIRECTORY" ]; then \
