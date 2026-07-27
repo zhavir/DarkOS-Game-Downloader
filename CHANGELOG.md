@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.0.3 (2026-07-27)
+
+### Bug Fixes
+
+- **tui**: Always show persisted download queue
+  ([`8b4567a`](https://github.com/zhavir/PoketHarbor/commit/8b4567a7ec30c9a5115036916d9244956c006839))
+
+
 ## v3.0.2 (2026-07-27)
 
 ### Bug Fixes
