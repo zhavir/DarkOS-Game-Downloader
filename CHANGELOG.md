@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-07-27)
+
+### Continuous Integration
+
+- **release**: Parallelize platform artifact builds
+  ([`e52e17a`](https://github.com/zhavir/PoketHarbor/commit/e52e17a79b8d68199d8c4c6caf9f739b2eb6ec1b))
+
+### Features
+
+- Add persistent background download queue
+  ([`a532b1a`](https://github.com/zhavir/PoketHarbor/commit/a532b1a31b2862017c3cb87699e89578ae7cf2af))
+
+
 ## v2.0.1 (2026-07-26)
 
 ### Bug Fixes
