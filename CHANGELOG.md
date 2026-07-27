@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.0.4 (2026-07-27)
+
+### Bug Fixes
+
+- **downloads**: Remove completed jobs from queue
+  ([`be5c07c`](https://github.com/zhavir/PoketHarbor/commit/be5c07ccc62ee1d03cb11ea3cd193dbe565a3c38))
+
+
 ## v3.0.3 (2026-07-27)
 
 ### Bug Fixes
