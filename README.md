@@ -1,7 +1,7 @@
 # Pocket Harbor
 
 [![Latest release](https://img.shields.io/github/v/release/zhavir/PoketHarbor?display_name=tag&sort=semver)](https://github.com/zhavir/PoketHarbor/releases/latest)
-[![Coverage](https://raw.githubusercontent.com/zhavir/PoketHarbor/gh-pages/badges/coverage.svg)](https://zhavir.github.io/PoketHarbor/coverage/)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fzhavir.github.io%2FPoketHarbor%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage)](https://zhavir.github.io/PoketHarbor/coverage/)
 
 Pocket Harbor is a controller-first game library manager for Linux handhelds. The portable core is
 designed for multiple operating-system targets; the current release target is **DarkOS ARM64**, the
