@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v3.0.0 (2026-07-27)
+
+### Continuous Integration
+
+- **docs**: Remove obsolete badge publisher
+  ([`b3ea32e`](https://github.com/zhavir/PoketHarbor/commit/b3ea32ed1946325d93d892f102d3261128d31498))
+
+### Features
+
+- **settings**: Add storage mappings and YAML localization
+  ([`ebf3f53`](https://github.com/zhavir/PoketHarbor/commit/ebf3f53a9fa94de77eb5d3400ce7ae32100a131a))
+
+### Breaking Changes
+
+- **settings**: PH_BASE_URL and --base-url are replaced by PH_VIMM_BASE_URL and --vimm-url.
+
+
 ## v2.1.1 (2026-07-27)
 
 ### Bug Fixes
