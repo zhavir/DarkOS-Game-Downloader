@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.0.2 (2026-07-27)
+
+### Bug Fixes
+
+- **minerva**: Coordinate parallel peer connections
+  ([`d4920be`](https://github.com/zhavir/PoketHarbor/commit/d4920bea05b17adba839e400035e06a3d5b16d15))
+
+
 ## v3.0.1 (2026-07-27)
 
 ### Bug Fixes
