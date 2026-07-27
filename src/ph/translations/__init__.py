@@ -1,0 +1,1 @@
+"""Packaged YAML translation catalogues."""

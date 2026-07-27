@@ -12,10 +12,18 @@ from ph.i18n import (
     normalize_language,
     translate,
 )
+from ph.translation_keys import TranslationKey
 
 
 def test_every_supported_language_has_a_complete_catalogue() -> None:
-    assert [language.code for language in LANGUAGES] == ["en", "de", "es", "it", "pt"]
+    assert [language.code for language in LANGUAGES] == [
+        "en",
+        "de",
+        "es",
+        "fr",
+        "it",
+        "pt",
+    ]
     assert all(not missing_translation_keys(language.code) for language in LANGUAGES)
     assert all(not mismatched_placeholder_keys(language.code) for language in LANGUAGES)
 
@@ -28,7 +36,7 @@ def test_every_supported_language_has_a_complete_catalogue() -> None:
         ("EN-us", "en"),
         (" de-CH ", "de"),
         ("pt-BR", "pt"),
-        ("fr", "en"),
+        ("fr-CH", "fr"),
     ],
 )
 def test_language_codes_are_normalized_with_an_english_fallback(
@@ -39,15 +47,16 @@ def test_language_codes_are_normalized_with_an_english_fallback(
 
 
 def test_translation_formats_values_and_language_names_are_native() -> None:
-    assert translate("it", "loading_all", platform="Game Boy") == (
+    assert translate("it", TranslationKey.LOADING_ALL, platform="Game Boy") == (
         "Caricamento di tutti i giochi Game Boy..."
     )
+    assert translate("fr", TranslationKey.SEARCH_LIBRARY) == "Rechercher dans la bibliothèque"
     assert language_name("de") == "Deutsch"
 
 
 def test_unknown_translation_key_fails_during_development() -> None:
-    with pytest.raises(KeyError):
-        translate("en", "not-a-real-key")
+    with pytest.raises(ValueError):
+        TranslationKey("not-a-real-key")
 
 
 def test_tui_presentation_text_uses_the_translation_catalogue() -> None:

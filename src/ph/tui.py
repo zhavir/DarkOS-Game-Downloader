@@ -70,6 +70,7 @@ from ph.retrobios import (
 from ph.store import GameStore, StoreError
 from ph.store_cache import CatalogueCacheError, StoreCacheStatus
 from ph.store_catalog import StoreCatalog
+from ph.translation_keys import TranslationKey
 from ph.updater import (
     ReleaseUpdate,
     UpdateCancelled,
@@ -220,16 +221,19 @@ class DownloaderTui:
 
     def __init__(self, screen: Window, config: Config) -> None:
         self.screen = screen
-        self.config = config
         self.preferences_path = preference_path(config.download_directory)
         preferences = load_preferences(self.preferences_path)
         self.preferences = preferences
+        self.config = replace(
+            config,
+            timeout_seconds=preferences.network_timeout_seconds or config.timeout_seconds,
+        )
         self.language = preferences.language
         ttl_seconds = catalogue_ttl_seconds(preferences.catalogue_ttl_days)
-        self.store_catalog = StoreCatalog.from_config(config, ttl_seconds)
+        self.store_catalog = StoreCatalog.from_config(self.config, ttl_seconds)
         self.retrobios_repository = RetroBiosRepository(
-            config.download_directory,
-            config.timeout_seconds,
+            self.config.download_directory,
+            self.config.timeout_seconds,
             ttl_seconds,
         )
         self.retrobios_catalog: RetroBiosCatalog | None = None
@@ -237,7 +241,7 @@ class DownloaderTui:
             self.store_catalog.find(preferences.store_id) if preferences.store_id else None
         )
         self.download_queue = DownloadQueue(
-            config.download_directory,
+            self.config.download_directory,
             max_concurrent=preferences.max_concurrent_downloads,
             retry_settings=preferences.rate_limit_retry,
         )
@@ -245,17 +249,17 @@ class DownloaderTui:
         self.refresh_on_exit = False
         self.exit_after_update = False
         self.compatibility_client = GameCompatibilityClient(
-            config.download_directory / ".game-compatibility-cache.json",
-            timeout_seconds=config.timeout_seconds,
+            self.config.download_directory / ".game-compatibility-cache.json",
+            timeout_seconds=self.config.timeout_seconds,
             ttl_seconds=ttl_seconds,
         )
         self.roms_directories = detect_roms_directories(
-            config.roms_directories or None,
-            config.target.rom_roots,
+            self.config.roms_directories or None,
+            self.config.target.rom_roots,
         )
         self.platforms = discover_platforms(
             self.roms_directories,
-            platform_catalogue(config.target),
+            platform_catalogue(self.config.target),
         )
         self.hardware = detect_hardware_profile()
         self.gamepad = LinuxJoystick.open_first()
@@ -270,7 +274,7 @@ class DownloaderTui:
         )
         self._setup_screen()
 
-    def _t(self, key: str, **values: object) -> str:
+    def _t(self, key: TranslationKey, **values: object) -> str:
         """Translate one interface message using the persisted language."""
 
         language = normalize_language(getattr(self, "language", "en"))
@@ -299,7 +303,7 @@ class DownloaderTui:
         LOGGER.info("TUI session started")
         try:
             if not self.store_catalog.stores:
-                self._error(self._t("no_download_stores"))
+                self._error(self._t(TranslationKey.NO_DOWNLOAD_STORES))
                 return
             while self.selected_store is None:
                 if self._configure_store(first_run=True):
@@ -309,19 +313,19 @@ class DownloaderTui:
             while True:
                 self._handle_download_completions()
                 options = (
-                    self._t("search_library"),
-                    self._t("direct_download"),
-                    self._t("download_queue"),
-                    self._t("manage_games"),
-                    self._t("search_bios"),
-                    self._t("settings"),
-                    self._t("status_controls"),
-                    self._t("exit"),
+                    self._t(TranslationKey.SEARCH_LIBRARY),
+                    self._t(TranslationKey.DIRECT_DOWNLOAD),
+                    self._t(TranslationKey.DOWNLOAD_QUEUE),
+                    self._t(TranslationKey.MANAGE_GAMES),
+                    self._t(TranslationKey.SEARCH_BIOS),
+                    self._t(TranslationKey.SETTINGS),
+                    self._t(TranslationKey.STATUS_CONTROLS),
+                    self._t(TranslationKey.EXIT),
                 )
                 choice = self._menu(
-                    self._t("app_title"),
+                    self._t(TranslationKey.APP_TITLE),
                     options,
-                    self._t("main_footer"),
+                    self._t(TranslationKey.MAIN_FOOTER),
                 )
                 if choice is None or choice == 7:
                     if self._confirm_exit():
@@ -363,7 +367,9 @@ class DownloaderTui:
         )
         labels = [f"{item.name}  [{item.alias}]" for item in platforms]
         while True:
-            choice = self._menu(self._t("choose_platform"), labels, self._t("back_footer"))
+            choice = self._menu(
+                self._t(TranslationKey.CHOOSE_PLATFORM), labels, self._t(TranslationKey.BACK_FOOTER)
+            )
             if choice is None:
                 return
             self._search_platform_flow(store, platforms[choice])
@@ -373,17 +379,17 @@ class DownloaderTui:
 
         while True:
             query = self._on_screen_keyboard(
-                self._t("search_title", platform=platform.alias),
-                empty_hint=self._t("search_empty_hint"),
+                self._t(TranslationKey.SEARCH_TITLE, platform=platform.alias),
+                empty_hint=self._t(TranslationKey.SEARCH_EMPTY_HINT),
             )
             if query is None:
                 return
             description = (
-                self._t("looking_for", query=query)
+                self._t(TranslationKey.LOOKING_FOR, query=query)
                 if query
-                else self._t("loading_all", platform=platform.name)
+                else self._t(TranslationKey.LOADING_ALL, platform=platform.name)
             )
-            self._draw_message(self._t("searching"), description, 1)
+            self._draw_message(self._t(TranslationKey.SEARCHING), description, 1)
             try:
                 LOGGER.info(
                     "Searching store=%s platform=%s query=%r",
@@ -399,13 +405,15 @@ class DownloaderTui:
             results = filter_supported_results(results)
             if not results:
                 message = (
-                    self._t("nothing_matched", query=query) if query else self._t("catalogue_empty")
+                    self._t(TranslationKey.NOTHING_MATCHED, query=query)
+                    if query
+                    else self._t(TranslationKey.CATALOGUE_EMPTY)
                 )
-                self._draw_message(self._t("no_results"), message, 3, wait=True)
+                self._draw_message(self._t(TranslationKey.NO_RESULTS), message, 3, wait=True)
                 continue
             self._draw_message(
-                self._t("checking_compatibility"),
-                self._t("matching_compatibility"),
+                self._t(TranslationKey.CHECKING_COMPATIBILITY),
+                self._t(TranslationKey.MATCHING_COMPATIBILITY),
                 1,
             )
             compatibility = self.compatibility_client.lookup_many(results, platform)
@@ -425,9 +433,9 @@ class DownloaderTui:
     def _catalog_progress(self, current: int, total: int) -> None:
         percent = int(current * 100 / total)
         self._draw_message(
-            self._t("loading_catalogue"),
+            self._t(TranslationKey.LOADING_CATALOGUE),
             self._t(
-                "loading_catalogue_progress",
+                TranslationKey.LOADING_CATALOGUE_PROGRESS,
                 current=current,
                 total=total,
                 percent=percent,
@@ -447,19 +455,19 @@ class DownloaderTui:
             prefix = f"{result.system} | " if result.system else ""
             detail = f" - {result.region}" if result.region else ""
             badge = self._t(
-                "compatibility_badge",
+                TranslationKey.COMPATIBILITY_BADGE,
                 value=self._compatibility_label(info),
             )
             labels.append(f"{prefix}{result.title}{detail}  [{badge}]")
         while True:
             choice = self._menu(
                 self._t(
-                    "results_title",
+                    TranslationKey.RESULTS_TITLE,
                     store=store.display_name.upper(),
                     count=len(results),
                 ),
                 labels,
-                self._t("results_footer"),
+                self._t(TranslationKey.RESULTS_FOOTER),
             )
             if choice is None:
                 return
@@ -472,17 +480,22 @@ class DownloaderTui:
                     effective_platform = resolved
             details = [
                 result.title,
-                self._t("system_field", value=result.system or effective_platform.name),
-                self._t("region_field", value=result.region or "-"),
-                self._t("version_field", value=result.version or "-"),
-                self._t("languages_field", value=result.languages),
-                self._t("rating_field", value=result.rating),
-                self._t("compatibility_field", value=self._compatibility_label(info, detail=True)),
+                self._t(
+                    TranslationKey.SYSTEM_FIELD, value=result.system or effective_platform.name
+                ),
+                self._t(TranslationKey.REGION_FIELD, value=result.region or "-"),
+                self._t(TranslationKey.VERSION_FIELD, value=result.version or "-"),
+                self._t(TranslationKey.LANGUAGES_FIELD, value=result.languages),
+                self._t(TranslationKey.RATING_FIELD, value=result.rating),
+                self._t(
+                    TranslationKey.COMPATIBILITY_FIELD,
+                    value=self._compatibility_label(info, detail=True),
+                ),
             ]
             action = self._menu(
-                self._t("title_details"),
-                [*details, self._t("download"), self._t("back")],
-                self._t("select_download"),
+                self._t(TranslationKey.TITLE_DETAILS),
+                [*details, self._t(TranslationKey.DOWNLOAD), self._t(TranslationKey.BACK)],
+                self._t(TranslationKey.SELECT_DOWNLOAD),
             )
             if action == len(details):
                 self._download_detail(
@@ -505,13 +518,16 @@ class DownloaderTui:
             if platform.rom_folder is not None and store.supports_platform(platform)
         )
         choice = self._menu(
-            self._t("destination_platform"),
-            [f"{item.name} -> {item.rom_folder}" for item in platforms],
-            self._t("destination_platform_footer"),
+            self._t(TranslationKey.DESTINATION_PLATFORM),
+            [
+                f"{item.name} -> {self._platform_for_store(store, item).rom_folder}"
+                for item in platforms
+            ],
+            self._t(TranslationKey.DESTINATION_PLATFORM_FOOTER),
         )
         if choice is None:
             return
-        url = self._on_screen_keyboard(self._t("detail_url"), allow_lowercase=True)
+        url = self._on_screen_keyboard(self._t(TranslationKey.DETAIL_URL), allow_lowercase=True)
         if not url:
             return
         self._download_detail(url, platforms[choice], store, title=url)
@@ -525,16 +541,17 @@ class DownloaderTui:
         title: str | None = None,
         region: str | None = None,
     ) -> None:
-        if platform.rom_folder is None:
-            self._error(self._t("platform_has_no_rom_folder"))
+        install_platform = self._platform_for_store(store, platform)
+        if install_platform.rom_folder is None:
+            self._error(self._t(TranslationKey.PLATFORM_HAS_NO_ROM_FOLDER))
             return
         roms_directory = self._choose_roms_directory()
         if roms_directory is None:
-            self._error(self._t("no_rom_partition_environment"))
+            self._error(self._t(TranslationKey.NO_ROM_PARTITION_ENVIRONMENT))
             return
         self._draw_message(
-            self._t("preparing"),
-            self._t("retrieving_download_link"),
+            self._t(TranslationKey.PREPARING),
+            self._t(TranslationKey.RETRIEVING_DOWNLOAD_LINK),
             1,
         )
         try:
@@ -545,9 +562,10 @@ class DownloaderTui:
                 store_name=store.display_name,
                 referrer=store.download_referrer,
                 media=(media,),
-                platform=platform,
+                platform=install_platform,
                 roms_directory=roms_directory,
                 timeout_seconds=self.config.timeout_seconds,
+                bios_directory=self.preferences.bios_directory,
                 bittorrent_settings=(
                     self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
                 ),
@@ -559,9 +577,9 @@ class DownloaderTui:
             return
         LOGGER.info("Game download queued id=%s store=%s", job.job_id, store.store_id)
         self._draw_message(
-            self._t("download_queued"),
+            self._t(TranslationKey.DOWNLOAD_QUEUED),
             self._t(
-                "download_queued_message",
+                TranslationKey.DOWNLOAD_QUEUED_MESSAGE,
                 title=job.title,
                 store=job.store_name,
             ),
@@ -577,14 +595,19 @@ class DownloaderTui:
             ):
                 continue
             self._handled_completed_jobs.add(job.job_id)
-            required_bios = self._bios_followup(job.platform, job.roms_directory, job.region)
+            required_bios = self._bios_followup(
+                job.platform,
+                job.roms_directory,
+                job.region,
+                job.bios_directory,
+            )
             bundled_message = (
-                "\n" + self._t("installed_bundled_bios", count=job.bundled_bios_count)
+                "\n" + self._t(TranslationKey.INSTALLED_BUNDLED_BIOS, count=job.bundled_bios_count)
                 if job.bundled_bios_count
                 else ""
             )
             required_message = (
-                "\n" + self._t("installed_required_bios", count=required_bios)
+                "\n" + self._t(TranslationKey.INSTALLED_REQUIRED_BIOS, count=required_bios)
                 if required_bios
                 else ""
             )
@@ -592,7 +615,7 @@ class DownloaderTui:
             filename = job.completed_path.name if job.completed_path is not None else job.title
             message = (
                 self._t(
-                    "game_updated_message",
+                    TranslationKey.GAME_UPDATED_MESSAGE,
                     filename=filename,
                     destination=destination,
                     bundled=bundled_message,
@@ -600,14 +623,18 @@ class DownloaderTui:
                 )
                 if job.is_update
                 else self._t(
-                    "download_complete_message",
+                    TranslationKey.DOWNLOAD_COMPLETE_MESSAGE,
                     filename=filename,
                     destination=destination,
                     bios=bundled_message + required_message,
                 )
             )
             self._draw_message(
-                self._t("game_updated" if job.is_update else "download_complete"),
+                self._t(
+                    TranslationKey.GAME_UPDATED
+                    if job.is_update
+                    else TranslationKey.DOWNLOAD_COMPLETE
+                ),
                 message,
                 4,
                 wait=True,
@@ -618,18 +645,18 @@ class DownloaderTui:
             jobs = self.download_queue.jobs()
             if not jobs:
                 self._draw_message(
-                    self._t("download_queue_empty"),
-                    self._t("download_queue_empty_message"),
+                    self._t(TranslationKey.DOWNLOAD_QUEUE_EMPTY),
+                    self._t(TranslationKey.DOWNLOAD_QUEUE_EMPTY_MESSAGE),
                     1,
                     wait=True,
                 )
                 return
             labels = [self._download_job_label(job) for job in jobs]
-            labels.append(self._t("refresh_download_status"))
+            labels.append(self._t(TranslationKey.REFRESH_DOWNLOAD_STATUS))
             choice = self._menu(
-                self._t("download_queue_title"),
+                self._t(TranslationKey.DOWNLOAD_QUEUE_TITLE),
                 labels,
-                self._t("download_queue_footer"),
+                self._t(TranslationKey.DOWNLOAD_QUEUE_FOOTER),
             )
             if choice is None:
                 return
@@ -638,19 +665,19 @@ class DownloaderTui:
             self._download_job_controls(jobs[choice])
 
     def _download_job_label(self, job: DownloadJob) -> str:
-        state = self._t(f"download_state_{job.state.value}")
+        state = self._t(TranslationKey(f"download_state_{job.state.value}"))
         if job.total_bytes:
             percent = min(100, int(job.downloaded_bytes * 100 / job.total_bytes))
-            progress = self._t("download_progress_percent", percent=percent)
+            progress = self._t(TranslationKey.DOWNLOAD_PROGRESS_PERCENT, percent=percent)
         elif job.downloaded_bytes:
             progress = self._t(
-                "download_progress_size",
+                TranslationKey.DOWNLOAD_PROGRESS_SIZE,
                 size=self._format_file_size(job.downloaded_bytes),
             )
         else:
-            progress = self._t("download_progress_waiting")
+            progress = self._t(TranslationKey.DOWNLOAD_PROGRESS_WAITING)
         return self._t(
-            "download_job_row",
+            TranslationKey.DOWNLOAD_JOB_ROW,
             title=job.title,
             state=state,
             progress=progress,
@@ -663,23 +690,23 @@ class DownloaderTui:
             return
         details = [
             current.title,
-            self._t("download_store_field", value=current.store_name),
+            self._t(TranslationKey.DOWNLOAD_STORE_FIELD, value=current.store_name),
             self._t(
-                "download_status_field",
-                value=self._t(f"download_state_{current.state.value}"),
+                TranslationKey.DOWNLOAD_STATUS_FIELD,
+                value=self._t(TranslationKey(f"download_state_{current.state.value}")),
             ),
             self._t(
-                "download_progress_field",
+                TranslationKey.DOWNLOAD_PROGRESS_FIELD,
                 value=self._download_progress_detail(current),
             ),
         ]
         if current.error:
-            details.append(self._t("download_error_field", value=current.error))
+            details.append(self._t(TranslationKey.DOWNLOAD_ERROR_FIELD, value=current.error))
         if current.state is DownloadState.RATE_LIMITED and current.retry_at is not None:
             seconds = max(0, int(current.retry_at - time.time() + 0.999))
             details.append(
                 self._t(
-                    "download_retry_field",
+                    TranslationKey.DOWNLOAD_RETRY_FIELD,
                     attempt=current.retry_attempt,
                     seconds=seconds,
                 )
@@ -691,23 +718,29 @@ class DownloaderTui:
             DownloadState.DOWNLOADING,
             DownloadState.RATE_LIMITED,
         }:
-            options.extend((self._t("pause_download"), self._t("cancel_download")))
+            options.extend(
+                (self._t(TranslationKey.PAUSE_DOWNLOAD), self._t(TranslationKey.CANCEL_DOWNLOAD))
+            )
             actions.extend(("pause", "cancel"))
         elif current.state is DownloadState.PAUSED:
-            options.extend((self._t("resume_download"), self._t("cancel_download")))
+            options.extend(
+                (self._t(TranslationKey.RESUME_DOWNLOAD), self._t(TranslationKey.CANCEL_DOWNLOAD))
+            )
             actions.extend(("resume", "cancel"))
         elif current.state in {DownloadState.FAILED, DownloadState.CANCELLED}:
             if current.torrent_candidates:
-                options.append(self._t("choose_minerva_torrent_file"))
+                options.append(self._t(TranslationKey.CHOOSE_MINERVA_TORRENT_FILE))
                 actions.append("choose_file")
-            options.extend((self._t("retry_download"), self._t("cancel_download")))
+            options.extend(
+                (self._t(TranslationKey.RETRY_DOWNLOAD), self._t(TranslationKey.CANCEL_DOWNLOAD))
+            )
             actions.extend(("retry", "cancel"))
-        options.append(self._t("back"))
+        options.append(self._t(TranslationKey.BACK))
         actions.append("back")
         choice = self._menu(
-            self._t("download_details_title"),
+            self._t(TranslationKey.DOWNLOAD_DETAILS_TITLE),
             options,
-            self._t("download_controls_footer"),
+            self._t(TranslationKey.DOWNLOAD_CONTROLS_FOOTER),
         )
         if choice is None or choice < len(details):
             return
@@ -732,31 +765,31 @@ class DownloaderTui:
     def _download_progress_detail(self, job: DownloadJob) -> str:
         if job.total_bytes:
             return self._t(
-                "download_progress_bytes",
+                TranslationKey.DOWNLOAD_PROGRESS_BYTES,
                 current=self._format_file_size(job.downloaded_bytes),
                 total=self._format_file_size(job.total_bytes),
             )
         if job.downloaded_bytes:
             return self._format_file_size(job.downloaded_bytes)
-        return self._t("download_progress_waiting")
+        return self._t(TranslationKey.DOWNLOAD_PROGRESS_WAITING)
 
     def _confirm_download_cancel(self, job: DownloadJob) -> bool:
         choice = self._menu(
-            self._t("confirm_download_cancel"),
+            self._t(TranslationKey.CONFIRM_DOWNLOAD_CANCEL),
             (
-                self._t("keep_downloading", title=job.title),
-                self._t("cancel_and_remove_partial"),
+                self._t(TranslationKey.KEEP_DOWNLOADING, title=job.title),
+                self._t(TranslationKey.CANCEL_AND_REMOVE_PARTIAL),
             ),
-            self._t("cancel_download_warning"),
+            self._t(TranslationKey.CANCEL_DOWNLOAD_WARNING),
         )
         return choice == 1
 
     def _choose_queued_torrent_file(self, job: DownloadJob) -> TorrentFileChoice | None:
         choice = self._menu(
-            self._t("choose_minerva_torrent_file"),
+            self._t(TranslationKey.CHOOSE_MINERVA_TORRENT_FILE),
             [
                 self._t(
-                    "minerva_candidate",
+                    TranslationKey.MINERVA_CANDIDATE,
                     index=candidate.index,
                     filename=candidate.filename,
                     size=self._format_file_size(candidate.length),
@@ -765,39 +798,39 @@ class DownloaderTui:
                 )
                 for candidate in job.torrent_candidates
             ],
-            self._t("minerva_candidates_footer"),
+            self._t(TranslationKey.MINERVA_CANDIDATES_FOOTER),
         )
         return job.torrent_candidates[choice] if choice is not None else None
 
     def _manage_library_flow(self) -> None:
         if not self.roms_directories:
-            self._error(self._t("no_rom_partitions"))
+            self._error(self._t(TranslationKey.NO_ROM_PARTITIONS))
             return
         while True:
             root = self._choose_from_roots(
                 self.roms_directories,
-                self._t("choose_memory_card"),
+                self._t(TranslationKey.CHOOSE_MEMORY_CARD),
             )
             if root is None:
                 return
             self._draw_message(
-                self._t("checking_folders"),
-                self._t("finding_installed_platforms", root=root),
+                self._t(TranslationKey.CHECKING_FOLDERS),
+                self._t(TranslationKey.FINDING_INSTALLED_PLATFORMS, root=root),
                 1,
             )
             platforms = platforms_with_installed_games(root, self.platforms)
             if not platforms:
                 self._draw_message(
-                    self._t("no_games_on_card"),
-                    self._t("no_supported_games_on_card", root=root),
+                    self._t(TranslationKey.NO_GAMES_ON_CARD),
+                    self._t(TranslationKey.NO_SUPPORTED_GAMES_ON_CARD, root=root),
                     3,
                     wait=True,
                 )
                 continue
             platform_choice = self._menu(
-                self._t("choose_installed_platform"),
+                self._t(TranslationKey.CHOOSE_INSTALLED_PLATFORM),
                 [platform.name for platform in platforms],
-                self._t("installed_platform_footer"),
+                self._t(TranslationKey.INSTALLED_PLATFORM_FOOTER),
             )
             if platform_choice is None:
                 continue
@@ -805,31 +838,31 @@ class DownloaderTui:
 
     def _manage_platform_library(self, root: Path, platform: Platform) -> None:
         self._draw_message(
-            self._t("scanning_platform"),
-            self._t("reading_platform", platform=platform.name, root=root),
+            self._t(TranslationKey.SCANNING_PLATFORM),
+            self._t(TranslationKey.READING_PLATFORM, platform=platform.name, root=root),
             1,
         )
         games = scan_library((root,), (platform,))
         if not games:
             self._draw_message(
-                self._t("no_games"),
-                self._t("no_platform_games", platform=platform.name),
+                self._t(TranslationKey.NO_GAMES),
+                self._t(TranslationKey.NO_PLATFORM_GAMES, platform=platform.name),
                 3,
                 wait=True,
             )
             return
         while games:
             game_choice = self._menu(
-                self._t("platform_on_card", platform=platform.alias, root=root),
+                self._t(TranslationKey.PLATFORM_ON_CARD, platform=platform.alias, root=root),
                 [game.title for game in games],
-                self._t("manage_games_footer"),
+                self._t(TranslationKey.MANAGE_GAMES_FOOTER),
             )
             if game_choice is None:
                 return
             if self._manage_game(games[game_choice]):
                 self._draw_message(
-                    self._t("refreshing"),
-                    self._t("refreshing_platform", platform=platform.name),
+                    self._t(TranslationKey.REFRESHING),
+                    self._t(TranslationKey.REFRESHING_PLATFORM, platform=platform.name),
                     1,
                 )
                 games = scan_library((root,), (platform,))
@@ -837,17 +870,17 @@ class DownloaderTui:
     def _manage_game(self, game: InstalledGame) -> bool:
         description = (
             game.title,
-            self._t("card_field", value=game.roms_directory),
-            self._t("file_field", value=game.primary_file.name),
-            self._t("files_in_group", count=len(game.files)),
-            self._t("update_from_remote"),
-            self._t("delete_from_device"),
-            self._t("back"),
+            self._t(TranslationKey.CARD_FIELD, value=game.roms_directory),
+            self._t(TranslationKey.FILE_FIELD, value=game.primary_file.name),
+            self._t(TranslationKey.FILES_IN_GROUP, count=len(game.files)),
+            self._t(TranslationKey.UPDATE_FROM_REMOTE),
+            self._t(TranslationKey.DELETE_FROM_DEVICE),
+            self._t(TranslationKey.BACK),
         )
         choice = self._menu(
-            self._t("manage_game"),
+            self._t(TranslationKey.MANAGE_GAME),
             description,
-            self._t("manage_game_footer"),
+            self._t(TranslationKey.MANAGE_GAME_FOOTER),
         )
         if choice == 4:
             return self._update_game(game)
@@ -857,12 +890,12 @@ class DownloaderTui:
 
     def _confirm_delete(self, game: InstalledGame) -> bool:
         choice = self._menu(
-            self._t("confirm_permanent_delete"),
+            self._t(TranslationKey.CONFIRM_PERMANENT_DELETE),
             (
-                self._t("keep_game", title=game.title),
-                self._t("delete_files", count=len(game.files)),
+                self._t(TranslationKey.KEEP_GAME, title=game.title),
+                self._t(TranslationKey.DELETE_FILES, count=len(game.files)),
             ),
-            self._t("delete_warning"),
+            self._t(TranslationKey.DELETE_WARNING),
         )
         if choice != 1:
             return False
@@ -875,8 +908,8 @@ class DownloaderTui:
         self.refresh_on_exit = True
         LOGGER.info("Deleted game title=%r files=%d", game.title, len(game.files))
         self._draw_message(
-            self._t("game_deleted"),
-            self._t("game_deleted_message", title=game.title),
+            self._t(TranslationKey.GAME_DELETED),
+            self._t(TranslationKey.GAME_DELETED_MESSAGE, title=game.title),
             4,
             wait=True,
         )
@@ -889,39 +922,39 @@ class DownloaderTui:
         if not store.supports_platform(game.platform):
             self._error(
                 self._t(
-                    "store_platform_unsupported",
+                    TranslationKey.STORE_PLATFORM_UNSUPPORTED,
                     store=store.display_name,
                     platform=game.platform.name,
                 )
             )
             return False
-        self._draw_message(self._t("searching_for_update"), game.title, 1)
+        self._draw_message(self._t(TranslationKey.SEARCHING_FOR_UPDATE), game.title, 1)
         try:
             results = store.search(store.platform_code(game.platform), game.title)
         except StoreError as error:
             self._operation_error(error)
             return False
         if not results:
-            self._draw_message(self._t("no_remote_match"), game.title, 3, wait=True)
+            self._draw_message(self._t(TranslationKey.NO_REMOTE_MATCH), game.title, 3, wait=True)
             return False
         choice = self._menu(
-            self._t("choose_replacement"),
+            self._t(TranslationKey.CHOOSE_REPLACEMENT),
             [
                 "{} - {} - {}".format(result.title, result.region or "-", result.version or "-")
                 for result in results
             ],
-            self._t("replacement_footer"),
+            self._t(TranslationKey.REPLACEMENT_FOOTER),
         )
         if choice is None:
             return False
         selected = results[choice]
         confirmation = self._menu(
-            self._t("confirm_update"),
+            self._t(TranslationKey.CONFIRM_UPDATE),
             (
-                self._t("keep_file", filename=game.primary_file.name),
-                self._t("replace_with", title=selected.title),
+                self._t(TranslationKey.KEEP_FILE, filename=game.primary_file.name),
+                self._t(TranslationKey.REPLACE_WITH, title=selected.title),
             ),
-            self._t("confirm_choice_footer"),
+            self._t(TranslationKey.CONFIRM_CHOICE_FOOTER),
         )
         if confirmation != 1:
             return False
@@ -936,6 +969,7 @@ class DownloaderTui:
                 platform=game.platform,
                 roms_directory=game.roms_directory,
                 timeout_seconds=self.config.timeout_seconds,
+                bios_directory=self.preferences.bios_directory,
                 bittorrent_settings=(
                     self.preferences.minerva_bittorrent if store.store_id == "minerva" else None
                 ),
@@ -948,9 +982,9 @@ class DownloaderTui:
             return False
         LOGGER.info("Game update queued id=%s title=%r", job.job_id, game.title)
         self._draw_message(
-            self._t("update_queued"),
+            self._t(TranslationKey.UPDATE_QUEUED),
             self._t(
-                "update_queued_message",
+                TranslationKey.UPDATE_QUEUED_MESSAGE,
                 title=selected.title,
                 store=store.display_name,
             ),
@@ -960,10 +994,20 @@ class DownloaderTui:
         return False
 
     def _choose_roms_directory(self) -> Path | None:
+        preferred = self._preferred_roms_directory()
+        if preferred is not None:
+            return preferred
         return self._choose_from_roots(
             self.roms_directories,
-            self._t("choose_destination_card"),
+            self._t(TranslationKey.CHOOSE_DESTINATION_CARD),
         )
+
+    def _preferred_roms_directory(self) -> Path | None:
+        configured = self.preferences.default_roms_directory
+        if configured is None:
+            return None
+        preferred = Path(configured).expanduser()
+        return next((root for root in self.roms_directories if root == preferred), None)
 
     def _choose_store(self, title: str, platform: Platform | None = None) -> GameStore | None:
         stores = tuple(
@@ -974,12 +1018,14 @@ class DownloaderTui:
         choice = self._menu(
             title,
             [f"{store.display_name} - {self._store_description(store)}" for store in stores],
-            self._t("choose_store_footer"),
+            self._t(TranslationKey.CHOOSE_STORE_FOOTER),
         )
         return stores[choice] if choice is not None else None
 
     def _configure_store(self, *, first_run: bool = False) -> bool:
-        title = self._t("first_run_store" if first_run else "choose_default_store")
+        title = self._t(
+            TranslationKey.FIRST_RUN_STORE if first_run else TranslationKey.CHOOSE_DEFAULT_STORE
+        )
         store = self._choose_store(title)
         if store is None:
             return False
@@ -995,8 +1041,8 @@ class DownloaderTui:
         LOGGER.info("Default store changed to %s", store.store_id)
         if not first_run:
             self._draw_message(
-                self._t("settings_saved"),
-                self._t("store_saved_message", store=store.display_name),
+                self._t(TranslationKey.SETTINGS_SAVED),
+                self._t(TranslationKey.STORE_SAVED_MESSAGE, store=store.display_name),
                 4,
                 wait=True,
             )
@@ -1007,7 +1053,7 @@ class DownloaderTui:
             current = (
                 self.selected_store.display_name
                 if self.selected_store is not None
-                else self._t("not_set")
+                else self._t(TranslationKey.NOT_SET)
             )
             retrobios_status = self._retrobios_cache_label()
             compatibility_status = self._compatibility_cache_label()
@@ -1015,28 +1061,47 @@ class DownloaderTui:
                 store.catalogue_cache_file_count() for store in self.store_catalog.stores
             )
             options = [
-                self._t("change_store", value=current),
-                f"{self._t('language')}  [{language_name(self.preferences.language)}]",
-                self._t("refresh_store_cache", count=game_catalogue_count),
-                self._t("update_bios_catalogue", status=retrobios_status),
-                self._t("update_compatibility", status=compatibility_status),
-                self._t("cache_lifetime", days=self.preferences.catalogue_ttl_days),
+                self._t(TranslationKey.CHANGE_STORE, value=current),
                 self._t(
-                    "max_concurrent_downloads",
+                    TranslationKey.DEFAULT_ROM_DESTINATION,
+                    value=(
+                        str(self._preferred_roms_directory())
+                        if self._preferred_roms_directory() is not None
+                        else self._t(TranslationKey.MANUAL_EVERY_TIME)
+                    ),
+                ),
+                self._t(TranslationKey.CONSOLE_FOLDER_MAPPINGS),
+                self._t(TranslationKey.BIOS_DIRECTORY, value=self.preferences.bios_directory),
+                f"{self._t(TranslationKey.LANGUAGE)}  [{language_name(self.preferences.language)}]",
+                self._t(TranslationKey.REFRESH_STORE_CACHE, count=game_catalogue_count),
+                self._t(TranslationKey.UPDATE_BIOS_CATALOGUE, status=retrobios_status),
+                self._t(TranslationKey.UPDATE_COMPATIBILITY, status=compatibility_status),
+                self._t(TranslationKey.CACHE_LIFETIME, days=self.preferences.catalogue_ttl_days),
+                self._t(
+                    TranslationKey.MAX_CONCURRENT_DOWNLOADS,
                     count=self.preferences.max_concurrent_downloads,
                 ),
-                self._t("rate_limit_retry_settings"),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_SETTINGS),
                 self._t(
-                    "log_level",
+                    TranslationKey.NETWORK_TIMEOUT,
+                    value=self.config.timeout_seconds,
+                ),
+                self._t(
+                    TranslationKey.LOG_LEVEL,
                     value=self.preferences.log_level or self.config.log_level,
                 ),
                 self._t(
-                    "file_logging",
-                    value=self._t("on") if self._file_logging_enabled() else self._t("off"),
+                    TranslationKey.FILE_LOGGING,
+                    value=self._t(TranslationKey.ON)
+                    if self._file_logging_enabled()
+                    else self._t(TranslationKey.OFF),
                 ),
             ]
             actions = [
                 "store",
+                "rom_destination",
+                "console_mappings",
+                "bios_directory",
                 "language",
                 "store_catalogue",
                 "retrobios_update",
@@ -1044,29 +1109,36 @@ class DownloaderTui:
                 "catalogue_ttl",
                 "max_concurrent_downloads",
                 "rate_limit_retry",
+                "network_timeout",
                 "log_level",
                 "log_file",
             ]
             if self.selected_store is not None and self.selected_store.store_id == "minerva":
-                options.append(self._t("minerva_settings"))
+                options.append(self._t(TranslationKey.MINERVA_SETTINGS))
                 actions.append("minerva")
             options.extend(
                 (
-                    self._t("check_update", version=installed_version()),
-                    self._t("back"),
+                    self._t(TranslationKey.CHECK_UPDATE, version=installed_version()),
+                    self._t(TranslationKey.BACK),
                 )
             )
             actions.extend(("update", "back"))
             choice = self._menu(
-                self._t("settings_title"),
+                self._t(TranslationKey.SETTINGS_TITLE),
                 options,
-                self._t("settings_footer"),
+                self._t(TranslationKey.SETTINGS_FOOTER),
             )
             if choice is None or actions[choice] == "back":
                 return
             action = actions[choice]
             if action == "store":
                 self._configure_store()
+            elif action == "rom_destination":
+                self._configure_default_roms_directory()
+            elif action == "console_mappings":
+                self._console_folder_mappings_screen()
+            elif action == "bios_directory":
+                self._configure_bios_directory()
             elif action == "language":
                 self._configure_language()
             elif action == "store_catalogue":
@@ -1081,6 +1153,8 @@ class DownloaderTui:
                 self._configure_max_concurrent_downloads()
             elif action == "rate_limit_retry":
                 self._rate_limit_retry_settings_screen()
+            elif action == "network_timeout":
+                self._configure_network_timeout()
             elif action == "log_level":
                 self._configure_log_level()
             elif action == "log_file":
@@ -1092,21 +1166,138 @@ class DownloaderTui:
             if self.exit_after_update:
                 return
 
+    def _configure_default_roms_directory(self) -> None:
+        choice = self._menu(
+            self._t(TranslationKey.DEFAULT_ROM_DESTINATION_TITLE),
+            [
+                self._t(TranslationKey.MANUAL_EVERY_TIME),
+                *(str(root) for root in self.roms_directories),
+            ],
+            self._t(TranslationKey.DEFAULT_ROM_DESTINATION_FOOTER),
+        )
+        if choice is None:
+            return
+        destination = None if choice == 0 else str(self.roms_directories[choice - 1])
+        display = destination or self._t(TranslationKey.MANUAL_EVERY_TIME)
+        self._save_runtime_preferences(
+            replace(self.preferences, default_roms_directory=destination),
+            self._t(TranslationKey.DEFAULT_ROM_DESTINATION_SAVED),
+            self._t(TranslationKey.DEFAULT_ROM_DESTINATION_SAVED_MESSAGE, destination=display),
+        )
+
+    def _platform_for_store(self, store: GameStore, platform: Platform) -> Platform:
+        directory = self.preferences.store_rom_mappings.get(store.store_id, {}).get(platform.slug)
+        if directory is None:
+            return platform
+        return replace(platform, rom_folder=directory, alternate_folders=())
+
+    def _rom_folder_choices(self) -> tuple[str, ...]:
+        folders = {
+            folder for platform in self.platforms for folder in platform.rom_folders if folder
+        }
+        for root in self.roms_directories:
+            with contextlib.suppress(OSError):
+                folders.update(
+                    entry.name
+                    for entry in root.iterdir()
+                    if entry.is_dir() and not entry.name.startswith(".")
+                )
+        return tuple(sorted(folders, key=str.casefold))
+
+    def _console_folder_mappings_screen(self) -> None:
+        store = self._choose_store(self._t(TranslationKey.CHOOSE_MAPPING_STORE))
+        if store is None:
+            return
+        platforms = tuple(
+            platform
+            for platform in self.platforms
+            if platform.slug != "all"
+            and platform.rom_folder is not None
+            and store.supports_platform(platform)
+        )
+        while True:
+            choice = self._menu(
+                self._t(TranslationKey.CONSOLE_FOLDER_MAPPINGS_TITLE, store=store.display_name),
+                [
+                    self._t(
+                        TranslationKey.CONSOLE_FOLDER_MAPPING,
+                        console=platform.name,
+                        folder=self._platform_for_store(store, platform).rom_folder,
+                    )
+                    for platform in platforms
+                ]
+                + [self._t(TranslationKey.BACK)],
+                self._t(TranslationKey.CONSOLE_FOLDER_MAPPINGS_FOOTER),
+            )
+            if choice is None or choice == len(platforms):
+                return
+            platform = platforms[choice]
+            folders = self._rom_folder_choices()
+            folder_choice = self._menu(
+                self._t(TranslationKey.CHOOSE_CONSOLE_FOLDER, console=platform.name),
+                [
+                    self._t(TranslationKey.AUTOMATIC_FOLDER, folder=platform.rom_folder),
+                    *folders,
+                ],
+                self._t(TranslationKey.CHOOSE_CONSOLE_FOLDER_FOOTER),
+            )
+            if folder_choice is None:
+                continue
+            mappings = {
+                store_id: dict(platform_mappings)
+                for store_id, platform_mappings in self.preferences.store_rom_mappings.items()
+            }
+            store_mappings = mappings.setdefault(store.store_id, {})
+            if folder_choice == 0:
+                store_mappings.pop(platform.slug, None)
+            else:
+                store_mappings[platform.slug] = folders[folder_choice - 1]
+            if not store_mappings:
+                mappings.pop(store.store_id, None)
+            destination = platform.rom_folder if folder_choice == 0 else folders[folder_choice - 1]
+            self._save_runtime_preferences(
+                replace(self.preferences, store_rom_mappings=mappings),
+                self._t(TranslationKey.CONSOLE_FOLDER_MAPPING_SAVED),
+                self._t(
+                    TranslationKey.CONSOLE_FOLDER_MAPPING_SAVED_MESSAGE,
+                    store=store.display_name,
+                    console=platform.name,
+                    folder=destination,
+                ),
+            )
+
+    def _configure_bios_directory(self) -> None:
+        folders = self._rom_folder_choices()
+        choices = tuple(folder for folder in folders if folder != "bios")
+        choice = self._menu(
+            self._t(TranslationKey.BIOS_DIRECTORY_TITLE),
+            [self._t(TranslationKey.AUTOMATIC_FOLDER, folder="bios"), *choices],
+            self._t(TranslationKey.BIOS_DIRECTORY_FOOTER),
+        )
+        if choice is None:
+            return
+        directory = "bios" if choice == 0 else choices[choice - 1]
+        self._save_runtime_preferences(
+            replace(self.preferences, bios_directory=directory),
+            self._t(TranslationKey.BIOS_DIRECTORY_SAVED),
+            self._t(TranslationKey.BIOS_DIRECTORY_SAVED_MESSAGE, directory=directory),
+        )
+
     def _configure_language(self) -> None:
         choice = self._menu(
-            self._t("choose_language"),
+            self._t(TranslationKey.CHOOSE_LANGUAGE),
             [language.name for language in LANGUAGES],
-            self._t("language_footer"),
+            self._t(TranslationKey.LANGUAGE_FOOTER),
         )
         if choice is None:
             return
         language = LANGUAGES[choice]
         self._save_runtime_preferences(
             replace(self.preferences, language=language.code),
-            translate(language.code, "language_saved"),
+            translate(language.code, TranslationKey.LANGUAGE_SAVED),
             translate(
                 language.code,
-                "language_saved_message",
+                TranslationKey.LANGUAGE_SAVED_MESSAGE,
                 language=language.name,
             ),
         )
@@ -1120,16 +1311,16 @@ class DownloaderTui:
         if input_kind is SettingInputKind.BOOLEAN:
             choice = self._menu(
                 title,
-                (self._t("false"), self._t("true")),
-                self._t("file_logging_footer"),
+                (self._t(TranslationKey.FALSE), self._t(TranslationKey.TRUE)),
+                self._t(TranslationKey.FILE_LOGGING_FOOTER),
             )
             return None if choice is None else choice == 1
         hint_key = (
-            "integer_keyboard"
+            TranslationKey.INTEGER_KEYBOARD
             if input_kind is SettingInputKind.INTEGER
-            else "float_keyboard"
+            else TranslationKey.FLOAT_KEYBOARD
             if input_kind is SettingInputKind.FLOAT
-            else "mixed_keyboard"
+            else TranslationKey.MIXED_KEYBOARD
         )
         return self._on_screen_keyboard(
             title,
@@ -1140,9 +1331,9 @@ class DownloaderTui:
 
     def _configure_catalogue_ttl(self) -> None:
         raw_value = self._edit_setting(
-            self._t("cache_days_title"),
+            self._t(TranslationKey.CACHE_DAYS_TITLE),
             self._t(
-                "cache_days_hint",
+                TranslationKey.CACHE_DAYS_HINT,
                 current=self.preferences.catalogue_ttl_days,
                 default=7,
             ),
@@ -1154,22 +1345,22 @@ class DownloaderTui:
         try:
             days = int(raw_value)
             if not 1 <= days <= 3650:
-                self._error(self._t("cache_lifetime_range"))
+                self._error(self._t(TranslationKey.CACHE_LIFETIME_RANGE))
                 return
         except ValueError:
-            self._error(self._t("invalid_cache_lifetime"))
+            self._error(self._t(TranslationKey.INVALID_CACHE_LIFETIME))
             return
         self._save_runtime_preferences(
             replace(self.preferences, catalogue_ttl_days=days),
-            self._t("cache_lifetime_saved"),
-            self._t("cache_lifetime_saved_message", days=days),
+            self._t(TranslationKey.CACHE_LIFETIME_SAVED),
+            self._t(TranslationKey.CACHE_LIFETIME_SAVED_MESSAGE, days=days),
         )
 
     def _configure_max_concurrent_downloads(self) -> None:
         raw_value = self._edit_setting(
-            self._t("max_concurrent_downloads_title"),
+            self._t(TranslationKey.MAX_CONCURRENT_DOWNLOADS_TITLE),
             self._t(
-                "max_concurrent_downloads_hint",
+                TranslationKey.MAX_CONCURRENT_DOWNLOADS_HINT,
                 current=self.preferences.max_concurrent_downloads,
             ),
             SettingInputKind.INTEGER,
@@ -1180,37 +1371,60 @@ class DownloaderTui:
         try:
             count = int(raw_value)
         except ValueError:
-            self._error(self._t("max_concurrent_downloads_range"))
+            self._error(self._t(TranslationKey.MAX_CONCURRENT_DOWNLOADS_RANGE))
             return
         if not 1 <= count <= 8:
-            self._error(self._t("max_concurrent_downloads_range"))
+            self._error(self._t(TranslationKey.MAX_CONCURRENT_DOWNLOADS_RANGE))
             return
         self._save_runtime_preferences(
             replace(self.preferences, max_concurrent_downloads=count),
-            self._t("max_concurrent_downloads_saved"),
-            self._t("max_concurrent_downloads_saved_message", count=count),
+            self._t(TranslationKey.MAX_CONCURRENT_DOWNLOADS_SAVED),
+            self._t(TranslationKey.MAX_CONCURRENT_DOWNLOADS_SAVED_MESSAGE, count=count),
+        )
+
+    def _configure_network_timeout(self) -> None:
+        raw_value = self._edit_setting(
+            self._t(TranslationKey.NETWORK_TIMEOUT_TITLE),
+            self._t(TranslationKey.NETWORK_TIMEOUT_HINT, current=self.config.timeout_seconds),
+            SettingInputKind.FLOAT,
+        )
+        if raw_value is None:
+            return
+        assert isinstance(raw_value, str)
+        try:
+            timeout_seconds = float(raw_value)
+        except ValueError:
+            self._error(self._t(TranslationKey.NETWORK_TIMEOUT_RANGE))
+            return
+        if not 1 <= timeout_seconds <= 3600:
+            self._error(self._t(TranslationKey.NETWORK_TIMEOUT_RANGE))
+            return
+        self._save_runtime_preferences(
+            replace(self.preferences, network_timeout_seconds=timeout_seconds),
+            self._t(TranslationKey.NETWORK_TIMEOUT_SAVED),
+            self._t(TranslationKey.NETWORK_TIMEOUT_SAVED_MESSAGE, value=timeout_seconds),
         )
 
     def _rate_limit_retry_settings_screen(self) -> None:
         while True:
             settings = self.preferences.rate_limit_retry
             options = (
-                self._t("rate_limit_retry_base", value=settings.base_seconds),
-                self._t("rate_limit_retry_max", value=settings.max_seconds),
-                self._t("rate_limit_retry_jitter", value=settings.jitter_ratio * 100),
-                self._t("back"),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_BASE, value=settings.base_seconds),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_MAX, value=settings.max_seconds),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_JITTER, value=settings.jitter_ratio * 100),
+                self._t(TranslationKey.BACK),
             )
             choice = self._menu(
-                self._t("rate_limit_retry_title"),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_TITLE),
                 options,
-                self._t("rate_limit_retry_footer"),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_FOOTER),
             )
             if choice is None or choice == 3:
                 return
             title_key = (
-                "rate_limit_retry_base_seconds_title",
-                "rate_limit_retry_max_seconds_title",
-                "rate_limit_retry_jitter_ratio_title",
+                TranslationKey.RATE_LIMIT_RETRY_BASE_SECONDS_TITLE,
+                TranslationKey.RATE_LIMIT_RETRY_MAX_SECONDS_TITLE,
+                TranslationKey.RATE_LIMIT_RETRY_JITTER_RATIO_TITLE,
             )[choice]
             current = (
                 settings.base_seconds,
@@ -1228,7 +1442,7 @@ class DownloaderTui:
             try:
                 value = float(raw_value)
             except ValueError:
-                self._error(self._t("rate_limit_retry_invalid"))
+                self._error(self._t(TranslationKey.RATE_LIMIT_RETRY_INVALID))
                 continue
             try:
                 if choice == 0:
@@ -1242,35 +1456,37 @@ class DownloaderTui:
                 if updated_settings.max_seconds > 24 * 60 * 60:
                     raise ValueError
             except ValueError:
-                self._error(self._t("rate_limit_retry_invalid"))
+                self._error(self._t(TranslationKey.RATE_LIMIT_RETRY_INVALID))
                 continue
             if self._save_runtime_preferences(
                 replace(self.preferences, rate_limit_retry=updated_settings),
-                self._t("rate_limit_retry_saved"),
-                self._t("rate_limit_retry_saved_message"),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_SAVED),
+                self._t(TranslationKey.RATE_LIMIT_RETRY_SAVED_MESSAGE),
             ):
                 self.download_queue.update_retry_settings(updated_settings)
 
     def _configure_log_level(self) -> None:
         levels = ("DEBUG", "INFO", "WARNING", "ERROR")
         choice = self._menu(
-            self._t("log_level_title"),
+            self._t(TranslationKey.LOG_LEVEL_TITLE),
             levels,
-            self._t("log_level_footer"),
+            self._t(TranslationKey.LOG_LEVEL_FOOTER),
         )
         if choice is None:
             return
         level = levels[choice]
         self._save_runtime_preferences(
             replace(self.preferences, log_level=level),
-            self._t("log_level_saved"),
-            self._t("log_level_saved_message", level=level),
+            self._t(TranslationKey.LOG_LEVEL_SAVED),
+            self._t(TranslationKey.LOG_LEVEL_SAVED_MESSAGE, level=level),
         )
 
     def _configure_file_logging(self) -> None:
         enabled = self._edit_setting(
-            self._t("file_logging_title"),
-            self._t("on") if self._file_logging_enabled() else self._t("off"),
+            self._t(TranslationKey.FILE_LOGGING_TITLE),
+            self._t(TranslationKey.ON)
+            if self._file_logging_enabled()
+            else self._t(TranslationKey.OFF),
             SettingInputKind.BOOLEAN,
         )
         if enabled is None:
@@ -1278,8 +1494,10 @@ class DownloaderTui:
         assert isinstance(enabled, bool)
         self._save_runtime_preferences(
             replace(self.preferences, log_to_file=enabled),
-            self._t("file_logging_saved"),
-            self._file_logging_message if enabled else self._t("file_logging_disabled"),
+            self._t(TranslationKey.FILE_LOGGING_SAVED),
+            self._file_logging_message
+            if enabled
+            else self._t(TranslationKey.FILE_LOGGING_DISABLED),
         )
 
     def _save_runtime_preferences(
@@ -1301,13 +1519,21 @@ class DownloaderTui:
 
     def _apply_runtime_preferences(self) -> None:
         self.language = normalize_language(self.preferences.language)
+        if self.preferences.network_timeout_seconds is not None:
+            self.config = replace(
+                self.config,
+                timeout_seconds=self.preferences.network_timeout_seconds,
+            )
         ttl_seconds = catalogue_ttl_seconds(self.preferences.catalogue_ttl_days)
         for store in self.store_catalog.stores:
             store.set_catalogue_ttl(ttl_seconds)
+            store.set_network_timeout(self.config.timeout_seconds)
         self.retrobios_repository.ttl_seconds = ttl_seconds
+        self.retrobios_repository.timeout_seconds = self.config.timeout_seconds
         if self.retrobios_catalog is not None:
             self.retrobios_catalog.ttl_seconds = ttl_seconds
         self.compatibility_client.ttl_seconds = ttl_seconds
+        self.compatibility_client.timeout_seconds = self.config.timeout_seconds
         self._apply_logging_preferences()
 
     def _file_logging_enabled(self) -> bool:
@@ -1328,23 +1554,23 @@ class DownloaderTui:
     def _file_logging_message(self) -> str:
         path = active_log_file()
         if path is None:
-            return self._t("file_logging_failed")
-        return self._t("file_logging_enabled", path=path)
+            return self._t(TranslationKey.FILE_LOGGING_FAILED)
+        return self._t(TranslationKey.FILE_LOGGING_ENABLED, path=path)
 
     def _refresh_store_catalogue(self) -> None:
         stores = self.store_catalog.stores
         while True:
             store_choice = self._menu(
-                self._t("choose_store_catalogue"),
+                self._t(TranslationKey.CHOOSE_STORE_CATALOGUE),
                 [
                     self._t(
-                        "store_cached_count",
+                        TranslationKey.STORE_CACHED_COUNT,
                         store=store.display_name,
                         count=store.catalogue_cache_file_count(),
                     )
                     for store in stores
                 ],
-                self._t("choose_store_footer"),
+                self._t(TranslationKey.CHOOSE_STORE_FOOTER),
             )
             if store_choice is None:
                 return
@@ -1360,20 +1586,20 @@ class DownloaderTui:
                 seen_codes.add(system_code)
                 choices.append((platform, system_code, store.catalogue_cache_status(system_code)))
             platform_choice = self._menu(
-                self._t("refresh_store_title", store=store.display_name.upper()),
+                self._t(TranslationKey.REFRESH_STORE_TITLE, store=store.display_name.upper()),
                 [
                     f"{platform.name}  [{self._store_cache_status_label(status)}]"
                     for platform, _system_code, status in choices
                 ],
-                self._t("refresh_store_footer"),
+                self._t(TranslationKey.REFRESH_STORE_FOOTER),
             )
             if platform_choice is None:
                 continue
             platform, system_code, _status = choices[platform_choice]
             self._draw_message(
-                self._t("refreshing_catalogue"),
+                self._t(TranslationKey.REFRESHING_CATALOGUE),
                 self._t(
-                    "refreshing_catalogue_message",
+                    TranslationKey.REFRESHING_CATALOGUE_MESSAGE,
                     store=store.display_name,
                     platform=platform.name,
                 ),
@@ -1385,9 +1611,9 @@ class DownloaderTui:
                 self._operation_error(error)
                 return
             self._draw_message(
-                self._t("catalogue_updated"),
+                self._t(TranslationKey.CATALOGUE_UPDATED),
                 self._t(
-                    "catalogue_updated_message",
+                    TranslationKey.CATALOGUE_UPDATED_MESSAGE,
                     count=len(results),
                     store=store.display_name,
                     platform=platform.name,
@@ -1399,16 +1625,16 @@ class DownloaderTui:
 
     def _store_cache_status_label(self, status: StoreCacheStatus | None) -> str:
         if status is None:
-            return self._t("not_downloaded")
+            return self._t(TranslationKey.NOT_DOWNLOADED)
         return self._t(
-            "stale_games" if status.stale else "fresh_games",
+            TranslationKey.STALE_GAMES if status.stale else TranslationKey.FRESH_GAMES,
             count=status.result_count,
         )
 
     def _store_description(self, store: GameStore) -> str:
         key = {
-            "vimm": "store_description_vimm",
-            "minerva": "store_description_minerva",
+            "vimm": TranslationKey.STORE_DESCRIPTION_VIMM,
+            "minerva": TranslationKey.STORE_DESCRIPTION_MINERVA,
         }.get(store.store_id)
         return self._t(key) if key is not None else store.description
 
@@ -1419,87 +1645,91 @@ class DownloaderTui:
         detail: bool = False,
     ) -> str:
         level_key = {
-            "not listed": "compatibility_level_not_listed",
-            "perfect": "compatibility_level_perfect",
-            "playable": "compatibility_level_playable",
-            "limited": "compatibility_level_limited",
-            "unsupported": "compatibility_level_unsupported",
+            "not listed": TranslationKey.COMPATIBILITY_LEVEL_NOT_LISTED,
+            "perfect": TranslationKey.COMPATIBILITY_LEVEL_PERFECT,
+            "playable": TranslationKey.COMPATIBILITY_LEVEL_PLAYABLE,
+            "limited": TranslationKey.COMPATIBILITY_LEVEL_LIMITED,
+            "unsupported": TranslationKey.COMPATIBILITY_LEVEL_UNSUPPORTED,
         }.get(info.level.casefold())
         level = self._t(level_key) if level_key is not None else info.level
         if info.level == "Not listed":
-            return self._t("compatibility_not_listed_source") if detail else level
+            return self._t(TranslationKey.COMPATIBILITY_NOT_LISTED_SOURCE) if detail else level
         if detail:
             qualifier = (
                 self._t(
-                    "compatibility_title_match",
+                    TranslationKey.COMPATIBILITY_TITLE_MATCH,
                     score=round(info.match_score * 100),
                 )
                 if info.title_listed and info.match_score is not None
-                else self._t("compatibility_title_listed")
+                else self._t(TranslationKey.COMPATIBILITY_TITLE_LISTED)
                 if info.title_listed
-                else self._t("compatibility_platform_rating")
+                else self._t(TranslationKey.COMPATIBILITY_PLATFORM_RATING)
             )
-            return self._t("compatibility_detail", level=level, qualifier=qualifier)
+            return self._t(TranslationKey.COMPATIBILITY_DETAIL, level=level, qualifier=qualifier)
         if info.title_listed and info.match_score is not None:
             return self._t(
-                "compatibility_match",
+                TranslationKey.COMPATIBILITY_MATCH,
                 level=level,
                 score=round(info.match_score * 100),
             )
-        return self._t("compatibility_listed", level=level) if info.title_listed else level
+        return (
+            self._t(TranslationKey.COMPATIBILITY_LISTED, level=level)
+            if info.title_listed
+            else level
+        )
 
     def _bios_state_label(self, state: BiosState) -> str:
-        return self._t(f"bios_state_{state.value}")
+        return self._t(TranslationKey(f"bios_state_{state.value}"))
 
     def _progress_label(self, label: str) -> str:
         key = {
-            "Finding the latest RetroBIOS revision": "finding_retrobios_revision",
-            "Downloading RetroBIOS core profiles": "downloading_retrobios_profiles",
+            "Finding the latest RetroBIOS revision": TranslationKey.FINDING_RETROBIOS_REVISION,
+            "Downloading RetroBIOS core profiles": TranslationKey.DOWNLOADING_RETROBIOS_PROFILES,
         }.get(label)
         return self._t(key) if key is not None else label
 
     def _retrobios_cache_label(self) -> str:
         if not hasattr(self, "retrobios_repository"):
-            return self._t("not_downloaded")
+            return self._t(TranslationKey.NOT_DOWNLOADED)
         try:
             catalogue = self.retrobios_repository.load()
         except BiosError:
-            return self._t("cache_invalid")
+            return self._t(TranslationKey.CACHE_INVALID)
         if catalogue is None:
-            return self._t("not_downloaded")
+            return self._t(TranslationKey.NOT_DOWNLOADED)
         freshness = (
-            self._t("stale_over_days", days=self.preferences.catalogue_ttl_days)
+            self._t(TranslationKey.STALE_OVER_DAYS, days=self.preferences.catalogue_ttl_days)
             if catalogue.cache_is_stale()
-            else self._t("fresh")
+            else self._t(TranslationKey.FRESH)
         )
         return f"{catalogue.revision[:8]} - {freshness}"
 
     def _compatibility_cache_label(self) -> str:
         if not hasattr(self, "compatibility_client"):
-            return self._t("not_downloaded")
+            return self._t(TranslationKey.NOT_DOWNLOADED)
         age = self.compatibility_client.cache_age_seconds()
         if age is None:
-            return self._t("not_downloaded")
+            return self._t(TranslationKey.NOT_DOWNLOADED)
         return (
-            self._t("stale_over_days", days=self.preferences.catalogue_ttl_days)
+            self._t(TranslationKey.STALE_OVER_DAYS, days=self.preferences.catalogue_ttl_days)
             if self.compatibility_client.cache_is_stale()
-            else self._t("fresh")
+            else self._t(TranslationKey.FRESH)
         )
 
     def _update_compatibility_catalogue(self) -> None:
         choice = self._menu(
-            self._t("compatibility_update_title"),
+            self._t(TranslationKey.COMPATIBILITY_UPDATE_TITLE),
             (
-                self._t("compatibility_update_download"),
-                self._t("keep_catalogue"),
+                self._t(TranslationKey.COMPATIBILITY_UPDATE_DOWNLOAD),
+                self._t(TranslationKey.KEEP_CATALOGUE),
             ),
-            self._t("keep_cache_footer"),
+            self._t(TranslationKey.KEEP_CACHE_FOOTER),
         )
         if choice != 0:
             return
         self._draw_message(
-            self._t("compatibility_updating"),
-            self._t("compatibility_updating_message"),
+            self._t(TranslationKey.COMPATIBILITY_UPDATING),
+            self._t(TranslationKey.COMPATIBILITY_UPDATING_MESSAGE),
             1,
         )
         try:
@@ -1508,9 +1738,9 @@ class DownloaderTui:
             self._operation_error(error)
             return
         self._draw_message(
-            self._t("compatibility_updated"),
+            self._t(TranslationKey.COMPATIBILITY_UPDATED),
             self._t(
-                "compatibility_updated_message",
+                TranslationKey.COMPATIBILITY_UPDATED_MESSAGE,
                 count=count,
                 days=self.preferences.catalogue_ttl_days,
             ),
@@ -1524,7 +1754,7 @@ class DownloaderTui:
         cancelled = Event()
         state_lock = Lock()
         progress_state: list[str | int | None] = [
-            self._t("connecting_retrobios"),
+            self._t(TranslationKey.CONNECTING_RETROBIOS),
             0,
             None,
         ]
@@ -1555,12 +1785,12 @@ class DownloaderTui:
 
     def _update_retrobios_catalogue(self) -> None:
         choice = self._menu(
-            self._t("retrobios_update_title"),
+            self._t(TranslationKey.RETROBIOS_UPDATE_TITLE),
             (
-                self._t("download_latest_metadata"),
-                self._t("keep_catalogue"),
+                self._t(TranslationKey.DOWNLOAD_LATEST_METADATA),
+                self._t(TranslationKey.KEEP_CATALOGUE),
             ),
-            self._t("keep_cache_footer"),
+            self._t(TranslationKey.KEEP_CACHE_FOOTER),
         )
         if choice != 0:
             return
@@ -1568,8 +1798,8 @@ class DownloaderTui:
             catalogue = self._load_retrobios_catalogue(update=True)
         except BiosDownloadCancelled:
             self._draw_message(
-                self._t("retrobios_update_cancelled"),
-                self._t("catalogue_unchanged"),
+                self._t(TranslationKey.RETROBIOS_UPDATE_CANCELLED),
+                self._t(TranslationKey.CATALOGUE_UNCHANGED),
                 3,
                 wait=True,
             )
@@ -1578,12 +1808,12 @@ class DownloaderTui:
             self._operation_error(error)
             return
         self._draw_message(
-            self._t("retrobios_updated"),
+            self._t(TranslationKey.RETROBIOS_UPDATED),
             self._t(
-                "retrobios_summary",
+                TranslationKey.RETROBIOS_SUMMARY,
                 revision=catalogue.revision[:12],
                 systems=len(catalogue.systems),
-                profile=catalogue.retroarch_version or self._t("unknown"),
+                profile=catalogue.retroarch_version or self._t(TranslationKey.UNKNOWN),
             ),
             4,
             wait=True,
@@ -1592,10 +1822,10 @@ class DownloaderTui:
     def _bios_search_flow(self) -> None:
         root = self._choose_from_roots(
             self.roms_directories,
-            self._t("choose_bios_memory_card"),
+            self._t(TranslationKey.CHOOSE_BIOS_MEMORY_CARD),
         )
         if root is None:
-            self._error(self._t("no_rom_partition"))
+            self._error(self._t(TranslationKey.NO_ROM_PARTITION))
             return
         try:
             catalogue = self._load_retrobios_catalogue()
@@ -1605,8 +1835,8 @@ class DownloaderTui:
             self._operation_error(error)
             return
         query = self._on_screen_keyboard(
-            self._t("search_bios_title"),
-            empty_hint=self._t("search_bios_empty_hint"),
+            self._t(TranslationKey.SEARCH_BIOS_TITLE),
+            empty_hint=self._t(TranslationKey.SEARCH_BIOS_EMPTY_HINT),
         )
         if query is None:
             return
@@ -1619,7 +1849,12 @@ class DownloaderTui:
             system = catalogue.system_for(platform)
             if system is None:
                 continue
-            for check in audit_bios(system.requirements, platform, root):
+            for check in audit_bios(
+                system.requirements,
+                platform,
+                root,
+                self.preferences.bios_directory,
+            ):
                 requirement = check.requirement
                 haystack = " ".join(
                     (
@@ -1644,11 +1879,11 @@ class DownloaderTui:
                 entries.append((platform, check))
         if not entries:
             self._draw_message(
-                self._t("no_bios_results"),
+                self._t(TranslationKey.NO_BIOS_RESULTS),
                 (
-                    self._t("nothing_matched", query=query)
+                    self._t(TranslationKey.NOTHING_MATCHED, query=query)
                     if query
-                    else self._t("bios_catalogue_empty")
+                    else self._t(TranslationKey.BIOS_CATALOGUE_EMPTY)
                 ),
                 3,
                 wait=True,
@@ -1656,37 +1891,55 @@ class DownloaderTui:
             return
         while True:
             choice = self._menu(
-                self._t("bios_results", count=len(entries)),
+                self._t(TranslationKey.BIOS_RESULTS, count=len(entries)),
                 [
                     f"{platform.alias} | {self._bios_check_label(check)}"
                     for platform, check in entries
                 ],
-                self._t("bios_results_footer"),
+                self._t(TranslationKey.BIOS_RESULTS_FOOTER),
             )
             if choice is None:
                 return
             platform, old_check = entries[choice]
-            check = audit_bios((old_check.requirement,), platform, root)[0]
+            check = audit_bios(
+                (old_check.requirement,),
+                platform,
+                root,
+                self.preferences.bios_directory,
+            )[0]
             entries[choice] = (platform, check)
             requirement = check.requirement
             detail = [
                 requirement.description or requirement.name,
-                self._t("platform_field", value=platform.name),
-                self._t("status_field", value=self._bios_state_label(check.state).upper()),
-                self._t("required" if requirement.required else "optional"),
-                self._t("region_field", value=requirement.region or self._t("all_regions")),
-                self._t("destination_field", value=check.paths[0]),
+                self._t(TranslationKey.PLATFORM_FIELD, value=platform.name),
+                self._t(
+                    TranslationKey.STATUS_FIELD, value=self._bios_state_label(check.state).upper()
+                ),
+                self._t(
+                    TranslationKey.REQUIRED if requirement.required else TranslationKey.OPTIONAL
+                ),
+                self._t(
+                    TranslationKey.REGION_FIELD,
+                    value=requirement.region or self._t(TranslationKey.ALL_REGIONS),
+                ),
+                self._t(TranslationKey.DESTINATION_FIELD, value=check.paths[0]),
             ]
             if requirement.note:
                 detail.append(requirement.note)
             if check.state is BiosState.VALID:
-                self._draw_message(self._t("bios_details"), "\n".join(detail), 4, wait=True)
+                self._draw_message(
+                    self._t(TranslationKey.BIOS_DETAILS), "\n".join(detail), 4, wait=True
+                )
                 continue
             if catalogue.source_url(requirement) is None:
-                detail.append(self._t("bios_entry_not_downloadable"))
-                self._draw_message(self._t("bios_details"), "\n".join(detail), 3, wait=True)
+                detail.append(self._t(TranslationKey.BIOS_ENTRY_NOT_DOWNLOADABLE))
+                self._draw_message(
+                    self._t(TranslationKey.BIOS_DETAILS), "\n".join(detail), 3, wait=True
+                )
                 continue
-            self._draw_message(self._t("bios_details"), "\n".join(detail), 3, wait=True)
+            self._draw_message(
+                self._t(TranslationKey.BIOS_DETAILS), "\n".join(detail), 3, wait=True
+            )
             confirmation = self._confirm_retrobios_download((check,))
             if confirmation:
                 self._install_bios_checks(catalogue, (check,), platform, root)
@@ -1696,6 +1949,7 @@ class DownloaderTui:
         platform: Platform,
         roms_directory: Path,
         region: str | None,
+        bios_directory: str = "bios",
     ) -> int:
         """Offer BIOS only after bundled and existing files have been checked."""
 
@@ -1705,8 +1959,8 @@ class DownloaderTui:
             return 0
         except BiosError as error:
             self._draw_message(
-                self._t("bios_check_unavailable"),
-                self._t("bios_check_unavailable_message", error=error),
+                self._t(TranslationKey.BIOS_CHECK_UNAVAILABLE),
+                self._t(TranslationKey.BIOS_CHECK_UNAVAILABLE_MESSAGE, error=error),
                 3,
                 wait=True,
             )
@@ -1723,6 +1977,7 @@ class DownloaderTui:
             platform,
             self.roms_directories,
             roms_directory,
+            bios_directory,
         )
         missing = unresolved(checks)
         if not missing:
@@ -1733,7 +1988,7 @@ class DownloaderTui:
             )
             return 0
         lines = [
-            self._t("required_bios_missing_message"),
+            self._t(TranslationKey.REQUIRED_BIOS_MISSING_MESSAGE),
             "",
             *(
                 f"{check.requirement.name} [{self._bios_state_label(check.state)}]"
@@ -1741,20 +1996,20 @@ class DownloaderTui:
             ),
         ]
         if len(missing) > 8:
-            lines.append(self._t("and_more", count=len(missing) - 8))
+            lines.append(self._t(TranslationKey.AND_MORE, count=len(missing) - 8))
         self._draw_message(
-            self._t("required_bios_not_found"),
+            self._t(TranslationKey.REQUIRED_BIOS_NOT_FOUND),
             "\n".join(lines),
             3,
             wait=True,
         )
         choice = self._menu(
-            self._t("download_required_bios"),
+            self._t(TranslationKey.DOWNLOAD_REQUIRED_BIOS),
             (
-                self._t("download_from_retrobios"),
-                self._t("keep_without_bios"),
+                self._t(TranslationKey.DOWNLOAD_FROM_RETROBIOS),
+                self._t(TranslationKey.KEEP_WITHOUT_BIOS),
             ),
-            self._t("firmware_warning"),
+            self._t(TranslationKey.FIRMWARE_WARNING),
         )
         if choice != 0 or not self._confirm_retrobios_download(missing):
             LOGGER.warning(
@@ -1763,25 +2018,31 @@ class DownloaderTui:
                 platform.alias,
             )
             return 0
-        return self._install_bios_checks(catalogue, missing, platform, roms_directory)
+        return self._install_bios_checks(
+            catalogue,
+            missing,
+            platform,
+            roms_directory,
+            bios_directory,
+        )
 
     def _confirm_retrobios_download(self, checks: Sequence[BiosCheck]) -> bool:
         downloadable = tuple(check for check in checks if check.requirement.source_path is not None)
         if not downloadable:
             self._draw_message(
-                self._t("bios_not_downloadable"),
-                self._t("bios_not_downloadable_message"),
+                self._t(TranslationKey.BIOS_NOT_DOWNLOADABLE),
+                self._t(TranslationKey.BIOS_NOT_DOWNLOADABLE_MESSAGE),
                 3,
                 wait=True,
             )
             return False
         choice = self._menu(
-            self._t("confirm_retrobios_download"),
+            self._t(TranslationKey.CONFIRM_RETROBIOS_DOWNLOAD),
             (
-                self._t("cancel"),
-                self._t("download_verified_bios", count=len(downloadable)),
+                self._t(TranslationKey.CANCEL),
+                self._t(TranslationKey.DOWNLOAD_VERIFIED_BIOS, count=len(downloadable)),
             ),
-            self._t("bios_legal_footer"),
+            self._t(TranslationKey.BIOS_LEGAL_FOOTER),
         )
         return choice == 1
 
@@ -1791,7 +2052,9 @@ class DownloaderTui:
         checks: Sequence[BiosCheck],
         platform: Platform,
         root: Path,
+        bios_directory: str | None = None,
     ) -> int:
+        effective_bios_directory = bios_directory or self.preferences.bios_directory
         selected = tuple(
             check for check in checks if catalogue.source_url(check.requirement) is not None
         )
@@ -1800,7 +2063,7 @@ class DownloaderTui:
         cancelled = Event()
         state_lock = Lock()
         progress_state: list[str | int | None] = [
-            self._t("connecting_retrobios"),
+            self._t(TranslationKey.CONNECTING_RETROBIOS),
             0,
             None,
         ]
@@ -1820,6 +2083,7 @@ class DownloaderTui:
                     self.config.timeout_seconds,
                     report,
                     cancelled.is_set,
+                    effective_bios_directory,
                 )
                 installed += 1
             return installed
@@ -1843,8 +2107,8 @@ class DownloaderTui:
                 installed = future.result()
         except BiosDownloadCancelled:
             self._draw_message(
-                self._t("bios_download_cancelled"),
-                self._t("no_incomplete_bios_installed"),
+                self._t(TranslationKey.BIOS_DOWNLOAD_CANCELLED),
+                self._t(TranslationKey.NO_INCOMPLETE_BIOS_INSTALLED),
                 3,
                 wait=True,
             )
@@ -1853,11 +2117,11 @@ class DownloaderTui:
             self._operation_error(error)
             return 0
         self._draw_message(
-            self._t("bios_installed"),
+            self._t(TranslationKey.BIOS_INSTALLED),
             self._t(
-                "bios_installed_message",
+                TranslationKey.BIOS_INSTALLED_MESSAGE,
                 count=installed,
-                destination=root / "bios",
+                destination=root / effective_bios_directory,
             ),
             4,
             wait=True,
@@ -1865,22 +2129,26 @@ class DownloaderTui:
         return installed
 
     def _bios_check_label(self, check: BiosCheck) -> str:
-        kind = self._t("required_short" if check.requirement.required else "optional_short")
+        kind = self._t(
+            TranslationKey.REQUIRED_SHORT
+            if check.requirement.required
+            else TranslationKey.OPTIONAL_SHORT
+        )
         region = f" {check.requirement.region}" if check.requirement.region else ""
         state = self._bios_state_label(check.state).upper()
         return f"[{state}] [{kind}]{region} {check.requirement.name}"
 
     def _minerva_bittorrent_settings_screen(self) -> None:
         fields = (
-            ("minerva_udp_protocol_id", "udp_protocol_id"),
-            ("minerva_block_size", "block_size"),
-            ("minerva_max_torrent_bytes", "max_torrent_bytes"),
-            ("minerva_max_tracker_bytes", "max_tracker_bytes"),
-            ("minerva_max_peer_attempts", "max_peer_attempts"),
-            ("minerva_peer_race_workers", "peer_race_workers"),
-            ("minerva_max_peer_timeout", "max_peer_timeout_seconds"),
-            ("minerva_max_tracker_queries", "max_tracker_queries"),
-            ("minerva_max_discovered_peers", "max_discovered_peers"),
+            (TranslationKey.MINERVA_UDP_PROTOCOL_ID, "udp_protocol_id"),
+            (TranslationKey.MINERVA_BLOCK_SIZE, "block_size"),
+            (TranslationKey.MINERVA_MAX_TORRENT_BYTES, "max_torrent_bytes"),
+            (TranslationKey.MINERVA_MAX_TRACKER_BYTES, "max_tracker_bytes"),
+            (TranslationKey.MINERVA_MAX_PEER_ATTEMPTS, "max_peer_attempts"),
+            (TranslationKey.MINERVA_PEER_RACE_WORKERS, "peer_race_workers"),
+            (TranslationKey.MINERVA_MAX_PEER_TIMEOUT, "max_peer_timeout_seconds"),
+            (TranslationKey.MINERVA_MAX_TRACKER_QUERIES, "max_tracker_queries"),
+            (TranslationKey.MINERVA_MAX_DISCOVERED_PEERS, "max_discovered_peers"),
         )
         while True:
             settings = self.preferences.minerva_bittorrent
@@ -1889,20 +2157,20 @@ class DownloaderTui:
                 for label_key, field_name in fields
             ]
             choice = self._menu(
-                self._t("minerva_settings_title"),
-                (*values, self._t("reset_all_defaults"), self._t("back")),
-                self._t("minerva_settings_footer"),
+                self._t(TranslationKey.MINERVA_SETTINGS_TITLE),
+                (*values, self._t(TranslationKey.RESET_ALL_DEFAULTS), self._t(TranslationKey.BACK)),
+                self._t(TranslationKey.MINERVA_SETTINGS_FOOTER),
             )
             if choice is None or choice == len(fields) + 1:
                 return
             if choice == len(fields):
                 confirmation = self._menu(
-                    self._t("reset_minerva_settings"),
+                    self._t(TranslationKey.RESET_MINERVA_SETTINGS),
                     (
-                        self._t("keep_current_values"),
-                        self._t("restore_defaults"),
+                        self._t(TranslationKey.KEEP_CURRENT_VALUES),
+                        self._t(TranslationKey.RESTORE_DEFAULTS),
                     ),
-                    self._t("reset_minerva_footer"),
+                    self._t(TranslationKey.RESET_MINERVA_FOOTER),
                 )
                 if confirmation == 1:
                     self._save_minerva_bittorrent_settings(BitTorrentSettings())
@@ -1917,7 +2185,7 @@ class DownloaderTui:
             )
             raw_value = self._edit_setting(
                 label.upper(),
-                self._t("current_value", value=current),
+                self._t(TranslationKey.CURRENT_VALUE, value=current),
                 input_kind,
             )
             if raw_value is None:
@@ -1931,7 +2199,7 @@ class DownloaderTui:
                     value = int(raw_value)
                 updated = replace(settings, **{field_name: value})
             except (TypeError, ValueError) as error:
-                self._error(self._t("invalid_setting", setting=label, error=error))
+                self._error(self._t(TranslationKey.INVALID_SETTING, setting=label, error=error))
                 continue
             self._save_minerva_bittorrent_settings(updated)
 
@@ -1945,8 +2213,8 @@ class DownloaderTui:
         self.preferences = updated
         LOGGER.info("Minerva BitTorrent settings saved")
         self._draw_message(
-            self._t("minerva_settings_saved"),
-            self._t("minerva_settings_saved_message"),
+            self._t(TranslationKey.MINERVA_SETTINGS_SAVED),
+            self._t(TranslationKey.MINERVA_SETTINGS_SAVED_MESSAGE),
             4,
             wait=True,
         )
@@ -1960,12 +2228,12 @@ class DownloaderTui:
     def _application_update_flow(self) -> None:
         install_directory = self.config.install_directory
         if install_directory is None:
-            self._error(self._t("automatic_update_package"))
+            self._error(self._t(TranslationKey.AUTOMATIC_UPDATE_PACKAGE))
             return
         current = installed_version()
         self._draw_message(
-            self._t("checking_for_update"),
-            self._t("checking_for_update_message", version=current),
+            self._t(TranslationKey.CHECKING_FOR_UPDATE),
+            self._t(TranslationKey.CHECKING_FOR_UPDATE_MESSAGE, version=current),
             1,
         )
         try:
@@ -1980,9 +2248,9 @@ class DownloaderTui:
             return
         if release is None:
             self._draw_message(
-                self._t("already_up_to_date"),
+                self._t(TranslationKey.ALREADY_UP_TO_DATE),
                 self._t(
-                    "latest_release_message",
+                    TranslationKey.LATEST_RELEASE_MESSAGE,
                     version=current,
                     target=self.config.target.display_name,
                 ),
@@ -1991,12 +2259,12 @@ class DownloaderTui:
             )
             return
         choice = self._menu(
-            self._t("application_update_available"),
+            self._t(TranslationKey.APPLICATION_UPDATE_AVAILABLE),
             (
-                self._t("download_install_version", version=release.version),
-                self._t("later"),
+                self._t(TranslationKey.DOWNLOAD_INSTALL_VERSION, version=release.version),
+                self._t(TranslationKey.LATER),
             ),
-            self._t("installed_published", installed=current, published=release.tag),
+            self._t(TranslationKey.INSTALLED_PUBLISHED, installed=current, published=release.tag),
         )
         if choice != 0:
             return
@@ -2005,8 +2273,8 @@ class DownloaderTui:
         except UpdateCancelled:
             LOGGER.info("Application update cancelled")
             self._draw_message(
-                self._t("update_cancelled"),
-                self._t("installed_application_unchanged"),
+                self._t(TranslationKey.UPDATE_CANCELLED),
+                self._t(TranslationKey.INSTALLED_APPLICATION_UNCHANGED),
                 3,
                 wait=True,
             )
@@ -2016,8 +2284,8 @@ class DownloaderTui:
             self._operation_error(error)
             return
         self._draw_message(
-            self._t("update_ready"),
-            self._t("update_ready_message", version=release.version),
+            self._t(TranslationKey.UPDATE_READY),
+            self._t(TranslationKey.UPDATE_READY_MESSAGE, version=release.version),
             4,
             wait=True,
         )
@@ -2034,7 +2302,7 @@ class DownloaderTui:
         cancelled = Event()
         state_lock = Lock()
         progress_state: list[str | int | None] = [
-            self._t("connecting_github"),
+            self._t(TranslationKey.CONNECTING_GITHUB),
             0,
             release.asset_size,
         ]
@@ -2058,8 +2326,8 @@ class DownloaderTui:
                     label, current, total = progress_state
                 if cancelled.is_set():
                     self._draw_message(
-                        self._t("cancelling_update"),
-                        self._t("cancelling_update_message"),
+                        self._t(TranslationKey.CANCELLING_UPDATE),
+                        self._t(TranslationKey.CANCELLING_UPDATE_MESSAGE),
                         3,
                     )
                 else:
@@ -2074,12 +2342,12 @@ class DownloaderTui:
 
     def _confirm_exit(self) -> bool:
         choice = self._menu(
-            self._t("exit_pocket_harbor"),
+            self._t(TranslationKey.EXIT_POCKET_HARBOR),
             (
-                self._t("return_to_pocket_harbor"),
-                self._t("confirm_exit"),
+                self._t(TranslationKey.RETURN_TO_POCKET_HARBOR),
+                self._t(TranslationKey.CONFIRM_EXIT),
             ),
-            self._t("exit_footer"),
+            self._t(TranslationKey.EXIT_FOOTER),
         )
         return choice == 1
 
@@ -2095,12 +2363,12 @@ class DownloaderTui:
             elif root == Path("/roms"):
                 card = "SD1"
             else:
-                card = self._t("card_number", index=index)
+                card = self._t(TranslationKey.CARD_NUMBER, index=index)
             labels.append(f"{root}  ({card})")
         choice = self._menu(
             title,
             labels,
-            self._t("choose_library_location"),
+            self._t(TranslationKey.CHOOSE_LIBRARY_LOCATION),
         )
         return roots[choice] if choice is not None else None
 
@@ -2115,12 +2383,12 @@ class DownloaderTui:
             )
         else:
             message = self._t(
-                "downloaded_kib",
+                TranslationKey.DOWNLOADED_KIB,
                 label=label,
                 kib=current // 1024,
             )
-        self._draw_message(self._t("downloading"), message, 1)
-        self._footer(self._t("cancel_download_footer"))
+        self._draw_message(self._t(TranslationKey.DOWNLOADING), message, 1)
+        self._footer(self._t(TranslationKey.CANCEL_DOWNLOAD_FOOTER))
         self.screen.refresh()
 
     def _download_media(
@@ -2135,7 +2403,7 @@ class DownloaderTui:
             cancelled = Event()
             state_lock = Lock()
             progress_state: list[str | int | None] = [
-                self._t("connecting_download_service"),
+                self._t(TranslationKey.CONNECTING_DOWNLOAD_SERVICE),
                 0,
                 None,
             ]
@@ -2170,8 +2438,8 @@ class DownloaderTui:
                         label, current, total = progress_state
                     if cancelled.is_set():
                         self._draw_message(
-                            self._t("cancelling_download"),
-                            self._t("cancelling_download_message"),
+                            self._t(TranslationKey.CANCELLING_DOWNLOAD),
+                            self._t(TranslationKey.CANCELLING_DOWNLOAD_MESSAGE),
                             3,
                         )
                     else:
@@ -2225,9 +2493,9 @@ class DownloaderTui:
         """Explain a changed Minerva torrent and ask the user for a safe choice."""
 
         self._draw_message(
-            self._t("minerva_torrent_changed"),
+            self._t(TranslationKey.MINERVA_TORRENT_CHANGED),
             self._t(
-                "minerva_torrent_changed_message",
+                TranslationKey.MINERVA_TORRENT_CHANGED_MESSAGE,
                 filename=error.expected_filename,
                 index=error.catalogue_index,
                 count=error.total_files,
@@ -2237,7 +2505,7 @@ class DownloaderTui:
         )
         labels = [
             self._t(
-                "minerva_candidate",
+                TranslationKey.MINERVA_CANDIDATE,
                 index=candidate.index,
                 filename=candidate.filename,
                 size=self._format_file_size(candidate.length),
@@ -2247,17 +2515,17 @@ class DownloaderTui:
             for candidate in error.candidates
         ]
         selected_index = self._menu(
-            self._t("choose_minerva_torrent_file"),
+            self._t(TranslationKey.CHOOSE_MINERVA_TORRENT_FILE),
             labels,
-            self._t("minerva_candidates_footer"),
+            self._t(TranslationKey.MINERVA_CANDIDATES_FOOTER),
         )
         if selected_index is None:
             return None
         selected = error.candidates[selected_index]
         self._draw_message(
-            self._t("review_minerva_file"),
+            self._t(TranslationKey.REVIEW_MINERVA_FILE),
             self._t(
-                "review_minerva_file_message",
+                TranslationKey.REVIEW_MINERVA_FILE_MESSAGE,
                 expected=error.expected_filename,
                 selected="/".join(selected.path),
                 index=selected.index,
@@ -2268,12 +2536,12 @@ class DownloaderTui:
             wait=True,
         )
         confirmation = self._menu(
-            self._t("confirm_minerva_file"),
+            self._t(TranslationKey.CONFIRM_MINERVA_FILE),
             (
-                self._t("cancel_download"),
-                self._t("download_filename", filename=selected.filename),
+                self._t(TranslationKey.CANCEL_DOWNLOAD),
+                self._t(TranslationKey.DOWNLOAD_FILENAME, filename=selected.filename),
             ),
-            self._t("confirm_minerva_file_footer"),
+            self._t(TranslationKey.CONFIRM_MINERVA_FILE_FOOTER),
         )
         return selected if confirmation == 1 else None
 
@@ -2288,13 +2556,13 @@ class DownloaderTui:
         return f"{size:.1f} {units[-1]}"
 
     def _status_screen(self) -> None:
-        not_detected = self._t("not_detected")
+        not_detected = self._t(TranslationKey.NOT_DETECTED)
         roms = ", ".join(str(path) for path in self.roms_directories) or not_detected
         controller = str(self.gamepad.path) if self.gamepad is not None else not_detected
         selected_store = (
             self.selected_store.display_name
             if self.selected_store is not None
-            else self._t("not_configured")
+            else self._t(TranslationKey.NOT_CONFIGURED)
         )
         terminal_height, terminal_width = self.screen.getmaxyx()
         compatible = ", ".join(self.hardware.compatible[:2]) or not_detected
@@ -2304,7 +2572,7 @@ class DownloaderTui:
             f"{store.display_name} ({store.base_url})" for store in self.store_catalog.stores
         )
         message = self._t(
-            "status_message",
+            TranslationKey.STATUS_MESSAGE,
             store=selected_store,
             stores=stores,
             staging=self.config.download_directory,
@@ -2319,7 +2587,7 @@ class DownloaderTui:
             keys=key_count,
             controller=controller,
         )
-        self._draw_message(self._t("status_title"), message, 1, wait=True)
+        self._draw_message(self._t(TranslationKey.STATUS_TITLE), message, 1, wait=True)
 
     def _on_screen_keyboard(
         self,
@@ -2352,11 +2620,11 @@ class DownloaderTui:
                     selected = row_index == row and column_index == column
                     button_width = key_width * key.span
                     translated_label = (
-                        self._t("space")
+                        self._t(TranslationKey.SPACE)
                         if key.action == "space"
-                        else self._t("key_back")
+                        else self._t(TranslationKey.KEY_BACK)
                         if key.action == "back"
-                        else self._t("done")
+                        else self._t(TranslationKey.DONE)
                         if key.action == "done"
                         else key.label
                     )
@@ -2373,13 +2641,13 @@ class DownloaderTui:
                     )
                     grid_column += key.span
             page_label = (
-                self._t("integer_keyboard")
+                self._t(TranslationKey.INTEGER_KEYBOARD)
                 if input_kind is SettingInputKind.INTEGER
-                else self._t("float_keyboard")
+                else self._t(TranslationKey.FLOAT_KEYBOARD)
                 if input_kind is SettingInputKind.FLOAT
-                else self._t(f"keyboard_{page}")
+                else self._t(TranslationKey(f"keyboard_{page}"))
             )
-            footer = self._t("keyboard_footer", page=page_label)
+            footer = self._t(TranslationKey.KEYBOARD_FOOTER, page=page_label)
             if empty_hint:
                 footer = f"{footer}   {empty_hint}"
             self._footer(footer)
@@ -2501,7 +2769,7 @@ class DownloaderTui:
                 self._safe_add(y, 4, line, curses.color_pair(color_pair))
                 y += 1
         if wait:
-            self._footer(self._t("continue_footer"))
+            self._footer(self._t(TranslationKey.CONTINUE_FOOTER))
         self.screen.refresh()
         if wait:
             self._get_input()
@@ -2528,10 +2796,10 @@ class DownloaderTui:
         return int(pressed) if pressed != -1 else None
 
     def _operation_error(self, error: Exception) -> None:
-        self._error(self._t("operation_failed", error=error))
+        self._error(self._t(TranslationKey.OPERATION_FAILED, error=error))
 
     def _error(self, message: str) -> None:
-        self._draw_message(self._t("error"), message, 5, wait=True)
+        self._draw_message(self._t(TranslationKey.ERROR), message, 5, wait=True)
 
     def _header(self, title: str) -> None:
         _, width = self.screen.getmaxyx()
@@ -2556,7 +2824,7 @@ class DownloaderTui:
 
     def _require_size(self, height: int, width: int) -> None:
         if height < 15 or width < 40:
-            raise TerminalTooSmall(self._t("terminal_too_small"))
+            raise TerminalTooSmall(self._t(TranslationKey.TERMINAL_TOO_SMALL))
 
 
 def run_tui(config: Config) -> None:

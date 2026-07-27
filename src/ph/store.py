@@ -29,6 +29,7 @@ class GameStore(ABC):
     store_id: ClassVar[str]
     display_name: ClassVar[str]
     description: ClassVar[str]
+    timeout_seconds: float
 
     def _configure_catalogue_cache(
         self,
@@ -94,6 +95,11 @@ class GameStore(ABC):
         cache = getattr(self, "_catalogue_cache", None)
         if cache is not None:
             cache.ttl_seconds = ttl_seconds
+
+    def set_network_timeout(self, timeout_seconds: float) -> None:
+        """Apply a changed network timeout without rebuilding the store client."""
+
+        self.timeout_seconds = timeout_seconds
 
     @property
     @abstractmethod

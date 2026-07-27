@@ -1,0 +1,464 @@
+all_regions: todas
+already_up_to_date: JÁ ESTÁ ATUALIZADO
+and_more: '...e mais {count}'
+app_title: POCKET HARBOR
+application_update_available: ATUALIZAÇÃO DA APLICAÇÃO DISPONÍVEL
+automatic_folder: Automática  [{folder}]
+automatic_update_package: As atualizações automáticas estão disponíveis no pacote autónomo para o sistema operativo escolhido. Os ambientes locais são atualizados com git e uv.
+back: Voltar
+back_footer: 'B/Escape: voltar'
+bios_catalogue_empty: O catálogo BIOS está vazio.
+bios_check_unavailable: VERIFICAÇÃO DE BIOS INDISPONÍVEL
+bios_check_unavailable_message: 'O jogo foi instalado, mas não foi possível carregar os metadados RetroBIOS:
+
+  {error}
+
+  Pode tentar novamente em Pesquisar e transferir BIOS.'
+bios_details: DETALHES DO BIOS
+bios_directory: Localização da BIOS  [{value}]
+bios_directory_footer: Escolha a pasta BIOS partilhada em cada raiz ROM
+bios_directory_saved: LOCALIZAÇÃO DA BIOS GUARDADA
+bios_directory_saved_message: 'As BIOS partilhadas usarão: {directory}.'
+bios_directory_title: LOCALIZAÇÃO DA BIOS
+bios_download_cancelled: TRANSFERÊNCIA DE BIOS CANCELADA
+bios_entry_not_downloadable: O RetroBIOS tem metadados, mas não um ficheiro transferível para esta entrada.
+bios_installed: BIOS INSTALADO
+bios_installed_message: Instalados e verificados {count} ficheiro(s) BIOS em {destination}.
+bios_legal_footer: Continue apenas se tiver autorização para obter estas cópias de segurança pessoais
+bios_not_downloadable: BIOS NÃO TRANSFERÍVEL
+bios_not_downloadable_message: O RetroBIOS tem metadados dos requisitos, mas não uma cópia transferível dos ficheiros selecionados.
+bios_results: RESULTADOS DE BIOS ({count})
+bios_results_footer: 'Escolha um BIOS para ver ou transferir; B/Escape: voltar'
+bios_state_invalid: inválido
+bios_state_missing: em falta
+bios_state_valid: válido
+cache_days_hint: 'Atual: {current}; predefinido: {default}'
+cache_days_title: DIAS DE CACHE DO CATÁLOGO
+cache_invalid: cache inválida
+cache_lifetime: Duração da cache  [{days} dias]
+cache_lifetime_range: Introduza um valor entre 1 e 3650 dias.
+cache_lifetime_saved: DURAÇÃO GUARDADA
+cache_lifetime_saved_message: Os catálogos expiram após {days} dia(s).
+cancel: Cancelar
+cancel_and_remove_partial: Sim - cancelar e remover dados parciais
+cancel_download: Cancelar transferência
+cancel_download_footer: 'B/Escape: cancelar transferência'
+cancel_download_warning: Os dados parciais removidos não podem ser retomados
+cancelling_download: A CANCELAR TRANSFERÊNCIA
+cancelling_download_message: A fechar ligações de rede e a remover ficheiros parciais...
+cancelling_update: A CANCELAR ATUALIZAÇÃO
+cancelling_update_message: A remover a atualização incompleta; a versão instalada não será alterada...
+card_field: 'Cartão: {value}'
+card_number: CARTÃO {index}
+catalogue_empty: O catálogo está vazio.
+catalogue_unchanged: O catálogo existente não foi alterado.
+catalogue_updated: CATÁLOGO DE JOGOS ATUALIZADO
+catalogue_updated_message: Guardados {count} resultados de {store} para {platform}.
+change_store: 'Alterar loja  [atual: {value}]'
+check_update: 'Procurar atualização  [instalada: v{version}]'
+checking_compatibility: A VERIFICAR COMPATIBILIDADE
+checking_folders: A VERIFICAR PASTAS
+checking_for_update: A PROCURAR ATUALIZAÇÃO
+checking_for_update_message: 'Instalada: v{version}
+
+  A ler a versão mais recente do GitHub...'
+choose_bios_memory_card: ESCOLHER CARTÃO DE MEMÓRIA PARA BIOS
+choose_console_folder: PASTA ROM PARA {console}
+choose_console_folder_footer: Inclui pastas conhecidas e personalizadas detetadas
+choose_default_store: ESCOLHER LOJA PREDEFINIDA
+choose_destination_card: ESCOLHER CARTÃO DE DESTINO
+choose_installed_platform: ESCOLHER PLATAFORMA INSTALADA
+choose_language: ESCOLHER IDIOMA
+choose_library_location: Escolha onde a biblioteca de jogos está guardada
+choose_mapping_store: ESCOLHER LOJA A CONFIGURAR
+choose_memory_card: ESCOLHER CARTÃO DE MEMÓRIA
+choose_minerva_torrent_file: ESCOLHER FICHEIRO TORRENT DO MINERVA
+choose_platform: ESCOLHER PLATAFORMA
+choose_replacement: ESCOLHER SUBSTITUTO
+choose_store_catalogue: ESCOLHER CATÁLOGO DA LOJA
+choose_store_footer: 'Escolha uma loja; B/Escape: voltar'
+compatibility_badge: 'Compatibilidade: {value}'
+compatibility_detail: '{level} ({qualifier})'
+compatibility_field: 'Compatibilidade: {value}'
+compatibility_level_limited: Limitado
+compatibility_level_not_listed: Não listado
+compatibility_level_perfect: Perfeito
+compatibility_level_playable: Jogável
+compatibility_level_unsupported: Não suportado
+compatibility_listed: '{level} - listado'
+compatibility_match: '{level} - {score}% de correspondência'
+compatibility_not_listed_source: Não listado em r36sgamelist.com
+compatibility_platform_rating: classificação da plataforma
+compatibility_title_listed: título listado
+compatibility_title_match: correspondência do título {score}%
+compatibility_update_download: Transferir o catálogo de compatibilidade mais recente
+compatibility_update_title: ATUALIZAR CATÁLOGO DE COMPATIBILIDADE?
+compatibility_updated: CATÁLOGO DE COMPATIBILIDADE ATUALIZADO
+compatibility_updated_message: Guardados {count} títulos. Válido por {days} dia(s).
+compatibility_updating: A ATUALIZAR COMPATIBILIDADE
+compatibility_updating_message: A transferir o catálogo de compatibilidade atual...
+confirm_choice_footer: 'A/Enter: confirmar escolha'
+confirm_download_cancel: CANCELAR TRANSFERÊNCIA?
+confirm_exit: Sim - sair
+confirm_minerva_file: CONFIRMAR FICHEIRO DO MINERVA
+confirm_minerva_file_footer: Só será transferido o ficheiro torrent selecionado
+confirm_permanent_delete: CONFIRMAR ELIMINAÇÃO PERMANENTE
+confirm_retrobios_download: CONFIRMAR TRANSFERÊNCIA RETROBIOS
+confirm_update: CONFIRMAR ATUALIZAÇÃO
+connecting_download_service: A ligar ao serviço de transferência...
+connecting_github: A ligar ao GitHub...
+connecting_retrobios: A ligar ao RetroBIOS...
+console_folder_mapping: '{console}  [{folder}]'
+console_folder_mapping_saved: PASTA DA CONSOLA GUARDADA
+console_folder_mapping_saved_message: '{store} {console} será instalado em {folder}.'
+console_folder_mappings: Pastas ROM por consola e loja
+console_folder_mappings_footer: Escolha uma consola e depois a pasta ROM
+console_folder_mappings_title: PASTAS DE CONSOLA DE {store}
+continue_footer: 'A/Enter/B/Escape: continuar'
+current_value: 'Atual: {value}'
+default_rom_destination: Destino ROM predefinido  [{value}]
+default_rom_destination_footer: Escolha uma raiz ROM detetada ou pergunte em cada transferência
+default_rom_destination_saved: DESTINO ROM GUARDADO
+default_rom_destination_saved_message: 'Os jogos novos serão guardados em: {destination}.'
+default_rom_destination_title: DESTINO ROM PREDEFINIDO
+delete_files: Sim - eliminar {count} ficheiro(s)
+delete_from_device: Eliminar do dispositivo
+delete_warning: Os ficheiros eliminados não podem ser recuperados
+destination_field: 'Destino: {value}'
+destination_platform: PLATAFORMA DE DESTINO
+destination_platform_footer: O ficheiro concluído é movido para esta pasta de ROM
+detail_url: URL DE DETALHES
+direct_download: Transferir a partir de uma ligação
+done: CONCLUIR
+download: Transferir
+download_cancelled: TRANSFERÊNCIA CANCELADA
+download_complete: TRANSFERÊNCIA CONCLUÍDA
+download_complete_message: '{filename}
+
+  Movido para {destination}{bios}
+
+  A lista de jogos será atualizada ao sair do Pocket Harbor.'
+download_controls_footer: As transferências mantêm a loja original
+download_details_title: DETALHES DA TRANSFERÊNCIA
+download_error_field: 'Erro: {value}'
+download_filename: Transferir {filename}
+download_from_retrobios: Transferir do RetroBIOS
+download_install_version: Transferir e instalar v{version}
+download_job_row: '{title}  [{state} - {progress}]  {store}'
+download_latest_metadata: Transferir os metadados mais recentes
+download_progress_bytes: '{current} de {total}'
+download_progress_field: 'Progresso: {value}'
+download_progress_percent: '{percent}%'
+download_progress_size: '{size}'
+download_progress_waiting: a aguardar
+download_queue: Transferências
+download_queue_empty: SEM TRANSFERÊNCIAS
+download_queue_empty_message: Não há transferências ativas ou concluídas recentemente.
+download_queue_footer: Selecione para pausar, retomar, repetir ou cancelar
+download_queue_title: TRANSFERÊNCIAS
+download_queued: TRANSFERÊNCIA EM FILA
+download_queued_message: '{title}
+
+  A transferir de {store} em segundo plano. Abra Transferências para acompanhar ou controlar.'
+download_required_bios: TRANSFERIR OS BIOS OBRIGATÓRIOS?
+download_retry_field: Tentativa automática {attempt} dentro de cerca de {seconds}s
+download_state_cancelled: Cancelada
+download_state_completed: Concluída
+download_state_downloading: A transferir
+download_state_failed: Falhou
+download_state_paused: Pausada
+download_state_queued: Em fila
+download_state_rate_limited: A aguardar nova tentativa
+download_status_field: 'Estado: {value}'
+download_store_field: 'Loja: {value}'
+download_verified_bios: Transferir {count} ficheiro(s) BIOS verificados
+downloaded_kib: '{label}
+
+  {kib} KiB transferidos'
+downloading: A TRANSFERIR
+downloading_retrobios_profiles: A transferir perfis de núcleos RetroBIOS
+error: ERRO
+exit: Sair
+exit_footer: Confirme antes de voltar ao EmulationStation
+exit_pocket_harbor: SAIR DO POCKET HARBOR?
+'false': Falso
+file_field: 'Ficheiro: {value}'
+file_logging: Guardar registo em ficheiro  [{value}]
+file_logging_disabled: O registo em ficheiro está desativado.
+file_logging_enabled: 'O registo está ativo em:
+
+  {path}'
+file_logging_failed: Não foi possível ativar o registo. Verifique as permissões de escrita.
+file_logging_footer: A alteração é imediata e fica guardada
+file_logging_saved: REGISTO GUARDADO
+file_logging_title: GUARDAR REGISTO EM FICHEIRO?
+files_in_group: 'Ficheiros no grupo: {count}'
+finding_installed_platforms: A procurar plataformas instaladas em {root}...
+finding_retrobios_revision: A procurar a revisão mais recente do RetroBIOS
+firmware_warning: O jogo poderá não iniciar sem o firmware obrigatório
+first_run_store: LOJA DE TRANSFERÊNCIA INICIAL
+float_keyboard: Apenas números e ponto decimal
+fresh: atual
+fresh_games: atual, {count} jogos
+game_deleted: JOGO ELIMINADO
+game_deleted_message: '{title}
+
+  A lista de jogos será atualizada ao sair do Pocket Harbor.'
+game_updated: JOGO ATUALIZADO
+game_updated_message: '{filename}
+
+  Instalado em {destination}{bundled}{required}
+
+  A lista de jogos será atualizada ao sair do Pocket Harbor.'
+installed_application_unchanged: A aplicação instalada não foi alterada.
+installed_bundled_bios: Instalados {count} ficheiro(s) BIOS incluídos.
+installed_game_unchanged: O jogo instalado não foi alterado.
+installed_platform_footer: As plataformas são detetadas rapidamente; os jogos carregam após a seleção
+installed_published: 'Instalada: v{installed}   Publicada: {published}'
+installed_required_bios: Instalados {count} ficheiro(s) BIOS necessários do RetroBIOS.
+integer_keyboard: Apenas números
+invalid_cache_lifetime: Introduza uma duração válida para a cache do catálogo.
+invalid_setting: 'Valor inválido para {setting}: {error}'
+keep_cache_footer: A cache existente é mantida se a atualização falhar
+keep_catalogue: Manter o catálogo atual
+keep_current_values: Não - manter os valores atuais
+keep_downloading: Não - continuar a transferir {title}
+keep_file: Cancelar - manter {filename}
+keep_game: Não - manter {title}
+keep_without_bios: Manter o jogo sem BIOS
+key_back: APAGAR
+keyboard_accents: ACENTOS
+keyboard_footer: '{page}   Direcional: mover   A: tecla   X: confirmar   Y: apagar   B: cancelar'
+keyboard_letters: LETRAS
+keyboard_symbols: SÍMBOLOS
+language: Idioma
+language_footer: O idioma escolhido é aplicado imediatamente
+language_saved: IDIOMA GUARDADO
+language_saved_message: O idioma da interface agora é {language}.
+languages_field: 'Idiomas: {value}'
+later: Mais tarde
+latest_release_message: v{version} é a versão {target} publicada mais recente.
+loading_all: A carregar todos os jogos de {platform}...
+loading_catalogue: A CARREGAR CATÁLOGO
+loading_catalogue_progress: 'A ler as secções numéricas e A-Z...
+
+  {current}/{total}  ({percent}%)'
+log_level: Nível de registo  [{value}]
+log_level_footer: O nível escolhido é aplicado imediatamente
+log_level_saved: NÍVEL GUARDADO
+log_level_saved_message: O nível de registo agora é {level}.
+log_level_title: NÍVEL DE REGISTO
+looking_for: A pesquisar {query}...
+main_footer: 'Direcional/analógico: mover   A/Enter: selecionar'
+manage_game: GERIR JOGO
+manage_game_footer: As atualizações mantêm o cartão e a plataforma
+manage_games: Gerir jogos instalados
+manage_games_footer: 'A: gerir   B: voltar   L1/R1: página'
+manual_every_time: Perguntar sempre
+matching_compatibility: A comparar com o catálogo de compatibilidade local...
+max_concurrent_downloads: Transferências simultâneas  [{count}]
+max_concurrent_downloads_hint: 'Valor atual: {current}; intervalo permitido: 1-8'
+max_concurrent_downloads_range: Introduza um número inteiro de 1 a 8.
+max_concurrent_downloads_saved: LIMITE DE TRANSFERÊNCIAS GUARDADO
+max_concurrent_downloads_saved_message: Após reiniciar, serão executadas até {count} transferências simultâneas.
+max_concurrent_downloads_title: MÁXIMO DE TRANSFERÊNCIAS SIMULTÂNEAS
+minerva_block_size: Tamanho do bloco (bytes)
+minerva_candidate: '#{index}  {filename}  | {size} | {score}% de correspondência | {path}'
+minerva_candidates_footer: 'Candidatos seguros mais próximos; B/Escape: cancelar'
+minerva_max_discovered_peers: Máx. pares descobertos
+minerva_max_peer_attempts: Máx. tentativas de pares
+minerva_max_peer_timeout: Tempo limite máx. do par (segundos)
+minerva_max_torrent_bytes: Máx. metadados torrent (bytes)
+minerva_max_tracker_bytes: Máx. resposta do tracker (bytes)
+minerva_max_tracker_queries: Máx. consultas ao tracker
+minerva_peer_race_workers: Pesquisas de pares em paralelo
+minerva_settings: Definições BitTorrent do Minerva
+minerva_settings_footer: Os valores avançados são guardados localmente
+minerva_settings_saved: DEFINIÇÕES DO MINERVA GUARDADAS
+minerva_settings_saved_message: Os novos valores serão usados na próxima transferência do Minerva.
+minerva_settings_title: DEFINIÇÕES BITTORRENT DO MINERVA
+minerva_torrent_changed: O TORRENT DO MINERVA MUDOU
+minerva_torrent_changed_message: 'Ficheiro do catálogo:
+
+  {filename}
+
+  Posição no catálogo: #{index}
+
+
+  O torrent contém agora {count} ficheiros e já não tem uma correspondência inequívoca. Reveja os candidatos mais próximos ou cancele; nenhum jogo foi instalado.'
+minerva_udp_protocol_id: ID do protocolo UDP
+mixed_keyboard: Letras, números e símbolos
+network_timeout: Tempo limite de rede  [{value:g} segundos]
+network_timeout_hint: 'Valor atual: {current:g}; intervalo permitido: 1-3600'
+network_timeout_range: Introduza um valor de 1 a 3600 segundos.
+network_timeout_saved: TEMPO LIMITE GUARDADO
+network_timeout_saved_message: Os pedidos expiram após {value:g} segundos.
+network_timeout_title: TEMPO LIMITE DE REDE (SEGUNDOS)
+no_bios_results: SEM RESULTADOS DE BIOS
+no_download_stores: Não há lojas de transferência ativas. Verifique PH_STORES.
+no_game_installed: Nenhum jogo foi instalado.
+no_games: SEM JOGOS
+no_games_on_card: SEM JOGOS NO CARTÃO
+no_incomplete_bios_installed: Nenhum ficheiro BIOS incompleto foi instalado.
+no_platform_games: Não foram encontrados jogos de {platform}.
+no_remote_match: SEM CORRESPONDÊNCIA NA LOJA
+no_results: SEM RESULTADOS
+no_rom_partition: Não foi encontrada uma partição de ROM.
+no_rom_partition_environment: Não foi encontrada uma partição de ROM. Defina PH_ROMS_DIR ou PH_ROMS_DIRS.
+no_rom_partitions: Não foram encontradas partições de ROM.
+no_supported_games_on_card: Não foram encontrados jogos suportados em {root}.
+not_configured: não configurado
+not_detected: não detetado
+not_downloaded: não transferido
+not_set: não definido
+nothing_matched: Nenhum resultado para {query}.
+'off': não
+'on': sim
+operation_failed: 'A operação falhou.
+
+  Detalhes técnicos: {error}'
+optional: Opcional
+optional_short: P
+pause_download: Pausar transferência
+platform_field: 'Plataforma: {value}'
+platform_has_no_rom_folder: Esta plataforma não tem uma pasta de ROM no sistema operativo selecionado.
+platform_on_card: '{platform} EM {root}'
+preparing: A PREPARAR
+rate_limit_retry_base: Espera inicial  [{value:g} segundos]
+rate_limit_retry_base_seconds_title: ESPERA INICIAL (SEGUNDOS)
+rate_limit_retry_footer: As alterações aplicam-se a novas tentativas
+rate_limit_retry_invalid: Use 1-3600 segundos inicialmente, até 86400 segundos no máximo e 0-100% de variação. O máximo não pode ser inferior ao valor inicial.
+rate_limit_retry_jitter: Variação aleatória  [{value:g}%]
+rate_limit_retry_jitter_ratio_title: VARIAÇÃO ALEATÓRIA (PERCENTAGEM)
+rate_limit_retry_max: Espera máxima  [{value:g} segundos]
+rate_limit_retry_max_seconds_title: ESPERA MÁXIMA (SEGUNDOS)
+rate_limit_retry_saved: DEFINIÇÕES DE REPETIÇÃO GUARDADAS
+rate_limit_retry_saved_message: As novas tentativas usarão estes valores.
+rate_limit_retry_settings: Definições de repetição por limite
+rate_limit_retry_title: REPETIÇÕES POR LIMITE
+rating_field: 'Classificação: {value}'
+reading_platform: A ler apenas {platform} em {root}...
+refresh_download_status: Atualizar estado das transferências
+refresh_store_cache: Atualizar catálogo de jogos  [{count} guardados]
+refresh_store_footer: Substitui a cache selecionada antes de expirar
+refresh_store_title: ATUALIZAR {store}
+refreshing: A ATUALIZAR
+refreshing_catalogue: A ATUALIZAR CATÁLOGO DE JOGOS
+refreshing_catalogue_message: A transferir o catálogo completo de {store} para {platform}...
+refreshing_platform: A atualizar apenas {platform}...
+region_field: 'Região: {value}'
+replace_with: Substituir por {title}
+replacement_footer: O jogo antigo só é removido após a transferência terminar
+required: Obrigatório
+required_bios_missing_message: 'O arquivo do jogo não forneceu estes ficheiros BIOS obrigatórios e não foi encontrada uma cópia válida em nenhum cartão de memória:'
+required_bios_not_found: BIOS OBRIGATÓRIO NÃO ENCONTRADO
+required_short: O
+reset_all_defaults: Repor todos os valores predefinidos
+reset_minerva_footer: Isto altera os nove valores BitTorrent
+reset_minerva_settings: REPOR AS DEFINIÇÕES DO MINERVA?
+restore_defaults: Sim - restaurar valores predefinidos
+results_footer: 'A/Enter: detalhes   B/Escape: voltar'
+results_title: RESULTADOS {store} ({count})
+resume_download: Retomar transferência
+retrieving_download_link: A obter a ligação de transferência...
+retrobios_summary: 'Revisão: {revision}
+
+  Sistemas: {systems}
+
+  Perfil RetroArch: {profile}'
+retrobios_update_cancelled: ATUALIZAÇÃO RETROBIOS CANCELADA
+retrobios_update_title: ATUALIZAR O CATÁLOGO RETROBIOS?
+retrobios_updated: RETROBIOS ATUALIZADO
+retry_download: Repetir transferência
+return_to_pocket_harbor: Não - voltar ao Pocket Harbor
+review_minerva_file: REVER FICHEIRO DO MINERVA
+review_minerva_file_message: 'Esperado pelo catálogo:
+
+  {expected}
+
+
+  Ficheiro torrent selecionado:
+
+  {selected}
+
+  Posição no torrent: #{index}
+
+  Tamanho: {size}
+
+  Semelhança do título: {score}%'
+scanning_platform: A ANALISAR PLATAFORMA
+search_bios: Pesquisar e transferir BIOS
+search_bios_empty_hint: 'CONCLUIR sem texto: mostrar todo o catálogo BIOS'
+search_bios_title: PESQUISAR BIOS
+search_empty_hint: 'CONCLUIR sem texto: mostrar todos os jogos'
+search_library: Pesquisar na biblioteca
+search_title: PESQUISAR {platform}
+searching: A PESQUISAR
+searching_for_update: A PROCURAR ATUALIZAÇÃO
+select_download: Escolha Transferir para continuar
+settings: Definições
+settings_footer: Definições de loja, interface, cache, registo e aplicação
+settings_saved: DEFINIÇÕES GUARDADAS
+settings_title: DEFINIÇÕES
+space: ESPAÇO
+stale_games: expirado, {count} jogos
+stale_over_days: expirada (>{days} dias)
+status_controls: Estado e controlos do sistema
+status_field: 'Estado: {value}'
+status_message: 'Loja predefinida: {store}
+
+  Lojas: {stores}
+
+  Área temporária: {staging}
+
+  Raiz das ROM: {roms}
+
+  Plataformas: {platforms}
+
+  Hardware: {hardware}
+
+  Compatível: {compatible}
+
+  Ecrã: {resolution} píxeis; {width}x{height} células de terminal
+
+  Entradas DT: {inputs} ({keys} teclas GPIO)
+
+  Comando: {controller} (entrada nativa Linux)
+
+
+  Controlos
+
+  Direcional / analógicos / setas   Mover seleção
+
+  A / Enter        Selecionar
+
+  B / Escape       Voltar
+
+  X                Confirmar texto da pesquisa
+
+
+  O texto pode ser introduzido com o teclado integrado no ecrã.'
+status_title: ESTADO DO POCKET HARBOR
+store_cached_count: '{store}  [{count} em cache]'
+store_description_minerva: Torrents RetroAchievements (Python nativo)
+store_description_vimm: Arquivo de jogos Vimm
+store_platform_unsupported: '{store} não suporta {platform}. Escolha outra loja nas Definições.'
+store_saved_message: Pesquisas, transferências e atualizações usarão {store}.
+system_field: 'Sistema: {value}'
+terminal_too_small: O terminal deve ter pelo menos 40 colunas e 15 linhas.
+title_details: DETALHES DO JOGO
+'true': Verdadeiro
+unknown: desconhecido
+update_bios_catalogue: Atualizar catálogo RetroBIOS  [{status}]
+update_cancelled: ATUALIZAÇÃO CANCELADA
+update_compatibility: Atualizar catálogo de compatibilidade  [{status}]
+update_from_remote: Atualizar a partir da loja
+update_queued: ATUALIZAÇÃO EM FILA
+update_queued_message: '{title}
+
+  A substituição de {store} é transferida em segundo plano. O jogo instalado permanece inalterado até à conclusão.'
+update_ready: ATUALIZAÇÃO PRONTA
+update_ready_message: 'v{version} será instalada agora.
+
+  Volte a abrir o Pocket Harbor em Ferramentas após este ecrã fechar.'
+version_field: 'Versão: {value}'

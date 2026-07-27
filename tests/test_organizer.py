@@ -1,4 +1,5 @@
 import zipfile
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -208,6 +209,15 @@ def test_non_zip_has_no_bundled_bios_and_advision_bios_is_rom_local(tmp_path: Pa
     assert install_bundled_bios(tmp_path / "game.bin", advision, tmp_path) == ()
     destinations = _bios_destinations(PurePosixPath("advision.zip"), advision, tmp_path)
     assert destinations == (tmp_path / "advision" / "advision.zip",)
+    mapped_advision = replace(advision, rom_folder="custom-advision", alternate_folders=())
+    assert _bios_destinations(PurePosixPath("advision.zip"), mapped_advision, tmp_path) == (
+        tmp_path / "custom-advision" / "advision.zip",
+    )
+    gba = resolve_platform("GBA")
+    assert gba is not None
+    assert _bios_destinations(PurePosixPath("gba_bios.bin"), gba, tmp_path, "firmware") == (
+        tmp_path / "firmware" / "gba_bios.bin",
+    )
 
 
 def test_bios_member_validation_rejects_links_and_oversized_payload(tmp_path: Path) -> None:

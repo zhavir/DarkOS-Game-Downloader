@@ -389,7 +389,10 @@ def test_completed_download_defers_refresh_until_tui_exit(
     tui = object.__new__(DownloaderTui)
     tui.refresh_on_exit = False
     tui.config = Config("https://example.test", tmp_path, ())
-    tui.preferences = Preferences()
+    tui.preferences = Preferences(
+        store_rom_mappings={"vimm": {"game-boy-advance": "psp"}},
+        bios_directory="firmware",
+    )
     queue = mocker.Mock()
     queue.enqueue.return_value = SimpleNamespace(
         job_id="job-1",
@@ -418,6 +421,8 @@ def test_completed_download_defers_refresh_until_tui_exit(
 
     assert queue.enqueue.call_args.kwargs["store_id"] == "vimm"
     assert queue.enqueue.call_args.kwargs["title"] == "Advance Wars"
+    assert queue.enqueue.call_args.kwargs["platform"].rom_folder == "psp"
+    assert queue.enqueue.call_args.kwargs["bios_directory"] == "firmware"
     assert tui.refresh_on_exit is False
     assert "background" in messages[-1]
 

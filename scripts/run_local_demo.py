@@ -20,7 +20,7 @@ def prepare_demo_environment(workspace: Path, base_url: str) -> dict[str, str]:
     for directory in (downloads, card_one / "gba", card_two / "gba"):
         directory.mkdir(parents=True, exist_ok=True)
     return {
-        "PH_BASE_URL": base_url,
+        "PH_VIMM_BASE_URL": base_url,
         "PH_DOWNLOAD_DIR": str(downloads),
         "PH_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
         "PH_STORES": "vimm",

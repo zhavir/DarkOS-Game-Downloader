@@ -35,11 +35,29 @@ only while the keyboard is open; they do not accidentally submit or cancel the s
 5. Press **X** to search. Empty text is valid and lists the complete catalogue.
 6. Review the compatibility badge and match confidence in the results list, then the source detail
    on the title screen.
-7. Select **Download**, then choose SD1 or SD2 when both are available. The transfer is added to the
-   background queue, so you can immediately search for and queue another game.
+7. Select **Download**. Pocket Harbor uses the default ROM destination from **Settings**, or asks
+   for SD1 or SD2 when **Ask every time** is selected. The transfer is added to the background
+   queue, so you can immediately search for and queue another game.
 
 Completed downloads are staged first and moved only after success. Existing ROMs are not silently
 overwritten.
+
+## Storage destinations and folder mappings
+
+Open **Settings → Default ROM destination** to choose one detected ROM card for new games. Choose
+**Ask every time** to retain the per-download SD1/SD2 selector. If a saved card is unavailable on a
+later launch, Pocket Harbor falls back to the selector instead of writing to an unknown path.
+
+Open **Settings → Console ROM-folder mappings by store**, choose Vimm or Minerva, and then choose a
+console. **Automatic** uses the target profile's normal folder and its existing-folder detection.
+Every known platform folder and every custom top-level folder discovered on the active ROM cards is
+available in the selector; no folder name has to be typed. Mappings are independent per store, so
+Vimm PlayStation can install into `psp` while Minerva PlayStation continues using `psx`. Existing
+queued downloads retain the mapping captured when they were added.
+
+Open **Settings → BIOS location** to select the shared firmware folder used on each ROM card.
+`bios` is the automatic default. ROM-local firmware exceptions such as Neo Geo continue to be
+placed beside the applicable ROM set.
 
 ## Background downloads
 
@@ -49,9 +67,9 @@ a transfer to pause, resume, retry, or cancel it. Cancelling asks for confirmati
 partial data; pausing keeps verified data so the transfer can continue later.
 
 By default, up to three games can download concurrently. Each job captures the chosen store,
-download metadata, destination card, and Minerva settings when it is queued. Changing the preferred
-store in Settings therefore affects new searches and downloads only; an existing job continues with
-its original source.
+download metadata, destination card, console-folder mapping, BIOS folder, network timeout, and
+Minerva settings when it is queued. Changing Settings therefore affects new searches and downloads
+only; an existing job continues with its captured configuration.
 
 Change the global limit under **Settings → Concurrent downloads**. Values from 1 through 8 are
 accepted; 3 is the default. The new limit applies on the next launch so active jobs are not
@@ -191,13 +209,18 @@ the core configured on your image needs a file that was not offered automaticall
 
 ## Language and typed settings
 
-Open **Settings → Language** to select English, German, Spanish, Italian, or Portuguese. English is
+Open **Settings → Language** to select English, German, Spanish, French, Italian, or Portuguese. English is
 used on first launch. The interface changes immediately, and the saved choice survives application
 updates.
 
 Settings use an editor suited to the value: booleans show only **False** and **True**, integers use
 a digits-only keyboard, floating-point values add a decimal point, and text uses the full keyboard.
 This avoids entering unsupported characters into transfer limits or other numeric fields.
+
+Open **Settings → Network timeout** to change the overall timeout used by store requests, catalogue
+updates, BIOS downloads, application updates, and newly queued transfers. Values from 1 through
+3,600 seconds are accepted. The saved value overrides `PH_TIMEOUT` and applies immediately; 30
+seconds is the default when no preference has been saved.
 
 ## Logging settings
 

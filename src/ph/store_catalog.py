@@ -26,7 +26,7 @@ class StoreCatalog:
 
         available: tuple[GameStore, ...] = (
             VimmStore(
-                config.base_url,
+                config.vimm_base_url,
                 config.timeout_seconds,
                 config.download_directory,
                 ttl_seconds,

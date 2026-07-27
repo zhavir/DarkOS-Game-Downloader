@@ -203,7 +203,7 @@ Run it only where outbound GitHub access is available. The ordinary test suite r
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `PH_BASE_URL` | Vimm service root | `https://vimm.net` |
+| `PH_VIMM_BASE_URL` | Vimm service root | `https://vimm.net` |
 | `PH_MINERVA_BASE_URL` | Minerva browse service root | `https://minerva-archive.org` |
 | `PH_MINERVA_TORRENT_BASE_URL` | Minerva torrent metadata root | Minerva CDN |
 | `PH_STORES` | Comma-separated enabled stores | `vimm,minerva` |
@@ -221,13 +221,15 @@ paths or update packages from the wrong operating system. See [Linux target supp
 Minerva-specific transfer limits can be edited from **Settings → Minerva BitTorrent settings**
 when Minerva is selected.
 
-The interface language, catalogue cache lifetime, application log level, and application file
-logging can also be changed from **Settings**. The global concurrent-download limit accepts 1-8,
-defaults to 3, and applies after restarting Pocket Harbor. English is the default; German, Spanish,
-Italian, and Portuguese are included. Boolean settings use a True/False picker, numeric settings
-use a number-only keyboard, and text settings use the full keyboard. The default catalogue lifetime
-is seven days. HTTP 429 retry settings expose the initial delay, maximum delay, and jitter; the
-maximum delay defaults to 3,600 seconds (one hour).
+The interface language, default ROM card, per-store console-folder mappings, shared BIOS folder,
+network timeout, catalogue cache lifetime, application log level, and application file logging can
+also be changed from **Settings**. Folder mappings use selectors populated from known folders and
+folders discovered on the active cards. The global concurrent-download limit accepts 1-8, defaults
+to 3, and applies after restarting Pocket Harbor. English is the default; German, Spanish, French,
+Italian, and Portuguese are included. Boolean settings use a True/False picker and numeric settings use a
+number-only keyboard. The default catalogue lifetime is seven days. HTTP 429 retry settings expose
+the initial delay, maximum delay, and jitter; the maximum delay defaults to 3,600 seconds (one
+hour).
 
 ## Diagnostics
 

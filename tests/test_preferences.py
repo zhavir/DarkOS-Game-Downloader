@@ -59,6 +59,13 @@ def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> Non
         language="it",
         max_concurrent_downloads=5,
         rate_limit_retry=RateLimitRetrySettings(10, 3600, 0.3),
+        default_roms_directory="/roms2",
+        network_timeout_seconds=45.5,
+        store_rom_mappings={
+            "vimm": {"playstation": "psp"},
+            "minerva": {"playstation": "psx"},
+        },
+        bios_directory="firmware",
     )
 
     save_preferences(path, preferences)
@@ -68,7 +75,7 @@ def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> Non
 
 def test_preferences_default_invalid_languages_to_english(tmp_path: Path) -> None:
     path = preference_path(tmp_path)
-    path.write_text('{"language": "fr"}', encoding="utf-8")
+    path.write_text('{"language": "unsupported"}', encoding="utf-8")
 
     assert load_preferences(path).language == "en"
 
@@ -102,6 +109,16 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
           "catalogue_ttl_days": 0,
           "log_level": "verbose",
           "log_to_file": "yes",
+          "default_roms_directory": 12,
+          "network_timeout_seconds": 0,
+          "bios_directory": "../escape",
+          "store_rom_mappings": {
+            "VIMM": {
+              "PlayStation": "../escape",
+              "game-boy-advance": "custom-gba"
+            },
+            "bad": []
+          },
           "max_concurrent_downloads": 99,
           "rate_limit_retry": {
             "base_seconds": 60,
@@ -127,6 +144,10 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
     assert preferences.log_to_file is None
     assert preferences.max_concurrent_downloads == 3
     assert preferences.rate_limit_retry == RateLimitRetrySettings()
+    assert preferences.default_roms_directory is None
+    assert preferences.network_timeout_seconds is None
+    assert preferences.store_rom_mappings == {"vimm": {"game-boy-advance": "custom-gba"}}
+    assert preferences.bios_directory == "bios"
 
 
 def test_preferences_accept_integer_timeout(tmp_path: Path) -> None:

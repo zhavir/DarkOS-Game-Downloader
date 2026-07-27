@@ -42,8 +42,6 @@ build-backend.source-include = [
   "darkos/**",
   "packaging/**",
   "scripts/**",
-  "tests/**",
-  "uv.lock",
 ]
 
 [tool.ruff]

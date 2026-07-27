@@ -57,6 +57,18 @@ def test_configured_catalog_exposes_all_stores_through_store_contract(tmp_path: 
     assert minerva.base_url == "https://minerva-archive.org"
 
 
+def test_vimm_environment_configuration_is_explicit_and_drops_generic_name() -> None:
+    config = Config.from_environment(
+        {
+            "PH_VIMM_BASE_URL": "https://vimm.test/",
+            "PH_TIMEOUT": "12.5",
+        }
+    )
+
+    assert config.vimm_base_url == "https://vimm.test"
+    assert config.timeout_seconds == 12.5
+
+
 def test_catalog_accepts_future_store_without_tui_or_cli_changes() -> None:
     future = FutureStore()
     catalog = StoreCatalog((future,))

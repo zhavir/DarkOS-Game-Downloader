@@ -51,6 +51,7 @@ def _enqueue(queue: DownloadQueue, root: Path, title: str, url: str) -> str:
         platform=platform,
         roms_directory=root / "roms",
         timeout_seconds=5,
+        bios_directory="firmware",
         region="USA",
     ).job_id
 
@@ -287,6 +288,8 @@ def test_interrupted_job_resumes_automatically_after_restart(tmp_path: Path) -> 
     second_queue = DownloadQueue(tmp_path, runner=resumed_runner)
     _wait_for_state(second_queue, job_id, DownloadState.COMPLETED)
     assert resumed == [True]
+    restored = second_queue.find(job_id)
+    assert restored is not None and restored.bios_directory == "firmware"
     second_queue.shutdown()
 
     third_queue = DownloadQueue(tmp_path, runner=resumed_runner)

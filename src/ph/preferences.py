@@ -32,6 +32,10 @@ class Preferences:
     language: LanguageCode = DEFAULT_LANGUAGE
     max_concurrent_downloads: int = DEFAULT_CONCURRENT_DOWNLOADS
     rate_limit_retry: RateLimitRetrySettings = field(default_factory=RateLimitRetrySettings)
+    default_roms_directory: str | None = None
+    network_timeout_seconds: float | None = None
+    store_rom_mappings: dict[str, dict[str, str]] = field(default_factory=dict)
+    bios_directory: str = "bios"
 
 
 def preference_path(download_directory: Path) -> Path:
@@ -66,6 +70,17 @@ def load_preferences(path: Path) -> Preferences:
     )
     raw_log_to_file = payload.get("log_to_file")
     log_to_file = raw_log_to_file if isinstance(raw_log_to_file, bool) else None
+    raw_default_roms_directory = payload.get("default_roms_directory")
+    default_roms_directory = (
+        raw_default_roms_directory.strip()
+        if isinstance(raw_default_roms_directory, str) and raw_default_roms_directory.strip()
+        else None
+    )
+    network_timeout_seconds = _optional_float_setting(payload, "network_timeout_seconds")
+    if network_timeout_seconds is not None and not 1 <= network_timeout_seconds <= 3600:
+        network_timeout_seconds = None
+    store_rom_mappings = _store_rom_mappings(payload.get("store_rom_mappings"))
+    bios_directory = _relative_directory(payload.get("bios_directory")) or "bios"
     language = normalize_language(payload.get("language"))
     max_concurrent_downloads = _integer_setting(
         payload,
@@ -103,14 +118,18 @@ def load_preferences(path: Path) -> Preferences:
     defaults = BitTorrentSettings()
     if not isinstance(minerva_payload, dict):
         return Preferences(
-            normalized_store_id,
-            defaults,
-            ttl_days,
-            log_level,
-            log_to_file,
-            language,
-            max_concurrent_downloads,
-            rate_limit_retry,
+            store_id=normalized_store_id,
+            minerva_bittorrent=defaults,
+            catalogue_ttl_days=ttl_days,
+            log_level=log_level,
+            log_to_file=log_to_file,
+            language=language,
+            max_concurrent_downloads=max_concurrent_downloads,
+            rate_limit_retry=rate_limit_retry,
+            default_roms_directory=default_roms_directory,
+            network_timeout_seconds=network_timeout_seconds,
+            store_rom_mappings=store_rom_mappings,
+            bios_directory=bios_directory,
         )
     try:
         settings = BitTorrentSettings(
@@ -159,14 +178,18 @@ def load_preferences(path: Path) -> Preferences:
     except ValueError:
         settings = defaults
     return Preferences(
-        normalized_store_id,
-        settings,
-        ttl_days,
-        log_level,
-        log_to_file,
-        language,
-        max_concurrent_downloads,
-        rate_limit_retry,
+        store_id=normalized_store_id,
+        minerva_bittorrent=settings,
+        catalogue_ttl_days=ttl_days,
+        log_level=log_level,
+        log_to_file=log_to_file,
+        language=language,
+        max_concurrent_downloads=max_concurrent_downloads,
+        rate_limit_retry=rate_limit_retry,
+        default_roms_directory=default_roms_directory,
+        network_timeout_seconds=network_timeout_seconds,
+        store_rom_mappings=store_rom_mappings,
+        bios_directory=bios_directory,
     )
 
 
@@ -186,6 +209,10 @@ def save_preferences(path: Path, preferences: Preferences) -> None:
                     "log_to_file": preferences.log_to_file,
                     "language": preferences.language,
                     "max_concurrent_downloads": preferences.max_concurrent_downloads,
+                    "default_roms_directory": preferences.default_roms_directory,
+                    "network_timeout_seconds": preferences.network_timeout_seconds,
+                    "store_rom_mappings": preferences.store_rom_mappings,
+                    "bios_directory": preferences.bios_directory,
                     "rate_limit_retry": {
                         "base_seconds": preferences.rate_limit_retry.base_seconds,
                         "max_seconds": preferences.rate_limit_retry.max_seconds,
@@ -225,3 +252,42 @@ def _float_setting(payload: dict[object, object], key: str, default: float) -> f
     if isinstance(value, int | float) and not isinstance(value, bool):
         return float(value)
     return default
+
+
+def _optional_float_setting(payload: dict[object, object], key: str) -> float | None:
+    value = payload.get(key)
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def _relative_directory(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    path = Path(value.strip())
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        return None
+    return path.as_posix()
+
+
+def _store_rom_mappings(value: object) -> dict[str, dict[str, str]]:
+    if not isinstance(value, dict):
+        return {}
+    mappings: dict[str, dict[str, str]] = {}
+    for raw_store_id, raw_platforms in value.items():
+        if not isinstance(raw_store_id, str) or not isinstance(raw_platforms, dict):
+            continue
+        store_id = raw_store_id.strip().casefold()
+        if not store_id:
+            continue
+        platforms: dict[str, str] = {}
+        for raw_slug, raw_directory in raw_platforms.items():
+            if not isinstance(raw_slug, str):
+                continue
+            slug = raw_slug.strip().casefold()
+            directory = _relative_directory(raw_directory)
+            if slug and directory is not None:
+                platforms[slug] = directory
+        if platforms:
+            mappings[store_id] = platforms
+    return mappings

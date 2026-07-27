@@ -38,7 +38,7 @@ supports press-and-hold scrolling. The on-screen keyboard uses an evenly spaced 
 letter, symbol, and accented-character pages. All four directions navigate and X submits the
 current search—even when it is empty.
 
-The interface is available in English, German, Spanish, Italian, and Portuguese. Select a language
+The interface is available in English, German, Spanish, French, Italian, and Portuguese. Select a language
 under **Settings**; the choice applies immediately and is retained after upgrades.
 
 ## Standalone device package

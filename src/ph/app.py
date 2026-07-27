@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Linux handheld library manager. Run without a command to open the TUI.",
     )
     parser.add_argument("--version", action="version", version=f"ph {app_version}")
-    parser.add_argument("--base-url", help="override PH_BASE_URL for this run")
+    parser.add_argument("--vimm-url", help="override PH_VIMM_BASE_URL for this run")
     parser.add_argument(
         "--store",
         default="vimm",
@@ -88,9 +88,11 @@ def main(
     except TargetError as error:
         print(f"ph: {error}", file=sys.stderr)
         return 2
-    if arguments.base_url:
-        config = replace(config, base_url=arguments.base_url.rstrip("/"))
+    if arguments.vimm_url:
+        config = replace(config, vimm_base_url=arguments.vimm_url.rstrip("/"))
     preferences = load_preferences(preference_path(config.download_directory))
+    if preferences.network_timeout_seconds is not None:
+        config = replace(config, timeout_seconds=preferences.network_timeout_seconds)
     log_to_file = (
         config.log_file is not None if preferences.log_to_file is None else preferences.log_to_file
     )

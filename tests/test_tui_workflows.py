@@ -35,6 +35,7 @@ from ph.retrobios import (
 )
 from ph.store import CatalogProgress, GameStore, StoreError
 from ph.store_catalog import StoreCatalog
+from ph.translation_keys import TranslationKey
 from ph.tui import (
     GAMEPAD_SEARCH_KEY,
     DownloaderTui,
@@ -45,7 +46,7 @@ from ph.updater import ReleaseUpdate, UpdateCancelled, UpdateError
 
 
 def translated_operation_error(detail: str) -> str:
-    return translate("en", "operation_failed", error=detail)
+    return translate("en", TranslationKey.OPERATION_FAILED, error=detail)
 
 
 class RecordingScreen:
@@ -249,7 +250,11 @@ def test_constructor_detects_runtime_and_sets_up_screen(
         "from_config",
         lambda _config, _ttl: StoreCatalog((store,)),
     )
-    mocker.patch.object(tui_module, "load_preferences", lambda _path: Preferences("fake"))
+    mocker.patch.object(
+        tui_module,
+        "load_preferences",
+        lambda _path: Preferences("fake", network_timeout_seconds=18.5),
+    )
     mocker.patch.object(
         tui_module,
         "detect_roms_directories",
@@ -272,6 +277,9 @@ def test_constructor_detects_runtime_and_sets_up_screen(
     assert instance.selected_store is store
     assert instance.hardware is profile
     assert instance.download_queue is queue
+    assert instance.config.timeout_seconds == 18.5
+    assert instance.retrobios_repository.timeout_seconds == 18.5
+    assert instance.compatibility_client.timeout_seconds == 18.5
     queue_factory.assert_called_once_with(
         tmp_path,
         max_concurrent=3,
@@ -654,7 +662,7 @@ def test_completed_background_download_runs_bios_followup_once(
     instance._handle_download_completions()
     instance._handle_download_completions()
 
-    bios.assert_called_once_with(completed.platform, completed.roms_directory, "USA")
+    bios.assert_called_once_with(completed.platform, completed.roms_directory, "USA", "bios")
     assert "required BIOS" in messages[0]
 
 
@@ -970,6 +978,128 @@ def test_store_and_root_choices_and_configuration(
     assert instance.selected_store is supported
 
 
+def test_default_rom_destination_uses_saved_root_or_manual_selector(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    instance = bare_tui()
+    first = tmp_path / "sd1"
+    second = tmp_path / "sd2"
+    instance.roms_directories = (first, second)
+    menu = mocker.patch.object(instance, "_menu", return_value=0)
+
+    instance.preferences = replace(instance.preferences, default_roms_directory=str(second))
+    assert instance._choose_roms_directory() == second
+    menu.assert_not_called()
+
+    instance.preferences = replace(instance.preferences, default_roms_directory=None)
+    assert instance._choose_roms_directory() == first
+    save = mocker.patch.object(instance, "_save_runtime_preferences", return_value=True)
+    menu.return_value = 2
+    instance._configure_default_roms_directory()
+    assert save.call_args.args[0].default_roms_directory == str(second)
+    menu.return_value = 0
+    instance._configure_default_roms_directory()
+    assert save.call_args.args[0].default_roms_directory is None
+
+
+def test_store_console_mapping_and_bios_location_use_folder_selectors(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    playstation = resolve_platform("PS1")
+    psp = resolve_platform("PSP")
+    assert playstation is not None and psp is not None
+    root = tmp_path / "roms"
+    (root / "custom-games").mkdir(parents=True)
+    instance = bare_tui()
+    instance.roms_directories = (root,)
+    instance.platforms = (playstation, psp)
+    store = FakeStore()
+    mocker.patch.object(instance, "_choose_store", return_value=store)
+    saved: list[Preferences] = []
+
+    def save(preferences: Preferences, *_args: object) -> bool:
+        saved.append(preferences)
+        instance.preferences = preferences
+        return True
+
+    mocker.patch.object(instance, "_save_runtime_preferences", new=save)
+    console_menu_count = 0
+
+    def mapping_menu(title: str, options: Sequence[str], *_args: object) -> int | None:
+        nonlocal console_menu_count
+        if title == "Fake Store CONSOLE FOLDERS":
+            console_menu_count += 1
+            return 0 if console_menu_count == 1 else None
+        return options.index("custom-games")
+
+    mocker.patch.object(instance, "_menu", new=mapping_menu)
+    instance._console_folder_mappings_screen()
+
+    assert saved[-1].store_rom_mappings == {"fake": {"playstation": "custom-games"}}
+    mapped = instance._platform_for_store(store, playstation)
+    assert mapped.rom_folder == "custom-games"
+    assert mapped.alternate_folders == ()
+
+    mocker.patch.object(
+        instance,
+        "_menu",
+        new=lambda _title, options, *_args: options.index("custom-games"),
+    )
+    instance._configure_bios_directory()
+    assert saved[-1].bios_directory == "custom-games"
+
+
+def test_storage_setting_cancel_reset_and_timeout_validation(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    playstation = resolve_platform("PS1")
+    assert playstation is not None
+    instance = bare_tui()
+    instance.roms_directories = (tmp_path,)
+    instance.platforms = (playstation,)
+    store = FakeStore()
+    instance.preferences = replace(
+        instance.preferences,
+        store_rom_mappings={"fake": {"playstation": "custom-games"}},
+        bios_directory="firmware",
+    )
+    save = mocker.patch.object(instance, "_save_runtime_preferences", return_value=True)
+    menu = mocker.patch.object(instance, "_menu", return_value=None)
+
+    instance._configure_default_roms_directory()
+    instance._configure_bios_directory()
+    save.assert_not_called()
+    mocker.patch.object(instance, "_choose_store", return_value=None)
+    instance._console_folder_mappings_screen()
+
+    mocker.patch.object(instance, "_choose_store", return_value=store)
+    menu.side_effect = (0, None, None)
+    instance._console_folder_mappings_screen()
+    menu.side_effect = (0, 0, None)
+    instance._console_folder_mappings_screen()
+    assert save.call_args.args[0].store_rom_mappings == {}
+
+    menu.side_effect = None
+    menu.return_value = 0
+    instance._configure_bios_directory()
+    assert save.call_args.args[0].bios_directory == "bios"
+
+    errors: list[str] = []
+    mocker.patch.object(instance, "_error", new=errors.append)
+    editor = mocker.patch.object(instance, "_edit_setting", side_effect=(None, "invalid", "0"))
+    instance._configure_network_timeout()
+    instance._configure_network_timeout()
+    instance._configure_network_timeout()
+    assert editor.call_count == 3
+    assert errors == [
+        "Enter a value from 1 to 3600 seconds.",
+        "Enter a value from 1 to 3600 seconds.",
+    ]
+
+
 def test_settings_and_minerva_settings_actions(
     tmp_path: Path,
     mocker: MockerFixture,
@@ -984,6 +1114,21 @@ def test_settings_and_minerva_settings_actions(
         instance,
         "_configure_language",
         new=lambda: actions.append("language"),
+    )
+    mocker.patch.object(
+        instance,
+        "_configure_default_roms_directory",
+        new=lambda: actions.append("rom_destination"),
+    )
+    mocker.patch.object(
+        instance,
+        "_console_folder_mappings_screen",
+        new=lambda: actions.append("console_mappings"),
+    )
+    mocker.patch.object(
+        instance,
+        "_configure_bios_directory",
+        new=lambda: actions.append("bios_directory"),
     )
     mocker.patch.object(
         instance, "_minerva_bittorrent_settings_screen", new=lambda: actions.append("minerva")
@@ -1021,6 +1166,11 @@ def test_settings_and_minerva_settings_actions(
     )
     mocker.patch.object(
         instance,
+        "_configure_network_timeout",
+        new=lambda: actions.append("network_timeout"),
+    )
+    mocker.patch.object(
+        instance,
         "_configure_log_level",
         new=lambda: actions.append("log_level"),
     )
@@ -1029,8 +1179,8 @@ def test_settings_and_minerva_settings_actions(
         "_configure_file_logging",
         new=lambda: actions.append("log_file"),
     )
-    for choice in (None, *range(13)):
-        menu_choices = iter((choice,) if choice in (None, 12) else (choice, None))
+    for choice in (None, *range(17)):
+        menu_choices = iter((choice,) if choice in (None, 16) else (choice, None))
         mocker.patch.object(
             instance,
             "_menu",
@@ -1039,6 +1189,9 @@ def test_settings_and_minerva_settings_actions(
         instance._settings_screen()
     assert actions == [
         "store",
+        "rom_destination",
+        "console_mappings",
+        "bios_directory",
         "language",
         "store_catalogue",
         "retrobios",
@@ -1046,6 +1199,7 @@ def test_settings_and_minerva_settings_actions(
         "ttl",
         "concurrency",
         "rate_limit_retry",
+        "network_timeout",
         "log_level",
         "log_file",
         "minerva",
@@ -1075,7 +1229,7 @@ def test_settings_submenu_back_returns_to_settings_before_main_menu(
 ) -> None:
     instance = bare_tui()
     instance.selected_store = FakeStore()
-    choices = iter((8, None))
+    choices = iter((12, None))
     titles: list[str] = []
 
     def menu(title: str, *_args: object) -> int | None:
@@ -1098,7 +1252,7 @@ def test_language_setting_persists_and_applies_immediately(
     instance.preferences_path = tmp_path / "settings.json"
     instance.retrobios_repository = mocker.Mock(ttl_seconds=1)
     instance.compatibility_client = mocker.Mock(ttl_seconds=1)
-    mocker.patch.object(instance, "_menu", return_value=3)
+    mocker.patch.object(instance, "_menu", return_value=4)
     mocker.patch.object(instance, "_draw_message")
 
     instance._configure_language()
@@ -1106,7 +1260,7 @@ def test_language_setting_persists_and_applies_immediately(
     assert instance.language == "it"
     assert instance.preferences.language == "it"
     assert load_preferences(instance.preferences_path).language == "it"
-    assert instance._t("settings_title") == "IMPOSTAZIONI"
+    assert instance._t(TranslationKey.SETTINGS_TITLE) == "IMPOSTAZIONI"
 
 
 def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
@@ -1124,7 +1278,7 @@ def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
     set_store_ttl = mocker.patch.object(store, "set_catalogue_ttl")
     configure_logging = mocker.patch.object(tui_module, "configure_logging_with_fallback")
 
-    mocker.patch.object(instance, "_on_screen_keyboard", return_value="14")
+    keyboard = mocker.patch.object(instance, "_on_screen_keyboard", return_value="14")
     instance._configure_catalogue_ttl()
 
     expected_seconds = 14 * 24 * 60 * 60
@@ -1134,6 +1288,14 @@ def test_runtime_cache_and_logging_settings_apply_immediately_and_persist(
     assert instance.compatibility_client.ttl_seconds == expected_seconds
     set_store_ttl.assert_called_with(expected_seconds)
     assert load_preferences(instance.preferences_path).catalogue_ttl_days == 14
+
+    keyboard.return_value = "45.5"
+    instance._configure_network_timeout()
+    assert instance.config.timeout_seconds == 45.5
+    assert store.timeout_seconds == 45.5
+    assert instance.retrobios_repository.timeout_seconds == 45.5
+    assert instance.compatibility_client.timeout_seconds == 45.5
+    assert load_preferences(instance.preferences_path).network_timeout_seconds == 45.5
 
     mocker.patch.object(instance, "_menu", return_value=0)
     instance._configure_log_level()
@@ -1460,7 +1622,9 @@ def test_bios_followup_allows_skip_or_explicit_download(
     mocker.patch.object(
         instance,
         "_install_bios_checks",
-        new=lambda _catalog, checks, _platform, _root: installed.append(tuple(checks)) or 1,
+        new=lambda _catalog, checks, _platform, _root, _bios_directory: (
+            installed.append(tuple(checks)) or 1
+        ),
     )
     assert instance._bios_followup(gba, tmp_path, None) == 1
     assert installed[0][0].state is BiosState.MISSING

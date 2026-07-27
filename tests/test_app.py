@@ -84,8 +84,8 @@ def test_main_runs_tui_and_reports_terminal_errors(
     called: list[Config] = []
     run_tui = mocker.patch.object(app, "run_tui", side_effect=lambda value: called.append(value))
 
-    assert app.main(["--base-url", "https://new.test/", "tui"], runtime_config=config) == 0
-    assert called[0].base_url == "https://new.test"
+    assert app.main(["--vimm-url", "https://new.test/", "tui"], runtime_config=config) == 0
+    assert called[0].vimm_base_url == "https://new.test"
 
     run_tui.side_effect = ValueError("bad UI")
     assert app.main(["tui"], runtime_config=config) == 2

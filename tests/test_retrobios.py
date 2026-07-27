@@ -228,6 +228,9 @@ def test_bios_destinations_cover_shared_local_and_unsafe_paths(tmp_path: Path) -
 
     nested = requirement(destination="dc/firmware.bin")
     assert bios_destinations(nested, gba, tmp_path) == (tmp_path / "bios/dc/firmware.bin",)
+    assert bios_destinations(nested, gba, tmp_path, "firmware") == (
+        tmp_path / "firmware/dc/firmware.bin",
+    )
     neo = requirement(name="neogeo.zip")
     assert bios_destinations(neo, neogeo, tmp_path) == (
         tmp_path / "bios/neogeo.zip",

@@ -1,0 +1,378 @@
+all_regions: toutes
+already_up_to_date: DÉJÀ À JOUR
+and_more: '...et {count} de plus'
+app_title: POCKET HARBOR
+application_update_available: MISE À JOUR DISPONIBLE
+automatic_folder: 'Automatique  [{folder}]'
+automatic_update_package: Les mises à jour automatiques sont disponibles dans un paquet autonome pour le système sélectionné. Les environnements de développement locaux doivent utiliser git et uv.
+back: Retour
+back_footer: 'B/Échap : retour'
+bios_catalogue_empty: Le catalogue BIOS est vide.
+bios_check_unavailable: VÉRIFICATION BIOS INDISPONIBLE
+bios_check_unavailable_message: "Le jeu a été installé, mais les métadonnées RetroBIOS n’ont pas pu être chargées :\n\n{error}\n\nVous pouvez réessayer depuis Rechercher et télécharger des BIOS."
+bios_details: DÉTAILS DU BIOS
+bios_directory: 'Emplacement des BIOS  [{value}]'
+bios_directory_footer: Choisissez le dossier BIOS partagé dans chaque racine ROM
+bios_directory_saved: EMPLACEMENT BIOS ENREGISTRÉ
+bios_directory_saved_message: 'Les BIOS partagés utiliseront : {directory}.'
+bios_directory_title: EMPLACEMENT DES BIOS
+bios_download_cancelled: TÉLÉCHARGEMENT DU BIOS ANNULÉ
+bios_entry_not_downloadable: RetroBIOS contient les métadonnées, mais aucun fichier téléchargeable pour cette entrée.
+bios_installed: BIOS INSTALLÉ
+bios_installed_message: '{count} fichier(s) BIOS installé(s) et vérifié(s) dans {destination}.'
+bios_legal_footer: Continuez uniquement si vous êtes autorisé à obtenir ces copies de sauvegarde personnelles
+bios_not_downloadable: BIOS NON TÉLÉCHARGEABLE
+bios_not_downloadable_message: RetroBIOS contient les exigences, mais aucune copie téléchargeable pour les fichiers sélectionnés.
+bios_results: RÉSULTATS BIOS ({count})
+bios_results_footer: Sélectionnez un BIOS à consulter ou télécharger ; B/Échap revient
+bios_state_invalid: invalide
+bios_state_missing: manquant
+bios_state_valid: valide
+cache_days_hint: 'Actuel : {current} ; défaut : {default}'
+cache_days_title: DURÉE DU CACHE EN JOURS
+cache_invalid: cache invalide
+cache_lifetime: 'Durée du cache du catalogue  [{days} jours]'
+cache_lifetime_range: Saisissez une valeur de 1 à 3650 jours.
+cache_lifetime_saved: DURÉE DU CACHE ENREGISTRÉE
+cache_lifetime_saved_message: Les catalogues expirent maintenant après {days} jour(s).
+cancel: Annuler
+cancel_and_remove_partial: Oui - annuler et supprimer les données partielles
+cancel_download: Annuler le téléchargement
+cancel_download_footer: 'B/Échap : annuler le téléchargement'
+cancel_download_warning: Les données partielles supprimées ne peuvent pas être reprises
+cancelling_download: ANNULATION DU TÉLÉCHARGEMENT
+cancelling_download_message: Fermeture des connexions actives et suppression des fichiers partiels...
+cancelling_update: ANNULATION DE LA MISE À JOUR
+cancelling_update_message: Suppression de la mise à jour incomplète ; la version installée reste inchangée...
+card_field: 'Carte : {value}'
+card_number: CARTE {index}
+catalogue_empty: Le catalogue est vide.
+catalogue_unchanged: Le catalogue existant n’a pas été modifié.
+catalogue_updated: CATALOGUE DE JEUX ACTUALISÉ
+catalogue_updated_message: '{count} résultat(s) {store} mis en cache pour {platform}.'
+change_store: 'Changer de boutique  [actuelle : {value}]'
+check_update: 'Rechercher une mise à jour  [installée : v{version}]'
+checking_compatibility: VÉRIFICATION DE LA COMPATIBILITÉ
+checking_folders: VÉRIFICATION DES DOSSIERS
+checking_for_update: RECHERCHE DE MISE À JOUR
+checking_for_update_message: "Installée : v{version}\n\nLecture de la dernière version GitHub..."
+choose_bios_memory_card: CHOISIR LA CARTE MÉMOIRE BIOS
+choose_console_folder: DOSSIER ROM POUR {console}
+choose_console_folder_footer: Les dossiers connus et personnalisés détectés sont disponibles
+choose_default_store: CHOISIR LA BOUTIQUE PAR DÉFAUT
+choose_destination_card: CHOISIR LA CARTE DE DESTINATION
+choose_installed_platform: CHOISIR LA PLATEFORME INSTALLÉE
+choose_language: CHOISIR LA LANGUE
+choose_library_location: Choisissez l’emplacement de la bibliothèque de jeux
+choose_mapping_store: CHOISIR LA BOUTIQUE À CONFIGURER
+choose_memory_card: CHOISIR LA CARTE MÉMOIRE
+choose_minerva_torrent_file: CHOISIR LE FICHIER TORRENT MINERVA
+choose_platform: CHOISIR UNE PLATEFORME
+choose_replacement: CHOISIR LE REMPLACEMENT
+choose_store_catalogue: CHOISIR LE CATALOGUE DE LA BOUTIQUE
+choose_store_footer: Choisissez une boutique ; B/Échap revient
+compatibility_badge: 'Compatibilité : {value}'
+compatibility_detail: '{level} ({qualifier})'
+compatibility_field: 'Compatibilité : {value}'
+compatibility_level_limited: Limitée
+compatibility_level_not_listed: Non répertorié
+compatibility_level_perfect: Parfaite
+compatibility_level_playable: Jouable
+compatibility_level_unsupported: Non pris en charge
+compatibility_listed: '{level} - répertorié'
+compatibility_match: '{level} - correspondance {score}%'
+compatibility_not_listed_source: Non répertorié par r36sgamelist.com
+compatibility_platform_rating: évaluation de la plateforme
+compatibility_title_listed: titre répertorié
+compatibility_title_match: correspondance du titre {score}%
+compatibility_update_download: Télécharger le dernier catalogue de compatibilité
+compatibility_update_title: ACTUALISER LE CATALOGUE DE COMPATIBILITÉ ?
+compatibility_updated: CATALOGUE DE COMPATIBILITÉ ACTUALISÉ
+compatibility_updated_message: '{count} titre(s) mis en cache. Valide pendant {days} jour(s).'
+compatibility_updating: ACTUALISATION DE LA COMPATIBILITÉ
+compatibility_updating_message: Téléchargement du catalogue de compatibilité actuel...
+confirm_choice_footer: 'A/Entrée : confirmer le choix'
+confirm_download_cancel: ANNULER LE TÉLÉCHARGEMENT ?
+confirm_exit: Oui - quitter
+confirm_minerva_file: CONFIRMER LE FICHIER MINERVA
+confirm_minerva_file_footer: Seul le fichier torrent explicitement sélectionné sera téléchargé
+confirm_permanent_delete: CONFIRMER LA SUPPRESSION DÉFINITIVE
+confirm_retrobios_download: CONFIRMER LE TÉLÉCHARGEMENT RETROBIOS
+confirm_update: CONFIRMER LA MISE À JOUR
+connecting_download_service: Connexion au service de téléchargement...
+connecting_github: Connexion à GitHub...
+connecting_retrobios: Connexion à RetroBIOS...
+console_folder_mapping: '{console}  [{folder}]'
+console_folder_mapping_saved: DOSSIER DE CONSOLE ENREGISTRÉ
+console_folder_mapping_saved_message: '{store} {console} sera installé dans {folder}.'
+console_folder_mappings: Dossiers ROM des consoles par boutique
+console_folder_mappings_footer: Choisissez une console, puis son dossier ROM
+console_folder_mappings_title: 'DOSSIERS DE CONSOLE {store}'
+continue_footer: 'A/Entrée/B/Échap : continuer'
+current_value: 'Actuel : {value}'
+default_rom_destination: 'Destination ROM par défaut  [{value}]'
+default_rom_destination_footer: Choisissez une racine ROM détectée ou demandez à chaque téléchargement
+default_rom_destination_saved: DESTINATION ROM ENREGISTRÉE
+default_rom_destination_saved_message: 'Les nouveaux jeux utiliseront : {destination}.'
+default_rom_destination_title: DESTINATION ROM PAR DÉFAUT
+delete_files: Oui - supprimer {count} fichier(s)
+delete_from_device: Supprimer de l’appareil
+delete_warning: Les fichiers supprimés ne peuvent pas être récupérés
+destination_field: 'Destination : {value}'
+destination_platform: PLATEFORME DE DESTINATION
+destination_platform_footer: Le fichier terminé est déplacé dans ce dossier ROM
+detail_url: URL DE DÉTAIL
+direct_download: Télécharger depuis un lien détaillé
+done: TERMINÉ
+download: Télécharger
+download_cancelled: TÉLÉCHARGEMENT ANNULÉ
+download_complete: TÉLÉCHARGEMENT TERMINÉ
+download_complete_message: "{filename}\n\nDéplacé vers {destination}{bios}\n\nLa liste des jeux sera actualisée à la fermeture de Pocket Harbor."
+download_controls_footer: Les téléchargements en arrière-plan conservent leur boutique d’origine
+download_details_title: DÉTAILS DU TÉLÉCHARGEMENT
+download_error_field: 'Erreur : {value}'
+download_filename: Télécharger {filename}
+download_from_retrobios: Télécharger depuis RetroBIOS
+download_install_version: Télécharger et installer v{version}
+download_job_row: '{title}  [{state} - {progress}]  {store}'
+download_latest_metadata: Télécharger les dernières métadonnées
+download_progress_bytes: '{current} sur {total}'
+download_progress_field: 'Progression : {value}'
+download_progress_percent: '{percent}%'
+download_progress_size: '{size}'
+download_progress_waiting: en attente
+download_queue: Téléchargements
+download_queue_empty: AUCUN TÉLÉCHARGEMENT
+download_queue_empty_message: Aucun téléchargement actif ou récemment terminé.
+download_queue_footer: Sélectionnez un téléchargement pour le suspendre, reprendre, réessayer ou annuler
+download_queue_title: TÉLÉCHARGEMENTS
+download_queued: TÉLÉCHARGEMENT EN FILE
+download_queued_message: "{title}\n\nTéléchargement depuis {store} en arrière-plan. Ouvrez Téléchargements pour le surveiller ou le contrôler."
+download_required_bios: TÉLÉCHARGER LE BIOS REQUIS ?
+download_retry_field: Nouvelle tentative automatique {attempt} dans environ {seconds}s
+download_state_cancelled: Annulé
+download_state_completed: Terminé
+download_state_downloading: Téléchargement
+download_state_failed: Échec
+download_state_paused: Suspendu
+download_state_queued: En file
+download_state_rate_limited: En attente d’une nouvelle tentative
+download_status_field: 'État : {value}'
+download_store_field: 'Boutique : {value}'
+download_verified_bios: Télécharger {count} fichier(s) BIOS vérifié(s)
+downloaded_kib: "{label}\n\n{kib} Kio téléchargés"
+downloading: TÉLÉCHARGEMENT
+downloading_retrobios_profiles: Téléchargement des profils de cœur RetroBIOS
+error: ERREUR
+exit: Quitter
+exit_footer: Confirmez avant de retourner à EmulationStation
+exit_pocket_harbor: QUITTER POCKET HARBOR ?
+'false': Faux
+file_field: 'Fichier : {value}'
+file_logging: 'Écrire les journaux dans un fichier  [{value}]'
+file_logging_disabled: La journalisation dans un fichier est désactivée.
+file_logging_enabled: "La journalisation est activée dans :\n\n{path}"
+file_logging_failed: La journalisation n’a pas pu être activée. Vérifiez l’accès en écriture au dossier de l’outil.
+file_logging_footer: Les modifications s’appliquent immédiatement et sont enregistrées
+file_logging_saved: JOURNALISATION ENREGISTRÉE
+file_logging_title: ÉCRIRE LES JOURNAUX DANS UN FICHIER ?
+files_in_group: 'Fichiers du groupe : {count}'
+finding_installed_platforms: Recherche des plateformes installées sur {root}...
+finding_retrobios_revision: Recherche de la dernière révision RetroBIOS
+firmware_warning: Le jeu peut ne pas démarrer sans le micrologiciel requis
+first_run_store: BOUTIQUE DU PREMIER DÉMARRAGE
+float_keyboard: Chiffres et séparateur décimal uniquement
+fresh: récent
+fresh_games: récent, {count} jeux
+game_deleted: JEU SUPPRIMÉ
+game_deleted_message: "{title}\n\nLa liste des jeux sera actualisée à la fermeture de Pocket Harbor."
+game_updated: JEU ACTUALISÉ
+game_updated_message: "{filename}\n\nInstallé dans {destination}{bundled}{required}\n\nLa liste des jeux sera actualisée à la fermeture de Pocket Harbor."
+installed_application_unchanged: L’application installée n’a pas été modifiée.
+installed_bundled_bios: '{count} fichier(s) BIOS inclus installé(s).'
+installed_game_unchanged: Le jeu installé n’a pas été modifié.
+installed_platform_footer: Les plateformes sont détectées rapidement ; les jeux sont chargés après sélection
+installed_published: 'Installée : v{installed}   Publiée : {published}'
+installed_required_bios: '{count} fichier(s) BIOS requis installé(s) depuis RetroBIOS.'
+integer_keyboard: Chiffres uniquement
+invalid_cache_lifetime: Saisissez une durée de cache valide.
+invalid_setting: '{setting} invalide : {error}'
+keep_cache_footer: Le cache hors ligne existant est conservé si l’actualisation échoue
+keep_catalogue: Conserver le catalogue actuel
+keep_current_values: Non - conserver les valeurs actuelles
+keep_downloading: Non - continuer le téléchargement de {title}
+keep_file: Annuler - conserver {filename}
+keep_game: Non - conserver {title}
+keep_without_bios: Conserver le jeu sans BIOS
+key_back: RETOUR
+keyboard_accents: ACCENTS
+keyboard_footer: '{page}   Croix : déplacer   A : touche   X : confirmer   Y : retour   B : annuler'
+keyboard_letters: LETTRES
+keyboard_symbols: SYMBOLES
+language: Langue
+language_footer: La langue sélectionnée s’applique immédiatement
+language_saved: LANGUE ENREGISTRÉE
+language_saved_message: La langue de l’interface est maintenant {language}.
+languages_field: 'Langues : {value}'
+later: Plus tard
+latest_release_message: v{version} est la dernière version {target} publiée.
+loading_all: Chargement de tous les jeux {platform}...
+loading_catalogue: CHARGEMENT DU CATALOGUE
+loading_catalogue_progress: "Lecture des sections numériques et A-Z...\n\n{current}/{total}  ({percent}%)"
+log_level: 'Niveau de journalisation  [{value}]'
+log_level_footer: Le niveau sélectionné s’applique immédiatement
+log_level_saved: NIVEAU DE JOURNALISATION ENREGISTRÉ
+log_level_saved_message: Le niveau de journalisation est maintenant {level}.
+log_level_title: NIVEAU DE JOURNALISATION
+looking_for: Recherche de {query}...
+main_footer: 'Croix/stick : déplacer   A/Entrée : sélectionner'
+manage_game: GÉRER LE JEU
+manage_game_footer: Les mises à jour conservent la carte et la plateforme
+manage_games: Gérer les jeux installés
+manage_games_footer: 'A : gérer   B : retour   L1/R1 : page'
+manual_every_time: Demander à chaque fois
+matching_compatibility: Comparaison des résultats avec le catalogue de compatibilité en cache...
+max_concurrent_downloads: 'Téléchargements simultanés  [{count}]'
+max_concurrent_downloads_hint: 'Valeur actuelle : {current} ; plage autorisée : 1-8'
+max_concurrent_downloads_range: Saisissez un nombre entier de 1 à 8.
+max_concurrent_downloads_saved: LIMITE DE TÉLÉCHARGEMENT ENREGISTRÉE
+max_concurrent_downloads_saved_message: Jusqu’à {count} téléchargements seront exécutés simultanément après le redémarrage.
+max_concurrent_downloads_title: MAXIMUM DE TÉLÉCHARGEMENTS SIMULTANÉS
+minerva_block_size: Taille de bloc (octets)
+minerva_candidate: '#{index}  {filename}  | {size} | correspondance {score}% | {path}'
+minerva_candidates_footer: Candidats sûrs les plus proches ; B/Échap annule
+minerva_max_discovered_peers: Maximum de pairs découverts
+minerva_max_peer_attempts: Maximum de tentatives de pairs
+minerva_max_peer_timeout: Délai maximal d’un pair (secondes)
+minerva_max_torrent_bytes: Maximum des métadonnées torrent (octets)
+minerva_max_tracker_bytes: Maximum de la réponse du tracker (octets)
+minerva_max_tracker_queries: Maximum de requêtes tracker
+minerva_peer_race_workers: Travailleurs de course des pairs
+minerva_settings: Paramètres BitTorrent Minerva
+minerva_settings_footer: Les valeurs avancées sont enregistrées localement
+minerva_settings_saved: PARAMÈTRES MINERVA ENREGISTRÉS
+minerva_settings_saved_message: Les nouvelles valeurs seront utilisées par le prochain téléchargement Minerva.
+minerva_settings_title: PARAMÈTRES BITTORRENT MINERVA
+minerva_torrent_changed: TORRENT MINERVA MODIFIÉ
+minerva_torrent_changed_message: "Fichier du catalogue :\n\n{filename}\n\nPosition du catalogue : #{index}\n\nLe torrent contient maintenant {count} fichiers sans correspondance unique. Examinez les candidats les plus proches ou annulez ; aucun jeu n’a encore été installé."
+minerva_udp_protocol_id: Identifiant du protocole UDP
+mixed_keyboard: Lettres, chiffres et symboles
+network_timeout: 'Délai réseau  [{value:g} secondes]'
+network_timeout_hint: 'Valeur actuelle : {current:g} ; plage autorisée : 1-3600'
+network_timeout_range: Saisissez une valeur de 1 à 3600 secondes.
+network_timeout_saved: DÉLAI RÉSEAU ENREGISTRÉ
+network_timeout_saved_message: Les requêtes réseau expirent maintenant après {value:g} secondes.
+network_timeout_title: DÉLAI RÉSEAU (SECONDES)
+no_bios_results: AUCUN RÉSULTAT BIOS
+no_download_stores: Aucune boutique activée. Vérifiez PH_STORES.
+no_game_installed: Aucun jeu n’a été installé.
+no_games: AUCUN JEU
+no_games_on_card: AUCUN JEU SUR LA CARTE
+no_incomplete_bios_installed: Aucun fichier BIOS incomplet n’a été installé.
+no_platform_games: Aucun jeu {platform} trouvé.
+no_remote_match: AUCUNE CORRESPONDANCE DISTANTE
+no_results: AUCUN RÉSULTAT
+no_rom_partition: Aucune partition ROM trouvée.
+no_rom_partition_environment: Aucune partition ROM trouvée. Définissez PH_ROMS_DIR ou PH_ROMS_DIRS.
+no_rom_partitions: Aucune partition ROM trouvée.
+no_supported_games_on_card: Aucun fichier de jeu pris en charge trouvé sur {root}.
+not_configured: non configuré
+not_detected: non détecté
+not_downloaded: non téléchargé
+not_set: non défini
+nothing_matched: Aucun résultat pour {query}.
+'off': désactivé
+'on': activé
+operation_failed: "L’opération a échoué.\n\nDétails techniques : {error}"
+optional: Facultatif
+optional_short: F
+pause_download: Suspendre le téléchargement
+platform_field: 'Plateforme : {value}'
+platform_has_no_rom_folder: Cette plateforme n’a pas de dossier ROM sur le système sélectionné.
+platform_on_card: '{platform} SUR {root}'
+preparing: PRÉPARATION
+rate_limit_retry_base: 'Délai initial  [{value:g} secondes]'
+rate_limit_retry_base_seconds_title: DÉLAI INITIAL (SECONDES)
+rate_limit_retry_footer: Les modifications s’appliquent aux nouvelles tentatives planifiées
+rate_limit_retry_invalid: Utilisez 1-3600 secondes au départ, jusqu’à 86400 secondes au maximum et 0-100% de variation. Le maximum ne doit pas être inférieur au délai initial.
+rate_limit_retry_jitter: 'Variation aléatoire  [{value:g}%]'
+rate_limit_retry_jitter_ratio_title: VARIATION ALÉATOIRE (POURCENTAGE)
+rate_limit_retry_max: 'Délai maximal  [{value:g} secondes]'
+rate_limit_retry_max_seconds_title: DÉLAI MAXIMAL (SECONDES)
+rate_limit_retry_saved: PARAMÈTRES DE NOUVELLE TENTATIVE ENREGISTRÉS
+rate_limit_retry_saved_message: Les nouvelles tentatives utiliseront ces valeurs.
+rate_limit_retry_settings: Paramètres des nouvelles tentatives
+rate_limit_retry_title: PARAMÈTRES DES NOUVELLES TENTATIVES
+rating_field: 'Évaluation : {value}'
+reading_platform: Lecture de {platform} uniquement sur {root}...
+refresh_download_status: Actualiser l’état des téléchargements
+refresh_store_cache: 'Actualiser le catalogue de jeux  [{count} en cache]'
+refresh_store_footer: Remplace le cache sélectionné avant son expiration
+refresh_store_title: ACTUALISER {store}
+refreshing: ACTUALISATION
+refreshing_catalogue: ACTUALISATION DU CATALOGUE DE JEUX
+refreshing_catalogue_message: Téléchargement du catalogue complet {store} pour {platform}...
+refreshing_platform: Actualisation de {platform} uniquement...
+region_field: 'Région : {value}'
+replace_with: Remplacer par {title}
+replacement_footer: L’ancien jeu est supprimé uniquement lorsque le téléchargement est terminé
+required: Requis
+required_bios_missing_message: 'L’archive du jeu ne contient pas ces BIOS requis et aucune copie valide n’a été trouvée sur les cartes mémoire :'
+required_bios_not_found: BIOS REQUIS INTROUVABLE
+required_short: R
+reset_all_defaults: Rétablir toutes les valeurs par défaut
+reset_minerva_footer: Modifie les neuf valeurs BitTorrent
+reset_minerva_settings: RÉINITIALISER LES PARAMÈTRES MINERVA ?
+restore_defaults: Oui - rétablir les valeurs par défaut
+results_footer: 'A/Entrée : détails   B/Échap : retour'
+results_title: 'RÉSULTATS {store} ({count})'
+resume_download: Reprendre le téléchargement
+retrieving_download_link: Récupération du lien de téléchargement...
+retrobios_summary: "Révision : {revision}\n\nSystèmes : {systems}\n\nProfil RetroArch : {profile}"
+retrobios_update_cancelled: ACTUALISATION RETROBIOS ANNULÉE
+retrobios_update_title: ACTUALISER LE CATALOGUE RETROBIOS ?
+retrobios_updated: RETROBIOS ACTUALISÉ
+retry_download: Réessayer le téléchargement
+return_to_pocket_harbor: Non - retourner à Pocket Harbor
+review_minerva_file: EXAMINER LE FICHIER MINERVA
+review_minerva_file_message: "Catalogue attendu :\n\n{expected}\n\nFichier torrent sélectionné :\n\n{selected}\n\nPosition torrent : #{index}\n\nTaille : {size}\n\nSimilarité du titre : {score}%"
+scanning_platform: ANALYSE DE LA PLATEFORME
+search_bios: Rechercher et télécharger des BIOS
+search_bios_empty_hint: 'TERMINÉ sans texte : afficher tout le catalogue BIOS'
+search_bios_title: RECHERCHER UN BIOS
+search_empty_hint: 'TERMINÉ sans texte : afficher tous les jeux'
+search_library: Rechercher dans la bibliothèque
+search_title: RECHERCHER {platform}
+searching: RECHERCHE
+searching_for_update: RECHERCHE DE MISE À JOUR
+select_download: Choisissez Télécharger pour continuer
+settings: Paramètres
+settings_footer: Paramètres de boutique, interface, cache, journalisation et application
+settings_saved: PARAMÈTRES ENREGISTRÉS
+settings_title: PARAMÈTRES
+space: ESPACE
+stale_games: expiré, {count} jeux
+stale_over_days: expiré (>{days} jours)
+status_controls: État et commandes du système
+status_field: 'État : {value}'
+status_message: "Boutique par défaut : {store}\n\nBoutiques : {stores}\n\nZone temporaire : {staging}\n\nRacine ROM : {roms}\n\nPlateformes : {platforms}\n\nMatériel : {hardware}\n\nCompatible : {compatible}\n\nÉcran : {resolution} pixels ; terminal {width}x{height}\n\nEntrées DT : {inputs} ({keys} touches GPIO)\n\nContrôleur : {controller} (entrée Linux native)\n\nCommandes\n\nCroix / sticks / flèches   Déplacer la sélection\n\nA / Entrée        Sélectionner\n\nB / Échap         Retour\n\nX                 Valider le texte de recherche\n\nLe texte peut être saisi avec le clavier à l’écran."
+status_title: ÉTAT DE POCKET HARBOR
+store_cached_count: '{store}  [{count} en cache]'
+store_description_minerva: Torrents RetroAchievements (Python natif)
+store_description_vimm: Catalogue de jeux Vimm
+store_platform_unsupported: '{store} ne prend pas en charge {platform}. Choisissez une autre boutique dans Paramètres.'
+store_saved_message: Les recherches, téléchargements et mises à jour utiliseront {store}.
+system_field: 'Système : {value}'
+terminal_too_small: Le terminal doit comporter au moins 40 colonnes et 15 lignes.
+title_details: DÉTAILS DU TITRE
+'true': Vrai
+unknown: inconnu
+update_bios_catalogue: 'Actualiser le catalogue RetroBIOS  [{status}]'
+update_cancelled: MISE À JOUR ANNULÉE
+update_compatibility: 'Actualiser le catalogue de compatibilité  [{status}]'
+update_from_remote: Mettre à jour depuis la source distante
+update_queued: MISE À JOUR EN FILE
+update_queued_message: "{title}\n\nLe remplacement depuis {store} est téléchargé en arrière-plan. Le jeu installé reste inchangé jusqu’à la fin."
+update_ready: MISE À JOUR PRÊTE
+update_ready_message: "v{version} va être installée.\n\nRouvrez Pocket Harbor depuis Outils après la fermeture de cet écran."
+version_field: 'Version : {value}'

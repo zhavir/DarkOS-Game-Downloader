@@ -22,12 +22,12 @@ MAX_BIOS_FILES = 128
 MAX_BIOS_FILE_SIZE = 64 * 1024 * 1024
 MAX_BIOS_TOTAL_SIZE = 256 * 1024 * 1024
 ROM_LOCAL_BIOS: dict[str, frozenset[str]] = {
-    "advision": frozenset({"advision.zip"}),
-    "astrocde": frozenset({"astrocde.zip"}),
-    "coco3": frozenset({"coco.zip", "coco2.zip", "coco2b.zip", "coco3.zip", "coco3p.zip"}),
+    "adventure-vision": frozenset({"advision.zip"}),
+    "astrocade": frozenset({"astrocde.zip"}),
+    "coco-3": frozenset({"coco.zip", "coco2.zip", "coco2b.zip", "coco3.zip", "coco3p.zip"}),
 }
 ROM_AND_SHARED_BIOS: dict[str, frozenset[str]] = {
-    "neogeo": frozenset({"aes.zip", "neogeo.zip"}),
+    "neo-geo": frozenset({"aes.zip", "neogeo.zip"}),
 }
 
 
@@ -74,6 +74,7 @@ def install_downloads(
     platform: Platform,
     roms_directory: Path,
     bios_installed: Callable[[Path], None] | None = None,
+    bios_directory: str = "bios",
 ) -> list[DownloadResult]:
     """Move completed files to a platform folder without overwriting existing ROMs."""
 
@@ -99,7 +100,12 @@ def install_downloads(
         source = download.path
         if not source.is_file():
             raise OrganizeError(f"Completed file was not found: {source}")
-        for bios_path in install_bundled_bios(source, platform, roms_directory):
+        for bios_path in install_bundled_bios(
+            source,
+            platform,
+            roms_directory,
+            bios_directory,
+        ):
             if bios_installed is not None:
                 bios_installed(bios_path)
         destination = unique_destination(destination_directory / source.name)
@@ -116,6 +122,7 @@ def install_bundled_bios(
     archive_path: Path,
     platform: Platform,
     roms_directory: Path,
+    bios_directory: str = "bios",
 ) -> tuple[Path, ...]:
     """Safely install files explicitly stored under a BIOS directory in a game ZIP."""
 
@@ -126,7 +133,12 @@ def install_bundled_bios(
             members = _bundled_bios_members(archive)
             installed: list[Path] = []
             for member, relative_path in members:
-                for destination in _bios_destinations(relative_path, platform, roms_directory):
+                for destination in _bios_destinations(
+                    relative_path,
+                    platform,
+                    roms_directory,
+                    bios_directory,
+                ):
                     if destination.exists():
                         continue
                     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -180,14 +192,15 @@ def _bios_destinations(
     relative_path: PurePosixPath,
     platform: Platform,
     roms_directory: Path,
+    bios_directory: str = "bios",
 ) -> tuple[Path, ...]:
     folder = platform.rom_folder or ""
     filename = relative_path.name.casefold()
     local = roms_directory / folder / Path(*relative_path.parts)
-    shared = roms_directory / "bios" / Path(*relative_path.parts)
-    if filename in ROM_LOCAL_BIOS.get(folder, frozenset()):
+    shared = roms_directory / bios_directory / Path(*relative_path.parts)
+    if filename in ROM_LOCAL_BIOS.get(platform.slug, frozenset()):
         return (local,)
-    if filename in ROM_AND_SHARED_BIOS.get(folder, frozenset()):
+    if filename in ROM_AND_SHARED_BIOS.get(platform.slug, frozenset()):
         return (shared, local)
     return (shared,)
 

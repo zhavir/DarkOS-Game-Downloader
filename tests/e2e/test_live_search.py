@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from ph.config import DEFAULT_BASE_URL
+from ph.config import DEFAULT_VIMM_BASE_URL
 from ph.vimm_store import CATALOG_SECTIONS, VimmStore
 
 
@@ -13,7 +13,7 @@ from ph.vimm_store import CATALOG_SECTIONS, VimmStore
 def test_real_prefix_all_platform_and_empty_search_end_to_end() -> None:
     """Exercise actual HTTP, prefix filters, all-platform results, and every section."""
 
-    base_url = os.environ.get("PH_LIVE_BASE_URL", DEFAULT_BASE_URL)
+    base_url = os.environ.get("PH_LIVE_VIMM_BASE_URL", DEFAULT_VIMM_BASE_URL)
     client = VimmStore(base_url, timeout_seconds=60)
 
     partial_results = client.search("GBA", "aDvAnCe")

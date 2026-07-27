@@ -9,7 +9,7 @@ from typing import Self
 from ph.targets import DARKOS, LinuxTarget, resolve_target
 from ph.updater import DEFAULT_UPDATE_API_URL
 
-DEFAULT_BASE_URL = "https://vimm.net"
+DEFAULT_VIMM_BASE_URL = "https://vimm.net"
 DEFAULT_MINERVA_BASE_URL = "https://minerva-archive.org"
 DEFAULT_MINERVA_TORRENT_BASE_URL = "https://cdn.minerva-archive.org/torrents"
 
@@ -18,7 +18,7 @@ DEFAULT_MINERVA_TORRENT_BASE_URL = "https://cdn.minerva-archive.org/torrents"
 class Config:
     """Runtime settings shared by every supported Linux target."""
 
-    base_url: str
+    vimm_base_url: str
     download_directory: Path
     roms_directories: tuple[Path, ...]
     timeout_seconds: float = 30.0
@@ -36,7 +36,7 @@ class Config:
         """Build settings with DarkOS as the currently tested default target."""
 
         values = os.environ if environment is None else environment
-        base_url = values.get("PH_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+        vimm_base_url = values.get("PH_VIMM_BASE_URL", DEFAULT_VIMM_BASE_URL).rstrip("/")
         directory = Path(values.get("PH_DOWNLOAD_DIR", ".")).expanduser()
         roms_values = values.get("PH_ROMS_DIRS")
         if roms_values is not None:
@@ -70,7 +70,7 @@ class Config:
         log_level = values.get("PH_LOG_LEVEL", "INFO")
         target = resolve_target(values.get("PH_TARGET_OS", DARKOS.target_id))
         return cls(
-            base_url=base_url,
+            vimm_base_url=vimm_base_url,
             download_directory=directory,
             roms_directories=roms_directories,
             timeout_seconds=timeout,

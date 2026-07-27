@@ -568,12 +568,13 @@ def audit_bios(
     requirements: Iterable[BiosRequirement],
     platform: Platform,
     roms_directory: Path,
+    bios_directory: str = "bios",
 ) -> tuple[BiosCheck, ...]:
     """Verify BIOS files on the selected ROM card using pinned checksums."""
 
     checks: list[BiosCheck] = []
     for requirement in requirements:
-        paths = bios_destinations(requirement, platform, roms_directory)
+        paths = bios_destinations(requirement, platform, roms_directory, bios_directory)
         existing = tuple(path for path in paths if path.is_file())
         validity = tuple(verify_bios_file(path, requirement) for path in existing)
         if len(existing) == len(paths) and all(validity):
@@ -591,12 +592,15 @@ def audit_bios_roots(
     platform: Platform,
     roms_directories: Sequence[Path],
     preferred_directory: Path,
+    bios_directory: str = "bios",
 ) -> tuple[BiosCheck, ...]:
     """Treat a valid BIOS on either active memory card as already available."""
 
     roots = tuple(dict.fromkeys((preferred_directory, *roms_directories)))
-    preferred_checks = audit_bios(requirements, platform, preferred_directory)
-    checks_by_root = tuple(audit_bios(requirements, platform, root) for root in roots)
+    preferred_checks = audit_bios(requirements, platform, preferred_directory, bios_directory)
+    checks_by_root = tuple(
+        audit_bios(requirements, platform, root, bios_directory) for root in roots
+    )
     combined: list[BiosCheck] = []
     for index, preferred in enumerate(preferred_checks):
         valid = next(
@@ -615,6 +619,7 @@ def bios_destinations(
     requirement: BiosRequirement,
     platform: Platform,
     roms_directory: Path,
+    bios_directory: str = "bios",
 ) -> tuple[Path, ...]:
     """Resolve shared and exceptional ROM-local BIOS destinations."""
 
@@ -627,11 +632,11 @@ def bios_destinations(
         raise BiosError(f"RetroBIOS contains an unsafe destination: {requirement.destination}")
     folder = platform.rom_folder or ""
     filename = relative.name.casefold()
-    shared = roms_directory / "bios" / Path(*relative.parts)
+    shared = roms_directory / bios_directory / Path(*relative.parts)
     local = roms_directory / folder / Path(*relative.parts)
-    if filename in ROM_LOCAL_BIOS.get(folder, frozenset()):
+    if filename in ROM_LOCAL_BIOS.get(platform.slug, frozenset()):
         return (local,)
-    if filename in ROM_AND_SHARED_BIOS.get(folder, frozenset()):
+    if filename in ROM_AND_SHARED_BIOS.get(platform.slug, frozenset()):
         return (shared, local)
     return (shared,)
 
@@ -662,6 +667,7 @@ def install_bios(
     timeout_seconds: float,
     progress: BiosProgress | None = None,
     cancelled: CancellationCheck | None = None,
+    bios_directory: str = "bios",
 ) -> tuple[Path, ...]:
     """Download one explicitly approved BIOS and atomically install verified copies."""
 
@@ -670,7 +676,7 @@ def install_bios(
         raise BiosError(f"RetroBIOS does not provide a downloadable copy of {requirement.name}.")
     if requirement.size is not None and requirement.size > MAX_FIRMWARE_BYTES:
         raise BiosError(f"RetroBIOS firmware is too large to install safely: {requirement.name}")
-    destinations = bios_destinations(requirement, platform, roms_directory)
+    destinations = bios_destinations(requirement, platform, roms_directory, bios_directory)
     valid = tuple(path for path in destinations if verify_bios_file(path, requirement))
     if len(valid) == len(destinations):
         return valid

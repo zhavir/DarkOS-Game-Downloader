@@ -40,7 +40,7 @@ RATE_LIMIT_RETRY_JITTER = 0.2
 type DownloadRunner = Callable[..., list[DownloadResult]]
 type DownloadInstaller = Callable[..., list[DownloadResult]]
 type GameReplacer = Callable[[InstalledGame, DownloadResult], DownloadResult]
-type BundledBiosInstaller = Callable[[Path, Platform, Path], tuple[Path, ...]]
+type BundledBiosInstaller = Callable[..., tuple[Path, ...]]
 type RetryDelay = Callable[[int, float | None], float]
 
 
@@ -96,6 +96,7 @@ class DownloadJob:
     is_update: bool
     retry_attempt: int = 0
     retry_at: float | None = None
+    bios_directory: str = "bios"
 
 
 @dataclass(slots=True)
@@ -108,6 +109,7 @@ class _QueuedDownload:
     media: tuple[MediaDownload, ...]
     platform: Platform
     roms_directory: Path
+    bios_directory: str
     timeout_seconds: float
     bittorrent_settings: BitTorrentSettings | None
     region: str | None
@@ -129,25 +131,26 @@ class _QueuedDownload:
 
     def snapshot(self) -> DownloadJob:
         return DownloadJob(
-            self.job_id,
-            self.title,
-            self.store_id,
-            self.store_name,
-            self.state,
-            self.filename,
-            self.downloaded_bytes,
-            self.total_bytes,
-            self.error,
-            self.created_at,
-            self.completed_path,
-            self.torrent_candidates,
-            self.platform,
-            self.roms_directory,
-            self.region,
-            self.bundled_bios_count,
-            self.replacement_game is not None,
-            self.retry_attempt,
-            self.retry_at,
+            job_id=self.job_id,
+            title=self.title,
+            store_id=self.store_id,
+            store_name=self.store_name,
+            state=self.state,
+            filename=self.filename,
+            downloaded_bytes=self.downloaded_bytes,
+            total_bytes=self.total_bytes,
+            error=self.error,
+            created_at=self.created_at,
+            completed_path=self.completed_path,
+            torrent_candidates=self.torrent_candidates,
+            platform=self.platform,
+            roms_directory=self.roms_directory,
+            region=self.region,
+            bundled_bios_count=self.bundled_bios_count,
+            is_update=self.replacement_game is not None,
+            retry_attempt=self.retry_attempt,
+            retry_at=self.retry_at,
+            bios_directory=self.bios_directory,
         )
 
 
@@ -208,6 +211,7 @@ class DownloadQueue:
         platform: Platform,
         roms_directory: Path,
         timeout_seconds: float,
+        bios_directory: str = "bios",
         bittorrent_settings: BitTorrentSettings | None = None,
         region: str | None = None,
         replacement_game: InstalledGame | None = None,
@@ -225,6 +229,7 @@ class DownloadQueue:
             media=tuple(media),
             platform=platform,
             roms_directory=roms_directory,
+            bios_directory=bios_directory,
             timeout_seconds=timeout_seconds,
             bittorrent_settings=bittorrent_settings,
             region=region,
@@ -456,6 +461,7 @@ class DownloadQueue:
                         downloads[0].path,
                         job.platform,
                         job.roms_directory,
+                        job.bios_directory,
                     )
                 )
                 completed = [self._replacer(job.replacement_game, downloads[0])]
@@ -465,6 +471,7 @@ class DownloadQueue:
                     job.platform,
                     job.roms_directory,
                     installed_bios.append,
+                    job.bios_directory,
                 )
             if not completed:
                 raise OrganizeError("The completed download was not installed.")
@@ -704,6 +711,7 @@ def _job_to_json(job: _QueuedDownload) -> dict[str, object]:
             "alternate_folders": list(job.platform.alternate_folders),
         },
         "roms_directory": str(job.roms_directory),
+        "bios_directory": job.bios_directory,
         "timeout_seconds": job.timeout_seconds,
         "bittorrent_settings": asdict(job.bittorrent_settings)
         if job.bittorrent_settings is not None
@@ -755,6 +763,7 @@ def _job_from_json(value: object) -> _QueuedDownload:
         media=tuple(_media_from_json(item) for item in media_payload),
         platform=platform,
         roms_directory=Path(_string(payload["roms_directory"])),
+        bios_directory=_string(payload.get("bios_directory", "bios")),
         timeout_seconds=_number(payload["timeout_seconds"]),
         bittorrent_settings=(
             BitTorrentSettings(**_dictionary(settings_payload))

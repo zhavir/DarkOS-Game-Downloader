@@ -62,7 +62,7 @@ def test_search_caches_full_catalogue_for_prefix_empty_and_offline_replay(
     (card / "gba").mkdir(parents=True)
     config = Config.from_environment(
         {
-            "PH_BASE_URL": local_vault,
+            "PH_VIMM_BASE_URL": local_vault,
             "PH_DOWNLOAD_DIR": str(staging),
             "PH_ROMS_DIR": str(card),
         }
@@ -133,7 +133,7 @@ def test_dual_card_install_update_and_delete_workflow(
     (card_two / "gba").mkdir(parents=True)
     config = Config.from_environment(
         {
-            "PH_BASE_URL": local_vault,
+            "PH_VIMM_BASE_URL": local_vault,
             "PH_DOWNLOAD_DIR": str(staging),
             "PH_ROMS_DIRS": os.pathsep.join((str(card_one), str(card_two))),
         }
@@ -142,7 +142,7 @@ def test_dual_card_install_update_and_delete_workflow(
     assert detect_roms_directories(config.roms_directories) == (card_one, card_two)
     platform = resolve_platform("GBA")
     assert platform is not None
-    client = VimmStore(config.base_url, config.timeout_seconds)
+    client = VimmStore(config.vimm_base_url, config.timeout_seconds)
 
     matches = client.search(platform.code, "advance wars")
     original = next(result for result in matches if result.version == "1.0")
