@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.11.32,<0.12" ]
 
 [project]
 name = "pocket-harbor"
-version = "3.1.0"
+version = "3.2.0"
 description = "Pocket Harbor controller-first game library manager"
 readme = "README.md"
 license = "MIT"

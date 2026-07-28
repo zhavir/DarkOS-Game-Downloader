@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v3.2.0 (2026-07-28)
+
+### Features
+
+- **search**: Defer compatibility scoring
+  ([`98ef9ee`](https://github.com/zhavir/PoketHarbor/commit/98ef9ee80607e21f0050bb6ffdeb4de0aa514a61))
+
+
 ## v3.1.0 (2026-07-28)
 
 ### Features
