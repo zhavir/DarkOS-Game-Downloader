@@ -6,6 +6,7 @@ from enum import StrEnum
 class TranslationKey(StrEnum):
     """A type-safe key present in every translation catalogue."""
 
+    ALL_CONSOLES = "all_consoles"
     ALL_REGIONS = "all_regions"
     ALREADY_UP_TO_DATE = "already_up_to_date"
     AND_MORE = "and_more"
@@ -77,6 +78,7 @@ class TranslationKey(StrEnum):
     CHOOSE_MINERVA_TORRENT_FILE = "choose_minerva_torrent_file"
     CHOOSE_PLATFORM = "choose_platform"
     CHOOSE_REPLACEMENT = "choose_replacement"
+    CHOOSE_STORE = "choose_store"
     CHOOSE_STORE_CATALOGUE = "choose_store_catalogue"
     CHOOSE_STORE_FOOTER = "choose_store_footer"
     COMPATIBILITY_BADGE = "compatibility_badge"
@@ -142,7 +144,6 @@ class TranslationKey(StrEnum):
     DOWNLOAD_FILENAME = "download_filename"
     DOWNLOAD_FROM_RETROBIOS = "download_from_retrobios"
     DOWNLOAD_INSTALL_VERSION = "download_install_version"
-    DOWNLOAD_JOB_ROW = "download_job_row"
     DOWNLOAD_LATEST_METADATA = "download_latest_metadata"
     DOWNLOAD_PROGRESS_BYTES = "download_progress_bytes"
     DOWNLOAD_PROGRESS_FIELD = "download_progress_field"
@@ -185,6 +186,8 @@ class TranslationKey(StrEnum):
     FILE_LOGGING_SAVED = "file_logging_saved"
     FILE_LOGGING_TITLE = "file_logging_title"
     FILES_IN_GROUP = "files_in_group"
+    FILTER_CONSOLE = "filter_console"
+    FILTER_CONSOLE_FOOTER = "filter_console_footer"
     FINDING_INSTALLED_PLATFORMS = "finding_installed_platforms"
     FINDING_RETROBIOS_REVISION = "finding_retrobios_revision"
     FIRMWARE_WARNING = "firmware_warning"

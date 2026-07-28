@@ -87,6 +87,12 @@ LOGGER = logging.getLogger(__name__)
 GAMEPAD_START_KEY = 0x110000
 GAMEPAD_SEARCH_KEY = 0x110001
 GAMEPAD_NOOP_KEY = 0x110002
+GAMEPAD_FILTER_KEY = 0x110003
+GAMEPAD_RESET_KEY = 0x110004
+
+SEARCH_FILTER_CHOICE = -1
+SEARCH_RESET_CHOICE = -2
+MENU_REDRAW_SECONDS = 0.25
 
 GAMEPAD_KEYS: dict[InputAction, int] = {
     InputAction.UP: curses.KEY_UP,
@@ -109,6 +115,20 @@ KEYBOARD_GAMEPAD_KEYS: dict[InputAction, int] = {
     InputAction.RIGHT: curses.KEY_RIGHT,
     InputAction.SUBMIT_SEARCH: GAMEPAD_SEARCH_KEY,
     InputAction.START: GAMEPAD_NOOP_KEY,
+}
+
+SEARCH_RESULTS_GAMEPAD_KEYS: dict[InputAction, int] = {
+    **GAMEPAD_KEYS,
+    InputAction.SUBMIT_SEARCH: GAMEPAD_FILTER_KEY,
+    InputAction.BACKSPACE: GAMEPAD_RESET_KEY,
+}
+SEARCH_RESULTS_SHORTCUTS: dict[int, int] = {
+    GAMEPAD_FILTER_KEY: SEARCH_FILTER_CHOICE,
+    GAMEPAD_RESET_KEY: SEARCH_RESET_CHOICE,
+    ord("x"): SEARCH_FILTER_CHOICE,
+    ord("X"): SEARCH_FILTER_CHOICE,
+    ord("y"): SEARCH_RESET_CHOICE,
+    ord("Y"): SEARCH_RESET_CHOICE,
 }
 
 
@@ -212,6 +232,41 @@ def _nearest_keyboard_key(row: Sequence[KeyboardKey], center: float) -> int:
     return min(range(len(row)), key=lambda index: abs(_keyboard_key_center(row, index) - center))
 
 
+def _fit_column(value: str, width: int) -> str:
+    """Fit a metadata value without disturbing the following menu columns."""
+
+    if len(value) <= width:
+        return value
+    if width <= 1:
+        return value[:width]
+    return value[: width - 1] + "…"
+
+
+def _marquee_text(value: str, width: int, offset: int) -> str:
+    """Return one frame of a looping horizontal marquee."""
+
+    if width <= 0:
+        return ""
+    if len(value) <= width:
+        return value
+    loop = value + "   "
+    start = offset % len(loop)
+    repeated = loop + loop[:width]
+    return repeated[start : start + width]
+
+
+def _visible_menu_label(value: str, width: int, offset: int) -> str:
+    """Scroll long titles while retaining structured metadata when it fits."""
+
+    if len(value) <= width:
+        return value
+    prefix, separator, title = value.rpartition(" | ")
+    if separator and len(prefix) + len(separator) < width:
+        title_width = width - len(prefix) - len(separator)
+        return prefix + separator + _marquee_text(title, title_width, offset)
+    return _marquee_text(value, width, offset)
+
+
 class TerminalTooSmall(RuntimeError):
     """The active terminal cannot display the interface."""
 
@@ -238,7 +293,9 @@ class DownloaderTui:
         )
         self.retrobios_catalog: RetroBiosCatalog | None = None
         self.selected_store = (
-            self.store_catalog.find(preferences.store_id) if preferences.store_id else None
+            self.store_catalog.find(preferences.store_id)
+            if preferences.store_id and not preferences.ask_store_each_time
+            else None
         )
         self.download_queue = DownloadQueue(
             self.config.download_directory,
@@ -305,7 +362,7 @@ class DownloaderTui:
             if not self.store_catalog.stores:
                 self._error(self._t(TranslationKey.NO_DOWNLOAD_STORES))
                 return
-            while self.selected_store is None:
+            while self.selected_store is None and not self.preferences.ask_store_each_time:
                 if self._configure_store(first_run=True):
                     break
                 if self._confirm_exit():
@@ -364,7 +421,7 @@ class DownloaderTui:
         return f"{self._t(TranslationKey.DOWNLOAD_QUEUE)}  [{len(self.download_queue.jobs())}]"
 
     def _search_flow(self) -> None:
-        store = self.selected_store
+        store = self._store_for_operation(self._t(TranslationKey.CHOOSE_STORE))
         if store is None:
             return
         platforms = tuple(
@@ -455,29 +512,54 @@ class DownloaderTui:
         compatibility: Sequence[CompatibilityInfo],
         store: GameStore,
     ) -> None:
-        labels = []
-        for result, info in zip(results, compatibility, strict=True):
-            prefix = f"{result.system} | " if result.system else ""
-            detail = f" - {result.region}" if result.region else ""
-            badge = self._t(
-                TranslationKey.COMPATIBILITY_BADGE,
-                value=self._compatibility_label(info),
-            )
-            labels.append(f"{prefix}{result.title}{detail}  [{badge}]")
+        pairs = list(zip(results, compatibility, strict=True))
+        system_filter: str | None = None
         while True:
+            visible_pairs = [
+                (result, info)
+                for result, info in pairs
+                if system_filter is None
+                or (result.system and result.system.casefold() == system_filter.casefold())
+            ]
+            labels = []
+            for result, info in visible_pairs:
+                prefix = f"{result.system} | " if result.system else ""
+                detail = f" - {result.region}" if result.region else ""
+                badge = self._t(
+                    TranslationKey.COMPATIBILITY_BADGE,
+                    value=self._compatibility_label(info),
+                )
+                labels.append(f"{prefix}{result.title}{detail}  [{badge}]")
             choice = self._menu(
                 self._t(
                     TranslationKey.RESULTS_TITLE,
                     store=store.display_name.upper(),
-                    count=len(results),
+                    count=len(visible_pairs),
                 ),
                 labels,
                 self._t(TranslationKey.RESULTS_FOOTER),
+                gamepad_keys=SEARCH_RESULTS_GAMEPAD_KEYS,
+                shortcuts=SEARCH_RESULTS_SHORTCUTS,
             )
             if choice is None:
                 return
-            result = results[choice]
-            info = compatibility[choice]
+            if choice == SEARCH_FILTER_CHOICE:
+                systems = sorted(
+                    {result.system for result, _info in pairs if result.system},
+                    key=str.casefold,
+                )
+                filter_choice = self._menu(
+                    self._t(TranslationKey.FILTER_CONSOLE),
+                    [self._t(TranslationKey.ALL_CONSOLES), *systems],
+                    self._t(TranslationKey.FILTER_CONSOLE_FOOTER),
+                )
+                if filter_choice is not None:
+                    system_filter = None if filter_choice == 0 else systems[filter_choice - 1]
+                continue
+            if choice == SEARCH_RESET_CHOICE:
+                system_filter = None
+                continue
+            result, info = visible_pairs[choice]
             effective_platform = platform
             if not platform.code and result.system:
                 resolved = resolve_platform(result.system, self.platforms)
@@ -514,7 +596,7 @@ class DownloaderTui:
                 continue
 
     def _direct_download_flow(self) -> None:
-        store = self.selected_store
+        store = self._store_for_operation(self._t(TranslationKey.CHOOSE_STORE))
         if store is None:
             return
         platforms = tuple(
@@ -648,11 +730,24 @@ class DownloaderTui:
 
     def _download_queue_screen(self) -> None:
         while True:
-            jobs = tuple(
-                job
-                for job in self.download_queue.jobs()
-                if job.state is not DownloadState.COMPLETED
-            )
+            jobs: tuple[DownloadJob, ...] = ()
+
+            def menu_options() -> Sequence[str]:
+                nonlocal jobs
+                jobs = tuple(
+                    job
+                    for job in self.download_queue.jobs()
+                    if job.state is not DownloadState.COMPLETED
+                )
+                if not jobs:
+                    return ()
+                _height, width = self.screen.getmaxyx()
+                return [
+                    *self._download_job_labels(jobs, max(1, width - 6)),
+                    self._t(TranslationKey.REFRESH_DOWNLOAD_STATUS),
+                ]
+
+            initial_options = menu_options()
             if not jobs:
                 self._draw_message(
                     self._t(TranslationKey.DOWNLOAD_QUEUE_EMPTY),
@@ -661,20 +756,20 @@ class DownloaderTui:
                     wait=True,
                 )
                 return
-            labels = [self._download_job_label(job) for job in jobs]
-            labels.append(self._t(TranslationKey.REFRESH_DOWNLOAD_STATUS))
             choice = self._menu(
                 self._t(TranslationKey.DOWNLOAD_QUEUE_TITLE),
-                labels,
+                initial_options,
                 self._t(TranslationKey.DOWNLOAD_QUEUE_FOOTER),
+                refresh_options=menu_options,
+                refresh_seconds=MENU_REDRAW_SECONDS,
             )
             if choice is None:
                 return
-            if choice == len(jobs):
+            if choice >= len(jobs):
                 continue
             self._download_job_controls(jobs[choice])
 
-    def _download_job_label(self, job: DownloadJob) -> str:
+    def _download_job_fields(self, job: DownloadJob) -> tuple[str, str, str]:
         state = self._t(TranslationKey(f"download_state_{job.state.value}"))
         if job.total_bytes:
             percent = min(100, int(job.downloaded_bytes * 100 / job.total_bytes))
@@ -686,13 +781,53 @@ class DownloaderTui:
             )
         else:
             progress = self._t(TranslationKey.DOWNLOAD_PROGRESS_WAITING)
-        return self._t(
-            TranslationKey.DOWNLOAD_JOB_ROW,
-            title=job.title,
-            state=state,
-            progress=progress,
-            store=job.store_name,
+        return progress, state, job.store_name
+
+    def _download_job_label(
+        self,
+        job: DownloadJob,
+        widths: tuple[int, int, int] | None = None,
+    ) -> str:
+        progress, state, store = self._download_job_fields(job)
+        progress_width, state_width, store_width = widths or (
+            len(progress),
+            len(state),
+            len(store),
         )
+        progress = _fit_column(progress, progress_width)
+        state = _fit_column(state, state_width)
+        store = _fit_column(store, store_width)
+        return (
+            f"{progress:>{progress_width}} | "
+            f"{state:<{state_width}} | "
+            f"{store:<{store_width}} | {job.title}"
+        )
+
+    def _download_job_labels(
+        self,
+        jobs: Sequence[DownloadJob],
+        available_width: int,
+    ) -> list[str]:
+        fields = [self._download_job_fields(job) for job in jobs]
+        desired = [
+            min(10, max(len(progress) for progress, _state, _store in fields)),
+            min(16, max(len(state) for _progress, state, _store in fields)),
+            min(12, max(len(store) for _progress, _state, store in fields)),
+        ]
+        minimums = (5, 7, 5)
+        column_budget = max(sum(minimums), available_width - 17)
+        while sum(desired) > column_budget:
+            shrinkable = [
+                (width - minimum, index)
+                for index, (width, minimum) in enumerate(zip(desired, minimums, strict=True))
+                if width > minimum
+            ]
+            if not shrinkable:
+                break
+            _room, index = max(shrinkable)
+            desired[index] -= 1
+        widths = (desired[0], desired[1], desired[2])
+        return [self._download_job_label(job, widths) for job in jobs]
 
     def _download_job_controls(self, job: DownloadJob) -> None:
         current = self.download_queue.find(job.job_id)
@@ -926,7 +1061,10 @@ class DownloaderTui:
         return True
 
     def _update_game(self, game: InstalledGame) -> bool:
-        store = self.selected_store
+        store = self._store_for_operation(
+            self._t(TranslationKey.CHOOSE_STORE),
+            game.platform,
+        )
         if store is None:
             return False
         if not store.supports_platform(game.platform):
@@ -1032,15 +1170,40 @@ class DownloaderTui:
         )
         return stores[choice] if choice is not None else None
 
+    def _store_for_operation(
+        self,
+        title: str,
+        platform: Platform | None = None,
+    ) -> GameStore | None:
+        """Use the default store or prompt when manual selection is configured."""
+
+        if self.preferences.ask_store_each_time:
+            return self._choose_store(title, platform)
+        return self.selected_store
+
     def _configure_store(self, *, first_run: bool = False) -> bool:
         title = self._t(
             TranslationKey.FIRST_RUN_STORE if first_run else TranslationKey.CHOOSE_DEFAULT_STORE
         )
-        store = self._choose_store(title)
-        if store is None:
+        stores = self.store_catalog.stores
+        choice = self._menu(
+            title,
+            [
+                *(f"{store.display_name} - {self._store_description(store)}" for store in stores),
+                self._t(TranslationKey.MANUAL_EVERY_TIME),
+            ],
+            self._t(TranslationKey.CHOOSE_STORE_FOOTER),
+        )
+        if choice is None:
             return False
+        manual = choice == len(stores)
+        store = None if manual else stores[choice]
         preferences = load_preferences(self.preferences_path)
-        updated_preferences = replace(preferences, store_id=store.store_id)
+        updated_preferences = replace(
+            preferences,
+            store_id=store.store_id if store is not None else None,
+            ask_store_each_time=manual,
+        )
         try:
             save_preferences(self.preferences_path, updated_preferences)
         except PreferencesError as error:
@@ -1048,11 +1211,17 @@ class DownloaderTui:
             return False
         self.preferences = updated_preferences
         self.selected_store = store
-        LOGGER.info("Default store changed to %s", store.store_id)
+        store_label = (
+            store.display_name if store is not None else self._t(TranslationKey.MANUAL_EVERY_TIME)
+        )
+        LOGGER.info(
+            "Default store changed to %s",
+            store.store_id if store is not None else "manual",
+        )
         if not first_run:
             self._draw_message(
                 self._t(TranslationKey.SETTINGS_SAVED),
-                self._t(TranslationKey.STORE_SAVED_MESSAGE, store=store.display_name),
+                self._t(TranslationKey.STORE_SAVED_MESSAGE, store=store_label),
                 4,
                 wait=True,
             )
@@ -1061,7 +1230,9 @@ class DownloaderTui:
     def _settings_screen(self) -> None:
         while True:
             current = (
-                self.selected_store.display_name
+                self._t(TranslationKey.MANUAL_EVERY_TIME)
+                if self.preferences.ask_store_each_time
+                else self.selected_store.display_name
                 if self.selected_store is not None
                 else self._t(TranslationKey.NOT_SET)
             )
@@ -1123,7 +1294,9 @@ class DownloaderTui:
                 "log_level",
                 "log_file",
             ]
-            if self.selected_store is not None and self.selected_store.store_id == "minerva":
+            if (
+                self.selected_store is not None and self.selected_store.store_id == "minerva"
+            ) or self.store_catalog.find("minerva") is not None:
                 options.append(self._t(TranslationKey.MINERVA_SETTINGS))
                 actions.append("minerva")
             options.extend(
@@ -2570,7 +2743,9 @@ class DownloaderTui:
         roms = ", ".join(str(path) for path in self.roms_directories) or not_detected
         controller = str(self.gamepad.path) if self.gamepad is not None else not_detected
         selected_store = (
-            self.selected_store.display_name
+            self._t(TranslationKey.MANUAL_EVERY_TIME)
+            if self.preferences.ask_store_each_time
+            else self.selected_store.display_name
             if self.selected_store is not None
             else self._t(TranslationKey.NOT_CONFIGURED)
         )
@@ -2708,12 +2883,27 @@ class DownloaderTui:
                 else:
                     value += character
 
-    def _menu(self, title: str, options: Sequence[str], footer: str) -> int | None:
-        if not options:
-            return None
+    def _menu(
+        self,
+        title: str,
+        options: Sequence[str],
+        footer: str,
+        *,
+        gamepad_keys: Mapping[InputAction, int] = GAMEPAD_KEYS,
+        shortcuts: Mapping[int, int] | None = None,
+        refresh_options: Callable[[], Sequence[str]] | None = None,
+        refresh_seconds: float | None = None,
+    ) -> int | None:
+        options_provider = refresh_options or (lambda: options)
+        dynamic = refresh_options is not None
         selected = 0
         offset = 0
+        marquee_offset = 0
         while True:
+            current_options = tuple(options_provider())
+            if not current_options:
+                return None
+            selected = min(selected, len(current_options) - 1)
             height, width = self.screen.getmaxyx()
             self._require_size(height, width)
             visible = max(1, height - 7)
@@ -2724,34 +2914,58 @@ class DownloaderTui:
             self.screen.erase()
             self._header(title)
             for screen_row, option_index in enumerate(
-                range(offset, min(len(options), offset + visible))
+                range(offset, min(len(current_options), offset + visible))
             ):
-                label = options[option_index].replace("\n", " ")
+                label = current_options[option_index].replace("\n", " ")
                 marker = "> " if option_index == selected else "  "
                 attribute = (
                     curses.color_pair(2) | curses.A_BOLD
                     if option_index == selected
                     else curses.A_NORMAL
                 )
-                self._safe_add(3 + screen_row, 2, marker + label, attribute)
-            if len(options) > visible:
-                position = "%d/%d" % (selected + 1, len(options))
+                label_width = max(1, width - 6)
+                frame = _visible_menu_label(
+                    label,
+                    label_width,
+                    marquee_offset if option_index == selected else 0,
+                )
+                self._safe_add(3 + screen_row, 2, marker + frame, attribute)
+            if len(current_options) > visible:
+                position = "%d/%d" % (selected + 1, len(current_options))
                 self._safe_add(
                     height - 3, max(2, width - len(position) - 2), position, curses.color_pair(3)
                 )
             self._footer(footer)
             self.screen.refresh()
-            pressed = self._get_input()
+            selected_label = current_options[selected].replace("\n", " ")
+            live_refresh = dynamic or len(selected_label) > max(1, width - 6)
+            pressed = (
+                self._get_input_until(
+                    gamepad_keys,
+                    refresh_seconds or MENU_REDRAW_SECONDS,
+                )
+                if live_refresh or refresh_seconds is not None
+                else self._get_input(gamepad_keys)
+            )
+            if pressed is None:
+                marquee_offset += 1
+                continue
+            if shortcuts is not None and pressed in shortcuts:
+                return shortcuts[pressed]
             if pressed in (27, ord("b"), ord("B"), curses.KEY_BACKSPACE, 127):
                 return None
             if pressed in (curses.KEY_UP, ord("k")):
-                selected = (selected - 1) % len(options)
+                selected = (selected - 1) % len(current_options)
+                marquee_offset = 0
             elif pressed in (curses.KEY_DOWN, ord("j")):
-                selected = (selected + 1) % len(options)
+                selected = (selected + 1) % len(current_options)
+                marquee_offset = 0
             elif pressed == curses.KEY_PPAGE:
                 selected = max(0, selected - visible)
+                marquee_offset = 0
             elif pressed == curses.KEY_NPAGE:
-                selected = min(len(options) - 1, selected + visible)
+                selected = min(len(current_options) - 1, selected + visible)
+                marquee_offset = 0
             elif pressed in (
                 10,
                 13,
@@ -2791,6 +3005,20 @@ class DownloaderTui:
             pressed = self._poll_input(gamepad_keys)
             if pressed is not None:
                 return pressed
+
+    def _get_input_until(
+        self,
+        gamepad_keys: Mapping[InputAction, int],
+        timeout_seconds: float,
+    ) -> int | None:
+        """Wait for input until a live menu needs its next render frame."""
+
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            pressed = self._poll_input(gamepad_keys)
+            if pressed is not None:
+                return pressed
+        return None
 
     def _poll_input(
         self,

@@ -152,6 +152,7 @@ def test_search_flow_uses_persisted_store_without_prompt(mocker: MockerFixture) 
         lambda system, query, _progress: calls.append((system, query)) or [result],
     )
     tui.store_catalog = StoreCatalog((store,))
+    tui.preferences = Preferences("vimm")
     tui.selected_store = store
     tui.platforms = (platform,)
     choices = iter((0, None))
@@ -191,6 +192,7 @@ def test_update_uses_persisted_store_without_prompt(
         ),
     )
     tui.selected_store = store
+    tui.preferences = Preferences("vimm")
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
     mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: None)
 
@@ -214,6 +216,41 @@ def test_configure_store_persists_selection(
     assert tui._configure_store(first_run=True) is True
     assert tui.selected_store is store
     assert load_preferences(tui.preferences_path) == Preferences("vimm")
+
+
+def test_configure_store_persists_manual_selection(
+    tmp_path: Path,
+    mocker: MockerFixture,
+) -> None:
+    tui = object.__new__(DownloaderTui)
+    store = VimmStore("https://example.test")
+    tui.store_catalog = StoreCatalog((store,))
+    tui.preferences_path = tmp_path / ".downloads" / "settings.json"
+    tui.selected_store = store
+    shown_options: list[tuple[str, ...]] = []
+
+    def menu(_title: str, options: list[str], _footer: str) -> int:
+        shown_options.append(tuple(options))
+        return 1
+
+    mocker.patch.object(tui, "_menu", new=menu)
+
+    assert tui._configure_store(first_run=True) is True
+    assert tui.selected_store is None
+    assert shown_options[0][-1] == "Ask every time"
+    assert load_preferences(tui.preferences_path) == Preferences(ask_store_each_time=True)
+
+
+def test_manual_store_mode_prompts_for_each_operation(mocker: MockerFixture) -> None:
+    tui = object.__new__(DownloaderTui)
+    store = VimmStore("https://example.test")
+    tui.preferences = Preferences(ask_store_each_time=True)
+    tui.selected_store = None
+    choose = mocker.patch.object(tui, "_choose_store", return_value=store)
+
+    assert tui._store_for_operation("CHOOSE", resolve_platform("GBA")) is store
+    assert tui._store_for_operation("CHOOSE") is store
+    assert choose.call_count == 2
 
 
 def test_minerva_settings_menu_edits_and_persists_value(

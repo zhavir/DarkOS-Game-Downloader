@@ -26,7 +26,8 @@ only while the keyboard is open; they do not accidentally submit or cancel the s
 
 ## Search and download
 
-1. On first launch, select Vimm or Minerva Archive as the default store. The choice is saved; use
+1. On first launch, select Vimm or Minerva Archive as the default store, or choose **Ask every
+   time** to select the store for each search, direct download, or update. The choice is saved; use
    **Settings** from the main menu to change it later.
 2. Choose **Search the library**.
 3. Select a platform or **All platforms**. Minerva is limited to its RetroAchievements collection
@@ -34,7 +35,8 @@ only while the keyboard is open; they do not accidentally submit or cancel the s
 4. Enter a title prefix. Matching is case-insensitive and starts at the beginning of the title.
 5. Press **X** to search. Empty text is valid and lists the complete catalogue.
 6. Review the compatibility badge and match confidence in the results list, then the source detail
-   on the title screen.
+   on the title screen. Press **X** to filter an all-platform result list by console and **Y** to
+   reset the complete list. Long selected titles scroll automatically.
 7. Select **Download**. Pocket Harbor uses the default ROM destination from **Settings**, or asks
    for SD1 or SD2 when **Ask every time** is selected. The transfer is added to the background
    queue, so you can immediately search for and queue another game.
@@ -61,9 +63,11 @@ placed beside the applicable ROM set.
 
 ## Background downloads
 
-Open **Downloads** from the main menu to see queued, active, paused, failed, cancelled, and recently
-completed transfers. Each row shows the source store and current byte or percentage progress. Select
-a transfer to pause, resume, retry, or cancel it. Cancelling asks for confirmation and removes its
+Open **Downloads** from the main menu to see queued, active, paused, failed, and cancelled transfers.
+The panel refreshes automatically. Its aligned rows put percentage or byte progress first, followed
+by status, store, and title; long selected titles scroll without moving those columns. Completed
+transfers are removed after Pocket Harbor shows their completion and BIOS follow-up. Select a
+transfer to pause, resume, retry, or cancel it. Cancelling asks for confirmation and removes its
 partial data; pausing keeps verified data so the transfer can continue later.
 
 By default, up to three games can download concurrently. Each job captures the chosen store,
@@ -153,10 +157,10 @@ overall network timeout.
 
 Open **Manage installed games**, choose the memory card and platform, then select the game. **Update
 from remote** searches the configured default store by the installed title and asks which remote
-result should replace it. The update joins the same background queue and captures that store, so the
-old copy remains untouched until the new download completes successfully even if the preferred store
-changes afterward. If the configured store does not support that platform, change it through
-**Settings** first.
+result should replace it. With **Ask every time**, first choose a store that supports the platform.
+The update joins the same background queue and captures that store, so the old copy remains untouched
+until the new download completes successfully even if the preferred store changes afterward. If the
+configured store does not support that platform, change it through **Settings** first.
 
 ## Delete an installed game
 

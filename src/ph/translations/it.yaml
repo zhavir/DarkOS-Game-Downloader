@@ -1,3 +1,4 @@
+all_consoles: Tutte le console
 all_regions: tutte
 already_up_to_date: GIÀ AGGIORNATO
 and_more: '...e altri {count}'
@@ -75,6 +76,7 @@ choose_memory_card: SCEGLI SCHEDA DI MEMORIA
 choose_minerva_torrent_file: SCEGLI FILE TORRENT MINERVA
 choose_platform: SCEGLI PIATTAFORMA
 choose_replacement: SCEGLI SOSTITUZIONE
+choose_store: SCEGLI UNO STORE
 choose_store_catalogue: SCEGLI CATALOGO STORE
 choose_store_footer: 'Scegli uno store; B/Escape: indietro'
 compatibility_badge: 'Compatibilità: {value}'
@@ -144,7 +146,6 @@ download_error_field: 'Errore: {value}'
 download_filename: Scarica {filename}
 download_from_retrobios: Scarica da RetroBIOS
 download_install_version: Scarica e installa v{version}
-download_job_row: '{title}  [{state} - {progress}]  {store}'
 download_latest_metadata: Scarica i metadati più recenti
 download_progress_bytes: '{current} di {total}'
 download_progress_field: 'Progresso: {value}'
@@ -153,8 +154,8 @@ download_progress_size: '{size}'
 download_progress_waiting: in attesa
 download_queue: Download
 download_queue_empty: NESSUN DOWNLOAD
-download_queue_empty_message: Non ci sono download attivi o completati di recente.
-download_queue_footer: Seleziona un download per sospendere, riprendere, riprovare o annullare
+download_queue_empty_message: Non ci sono download non completati.
+download_queue_footer: Aggiornamento automatico; seleziona un download per gestirlo
 download_queue_title: DOWNLOAD
 download_queued: DOWNLOAD IN CODA
 download_queued_message: '{title}
@@ -193,6 +194,8 @@ file_logging_footer: La modifica è immediata e viene salvata
 file_logging_saved: LOG SU FILE SALVATO
 file_logging_title: SCRIVERE I LOG SU FILE?
 files_in_group: 'File nel gruppo: {count}'
+filter_console: FILTRA PER CONSOLE
+filter_console_footer: Scegli una console o mostra l'elenco completo dei risultati
 finding_installed_platforms: Ricerca delle piattaforme installate su {root}...
 finding_retrobios_revision: Ricerca dell'ultima revisione RetroBIOS
 firmware_warning: Il gioco potrebbe non avviarsi senza il firmware necessario
@@ -357,7 +360,7 @@ reset_all_defaults: Ripristina tutti i valori predefiniti
 reset_minerva_footer: Questo modifica tutti i nove valori BitTorrent
 reset_minerva_settings: RIPRISTINARE LE IMPOSTAZIONI MINERVA?
 restore_defaults: Sì - ripristina i valori predefiniti
-results_footer: 'A/Invio: dettagli   B/Escape: indietro'
+results_footer: 'A/Invio: dettagli   X: filtra console   Y: reimposta elenco   B/Escape: indietro'
 results_title: RISULTATI {store} ({count})
 resume_download: Riprendi download
 retrieving_download_link: Recupero del link di download...

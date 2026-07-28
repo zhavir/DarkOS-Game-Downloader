@@ -1,3 +1,4 @@
+all_consoles: All consoles
 all_regions: all
 already_up_to_date: ALREADY UP TO DATE
 and_more: '...and {count} more'
@@ -75,6 +76,7 @@ choose_memory_card: CHOOSE MEMORY CARD
 choose_minerva_torrent_file: CHOOSE MINERVA TORRENT FILE
 choose_platform: CHOOSE A PLATFORM
 choose_replacement: CHOOSE REPLACEMENT
+choose_store: CHOOSE A STORE
 choose_store_catalogue: CHOOSE STORE CATALOGUE
 choose_store_footer: Choose a download store; B/Escape returns
 compatibility_badge: 'Compatibility: {value}'
@@ -144,7 +146,6 @@ download_error_field: 'Error: {value}'
 download_filename: Download {filename}
 download_from_retrobios: Download from RetroBIOS
 download_install_version: Download and install v{version}
-download_job_row: '{title}  [{state} - {progress}]  {store}'
 download_latest_metadata: Download latest metadata
 download_progress_bytes: '{current} of {total}'
 download_progress_field: 'Progress: {value}'
@@ -153,8 +154,8 @@ download_progress_size: '{size}'
 download_progress_waiting: waiting
 download_queue: Downloads
 download_queue_empty: NO DOWNLOADS
-download_queue_empty_message: There are no active or recently completed downloads.
-download_queue_footer: Select a download to pause, resume, retry, or cancel
+download_queue_empty_message: There are no unfinished downloads.
+download_queue_footer: Auto-refreshing; select a download to pause, resume, retry, or cancel
 download_queue_title: DOWNLOADS
 download_queued: DOWNLOAD QUEUED
 download_queued_message: '{title}
@@ -193,6 +194,8 @@ file_logging_footer: Changes apply immediately and are saved for the next launch
 file_logging_saved: FILE LOGGING SAVED
 file_logging_title: WRITE LOGS TO FILE?
 files_in_group: 'Files in group: {count}'
+filter_console: FILTER BY CONSOLE
+filter_console_footer: Choose one console or show the complete result list
 finding_installed_platforms: Finding installed platforms on {root}...
 finding_retrobios_revision: Finding the latest RetroBIOS revision
 firmware_warning: The game may not start without required firmware
@@ -357,7 +360,7 @@ reset_all_defaults: Reset all to defaults
 reset_minerva_footer: This changes all nine BitTorrent values
 reset_minerva_settings: RESET MINERVA SETTINGS?
 restore_defaults: Yes - restore defaults
-results_footer: 'A/Enter: details   B/Escape: back'
+results_footer: 'A/Enter: details   X: filter console   Y: reset list   B/Escape: back'
 results_title: '{store} RESULTS ({count})'
 resume_download: Resume download
 retrieving_download_link: Retrieving the download link...

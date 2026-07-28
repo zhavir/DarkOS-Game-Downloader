@@ -81,19 +81,22 @@ The on-screen keyboard uses a fixed 12-column grid with equally sized character 
 
 ## Search and download
 
-On first launch, choose the default store. Then:
+On first launch, choose a default store or **Ask every time** to select a store for each search,
+direct download, or game update. Then:
 
 1. Select **Search the library**.
 2. Choose a platform or **All platforms**.
 3. Enter the beginning of a title. Matching is case-insensitive.
 4. Press X. An empty value lists the selected catalogue.
-5. Review the game details and compatibility information.
+5. Review the game details and compatibility information. In the results, press X to filter by
+   console and Y to reset the complete list.
 6. Select **Download** and choose a memory card when both SD1 and SD2 are available.
 
 Downloads run in the background and are completed in a staging directory before being moved.
-Open **Downloads** from the main menu to monitor progress or pause, resume, retry, and cancel jobs.
-Unfinished jobs resume after Pocket Harbor is reopened, while completed entries disappear after the
-TUI exits. Each queued job keeps its original store even if the preferred store changes. Existing
+Open **Downloads** from the main menu to monitor its auto-refreshing, aligned progress rows or pause,
+resume, retry, and cancel jobs. Long selected titles scroll automatically. Unfinished jobs resume
+after Pocket Harbor is reopened, while completed entries disappear after their completion notice.
+Each queued job keeps its original store even if the preferred store changes. Existing
 ROMs are not silently overwritten. If a store responds with HTTP 429, the job waits and retries
 automatically with increasing randomized delays instead of failing or blocking another store.
 

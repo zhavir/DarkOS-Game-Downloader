@@ -1,3 +1,4 @@
+all_consoles: Toutes les consoles
 all_regions: toutes
 already_up_to_date: DÉJÀ À JOUR
 and_more: '...et {count} de plus'
@@ -69,6 +70,7 @@ choose_memory_card: CHOISIR LA CARTE MÉMOIRE
 choose_minerva_torrent_file: CHOISIR LE FICHIER TORRENT MINERVA
 choose_platform: CHOISIR UNE PLATEFORME
 choose_replacement: CHOISIR LE REMPLACEMENT
+choose_store: CHOISIR UNE BOUTIQUE
 choose_store_catalogue: CHOISIR LE CATALOGUE DE LA BOUTIQUE
 choose_store_footer: Choisissez une boutique ; B/Échap revient
 compatibility_badge: 'Compatibilité : {value}'
@@ -134,7 +136,6 @@ download_error_field: 'Erreur : {value}'
 download_filename: Télécharger {filename}
 download_from_retrobios: Télécharger depuis RetroBIOS
 download_install_version: Télécharger et installer v{version}
-download_job_row: '{title}  [{state} - {progress}]  {store}'
 download_latest_metadata: Télécharger les dernières métadonnées
 download_progress_bytes: '{current} sur {total}'
 download_progress_field: 'Progression : {value}'
@@ -143,8 +144,8 @@ download_progress_size: '{size}'
 download_progress_waiting: en attente
 download_queue: Téléchargements
 download_queue_empty: AUCUN TÉLÉCHARGEMENT
-download_queue_empty_message: Aucun téléchargement actif ou récemment terminé.
-download_queue_footer: Sélectionnez un téléchargement pour le suspendre, reprendre, réessayer ou annuler
+download_queue_empty_message: Aucun téléchargement n'est en attente.
+download_queue_footer: Actualisation automatique ; sélectionnez un téléchargement pour le contrôler
 download_queue_title: TÉLÉCHARGEMENTS
 download_queued: TÉLÉCHARGEMENT EN FILE
 download_queued_message: "{title}\n\nTéléchargement depuis {store} en arrière-plan. Ouvrez Téléchargements pour le surveiller ou le contrôler."
@@ -177,6 +178,8 @@ file_logging_footer: Les modifications s’appliquent immédiatement et sont enr
 file_logging_saved: JOURNALISATION ENREGISTRÉE
 file_logging_title: ÉCRIRE LES JOURNAUX DANS UN FICHIER ?
 files_in_group: 'Fichiers du groupe : {count}'
+filter_console: FILTRER PAR CONSOLE
+filter_console_footer: Choisissez une console ou affichez la liste complète des résultats
 finding_installed_platforms: Recherche des plateformes installées sur {root}...
 finding_retrobios_revision: Recherche de la dernière révision RetroBIOS
 firmware_warning: Le jeu peut ne pas démarrer sans le micrologiciel requis
@@ -324,7 +327,7 @@ reset_all_defaults: Rétablir toutes les valeurs par défaut
 reset_minerva_footer: Modifie les neuf valeurs BitTorrent
 reset_minerva_settings: RÉINITIALISER LES PARAMÈTRES MINERVA ?
 restore_defaults: Oui - rétablir les valeurs par défaut
-results_footer: 'A/Entrée : détails   B/Échap : retour'
+results_footer: 'A/Entrée : détails   X : filtrer console   Y : réinitialiser   B/Échap : retour'
 results_title: 'RÉSULTATS {store} ({count})'
 resume_download: Reprendre le téléchargement
 retrieving_download_link: Récupération du lien de téléchargement...

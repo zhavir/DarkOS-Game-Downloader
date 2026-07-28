@@ -1,3 +1,4 @@
+all_consoles: Todas las consolas
 all_regions: todas
 already_up_to_date: YA ESTÁ ACTUALIZADA
 and_more: '...y {count} más'
@@ -75,6 +76,7 @@ choose_memory_card: ELEGIR TARJETA DE MEMORIA
 choose_minerva_torrent_file: ELEGIR ARCHIVO DEL TORRENT DE MINERVA
 choose_platform: ELEGIR PLATAFORMA
 choose_replacement: ELEGIR SUSTITUTO
+choose_store: ELEGIR UNA TIENDA
 choose_store_catalogue: ELEGIR CATÁLOGO DE TIENDA
 choose_store_footer: 'Elige una tienda de descarga; B/Escape: atrás'
 compatibility_badge: 'Compatibilidad: {value}'
@@ -144,7 +146,6 @@ download_error_field: 'Error: {value}'
 download_filename: Descargar {filename}
 download_from_retrobios: Descargar desde RetroBIOS
 download_install_version: Descargar e instalar v{version}
-download_job_row: '{title}  [{state} - {progress}]  {store}'
 download_latest_metadata: Descargar los metadatos más recientes
 download_progress_bytes: '{current} de {total}'
 download_progress_field: 'Progreso: {value}'
@@ -153,8 +154,8 @@ download_progress_size: '{size}'
 download_progress_waiting: esperando
 download_queue: Descargas
 download_queue_empty: NO HAY DESCARGAS
-download_queue_empty_message: No hay descargas activas ni terminadas recientemente.
-download_queue_footer: Elige una descarga para pausar, reanudar, reintentar o cancelar
+download_queue_empty_message: No hay descargas sin finalizar.
+download_queue_footer: Actualización automática; elige una descarga para controlarla
 download_queue_title: DESCARGAS
 download_queued: DESCARGA EN COLA
 download_queued_message: '{title}
@@ -193,6 +194,8 @@ file_logging_footer: El cambio se aplica ahora y se guarda
 file_logging_saved: REGISTRO GUARDADO
 file_logging_title: ¿GUARDAR REGISTRO EN ARCHIVO?
 files_in_group: 'Archivos del grupo: {count}'
+filter_console: FILTRAR POR CONSOLA
+filter_console_footer: Elige una consola o muestra la lista completa de resultados
 finding_installed_platforms: Buscando plataformas instaladas en {root}...
 finding_retrobios_revision: Buscando la revisión más reciente de RetroBIOS
 firmware_warning: Es posible que el juego no arranque sin el firmware necesario
@@ -357,7 +360,7 @@ reset_all_defaults: Restablecer todos los valores
 reset_minerva_footer: Esto cambia los nueve valores de BitTorrent
 reset_minerva_settings: ¿RESTABLECER LOS AJUSTES DE MINERVA?
 restore_defaults: Sí - restaurar valores predeterminados
-results_footer: 'A/Enter: detalles   B/Escape: atrás'
+results_footer: 'A/Enter: detalles   X: filtrar consola   Y: restablecer lista   B/Escape: atrás'
 results_title: RESULTADOS DE {store} ({count})
 resume_download: Reanudar descarga
 retrieving_download_link: Obteniendo el enlace de descarga...

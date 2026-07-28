@@ -1,3 +1,4 @@
+all_consoles: Alle Konsolen
 all_regions: alle
 already_up_to_date: BEREITS AKTUELL
 and_more: '...und {count} weitere'
@@ -75,6 +76,7 @@ choose_memory_card: SPEICHERKARTE AUSWÄHLEN
 choose_minerva_torrent_file: MINERVA-TORRENT-DATEI AUSWÄHLEN
 choose_platform: PLATTFORM AUSWÄHLEN
 choose_replacement: ERSATZ AUSWÄHLEN
+choose_store: STORE AUSWÄHLEN
 choose_store_catalogue: STORE-KATALOG AUSWÄHLEN
 choose_store_footer: 'Download-Store auswählen; B/Escape: zurück'
 compatibility_badge: 'Kompatibilität: {value}'
@@ -144,7 +146,6 @@ download_error_field: 'Fehler: {value}'
 download_filename: '{filename} herunterladen'
 download_from_retrobios: Von RetroBIOS herunterladen
 download_install_version: v{version} herunterladen und installieren
-download_job_row: '{title}  [{state} - {progress}]  {store}'
 download_latest_metadata: Neueste Metadaten herunterladen
 download_progress_bytes: '{current} von {total}'
 download_progress_field: 'Fortschritt: {value}'
@@ -153,8 +154,8 @@ download_progress_size: '{size}'
 download_progress_waiting: wartet
 download_queue: Downloads
 download_queue_empty: KEINE DOWNLOADS
-download_queue_empty_message: Keine aktiven oder kürzlich abgeschlossenen Downloads.
-download_queue_footer: Download zum Pausieren, Fortsetzen, Wiederholen oder Abbrechen wählen
+download_queue_empty_message: Es gibt keine unvollständigen Downloads.
+download_queue_footer: Automatische Aktualisierung; Download zum Steuern auswählen
 download_queue_title: DOWNLOADS
 download_queued: DOWNLOAD EINGEREIHT
 download_queued_message: '{title}
@@ -193,6 +194,8 @@ file_logging_footer: Die Änderung gilt sofort und wird gespeichert
 file_logging_saved: DATEIPROTOKOLL GESPEICHERT
 file_logging_title: PROTOKOLL IN DATEI SCHREIBEN?
 files_in_group: 'Dateien in der Gruppe: {count}'
+filter_console: NACH KONSOLE FILTERN
+filter_console_footer: Eine Konsole auswählen oder die vollständige Ergebnisliste anzeigen
 finding_installed_platforms: Installierte Plattformen auf {root} werden gesucht...
 finding_retrobios_revision: Neueste RetroBIOS-Version wird gesucht
 firmware_warning: Ohne die erforderliche Firmware startet das Spiel möglicherweise nicht
@@ -357,7 +360,7 @@ reset_all_defaults: Alle Standardwerte wiederherstellen
 reset_minerva_footer: Dadurch werden alle neun BitTorrent-Werte geändert
 reset_minerva_settings: MINERVA-EINSTELLUNGEN ZURÜCKSETZEN?
 restore_defaults: Ja - Standardwerte wiederherstellen
-results_footer: 'A/Enter: Details   B/Escape: zurück'
+results_footer: 'A/Enter: Details   X: Konsole filtern   Y: Liste zurücksetzen   B/Escape: zurück'
 results_title: '{store}: ERGEBNISSE ({count})'
 resume_download: Download fortsetzen
 retrieving_download_link: Download-Link wird abgerufen...

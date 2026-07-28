@@ -36,6 +36,7 @@ class Preferences:
     network_timeout_seconds: float | None = None
     store_rom_mappings: dict[str, dict[str, str]] = field(default_factory=dict)
     bios_directory: str = "bios"
+    ask_store_each_time: bool = False
 
 
 def preference_path(download_directory: Path) -> Path:
@@ -70,6 +71,7 @@ def load_preferences(path: Path) -> Preferences:
     )
     raw_log_to_file = payload.get("log_to_file")
     log_to_file = raw_log_to_file if isinstance(raw_log_to_file, bool) else None
+    ask_store_each_time = payload.get("ask_store_each_time") is True
     raw_default_roms_directory = payload.get("default_roms_directory")
     default_roms_directory = (
         raw_default_roms_directory.strip()
@@ -130,6 +132,7 @@ def load_preferences(path: Path) -> Preferences:
             network_timeout_seconds=network_timeout_seconds,
             store_rom_mappings=store_rom_mappings,
             bios_directory=bios_directory,
+            ask_store_each_time=ask_store_each_time,
         )
     try:
         settings = BitTorrentSettings(
@@ -190,6 +193,7 @@ def load_preferences(path: Path) -> Preferences:
         network_timeout_seconds=network_timeout_seconds,
         store_rom_mappings=store_rom_mappings,
         bios_directory=bios_directory,
+        ask_store_each_time=ask_store_each_time,
     )
 
 
@@ -204,6 +208,7 @@ def save_preferences(path: Path, preferences: Preferences) -> None:
             json.dumps(
                 {
                     "store": preferences.store_id,
+                    "ask_store_each_time": preferences.ask_store_each_time,
                     "catalogue_ttl_days": preferences.catalogue_ttl_days,
                     "log_level": preferences.log_level,
                     "log_to_file": preferences.log_to_file,

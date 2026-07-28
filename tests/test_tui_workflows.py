@@ -38,6 +38,8 @@ from ph.store_catalog import StoreCatalog
 from ph.translation_keys import TranslationKey
 from ph.tui import (
     GAMEPAD_SEARCH_KEY,
+    SEARCH_FILTER_CHOICE,
+    SEARCH_RESET_CHOICE,
     DownloaderTui,
     TerminalTooSmall,
     _keyboard_rows,
@@ -322,7 +324,7 @@ def test_run_dispatches_main_actions_and_closes_controller(mocker: MockerFixture
     instance.gamepad = mocker.Mock(spec=LinuxJoystick)
     instance.gamepad.close.side_effect = lambda: closed.append(True)
     choices = iter((0, 1, 2, 3, 4, 5, 6, 7, 1))
-    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    mocker.patch.object(instance, "_menu", new=lambda *_args, **_kwargs: next(choices))
     actions: list[str] = []
     mocker.patch.object(instance, "_search_flow", new=lambda: actions.append("search"))
     mocker.patch.object(instance, "_direct_download_flow", new=lambda: actions.append("direct"))
@@ -383,6 +385,19 @@ def test_main_menu_is_retranslated_after_language_changes(
 
     assert menus[0][0] == "Search the library"
     assert menus[1][0] == "Cerca nella libreria"
+
+
+def test_manual_store_mode_skips_first_run_store_prompt(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    instance.preferences = replace(instance.preferences, ask_store_each_time=True)
+    instance.store_catalog = StoreCatalog((FakeStore(),))
+    configure = mocker.patch.object(instance, "_configure_store")
+    mocker.patch.object(instance, "_menu", return_value=7)
+    mocker.patch.object(instance, "_confirm_exit", return_value=True)
+
+    instance.run()
+
+    configure.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -522,7 +537,7 @@ def test_catalog_progress_and_results_flow_resolve_all_platform(
     )
     info = CompatibilityInfo("Perfect", True, 0.95)
     choices = iter((0, 7, 0, 8, None))
-    mocker.patch.object(instance, "_menu", new=lambda *_args: next(choices))
+    mocker.patch.object(instance, "_menu", new=lambda *_args, **_kwargs: next(choices))
     downloads: list[tuple[Any, ...]] = []
     mocker.patch.object(
         instance,
@@ -535,6 +550,44 @@ def test_catalog_progress_and_results_flow_resolve_all_platform(
 
     assert downloads[0][1] == gba
     assert downloads[0][-1] == {"title": "Advance Wars", "region": "USA"}
+
+
+def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) -> None:
+    platform = resolve_platform("ALL")
+    assert platform is not None
+    instance = bare_tui()
+    results = [
+        SearchResult("Advance Wars", "gba", system="GBA"),
+        SearchResult("Wipeout", "psx", system="PSX"),
+    ]
+    compatibility = [
+        CompatibilityInfo("Perfect", True),
+        CompatibilityInfo("Playable", True),
+    ]
+    choices = iter((SEARCH_FILTER_CHOICE, 2, SEARCH_RESET_CHOICE, None))
+    shown_options: list[tuple[str, ...]] = []
+    shortcut_arguments: list[dict[str, object]] = []
+
+    def menu(
+        _title: str,
+        options: Sequence[str],
+        _footer: str,
+        **kwargs: object,
+    ) -> int | None:
+        shown_options.append(tuple(options))
+        shortcut_arguments.append(kwargs)
+        return next(choices)
+
+    mocker.patch.object(instance, "_menu", new=menu)
+
+    instance._results_flow(results, platform, compatibility, FakeStore())
+
+    assert len(shown_options[0]) == 2
+    assert shown_options[1] == ("All consoles", "GBA", "PSX")
+    assert len(shown_options[2]) == 1 and shown_options[2][0].startswith("PSX |")
+    assert len(shown_options[3]) == 2
+    assert "gamepad_keys" in shortcut_arguments[0]
+    assert "shortcuts" in shortcut_arguments[0]
 
 
 def test_direct_download_flow_handles_store_platform_and_url_choices(
@@ -613,7 +666,7 @@ def test_download_queue_screen_and_job_controls(mocker: MockerFixture) -> None:
     queue.find.return_value = active
     instance.download_queue = queue
     choices = iter((0, 4, None))
-    mocker.patch.object(instance, "_menu", side_effect=lambda *_args: next(choices))
+    mocker.patch.object(instance, "_menu", side_effect=lambda *_args, **_kwargs: next(choices))
 
     instance._download_queue_screen()
 
@@ -633,6 +686,57 @@ def test_download_queue_status_can_be_refreshed(mocker: MockerFixture) -> None:
     instance._download_queue_screen()
 
     assert queue.jobs.call_count == 2
+
+
+def test_download_queue_auto_refreshes_aligned_progress(mocker: MockerFixture) -> None:
+    instance = bare_tui(RecordingScreen(size=(20, 64)))
+    initial = replace(
+        queued_job(DownloadState.DOWNLOADING, downloaded=10),
+        title="A very long game title that cannot fit on this display",
+    )
+    updated = replace(initial, downloaded_bytes=75)
+    queue = mocker.Mock()
+    queue.jobs.side_effect = ((initial,), (updated,))
+    instance.download_queue = queue
+    frames: list[tuple[str, ...]] = []
+
+    def menu(
+        _title: str,
+        options: Sequence[str],
+        _footer: str,
+        **kwargs: object,
+    ) -> None:
+        frames.append(tuple(options))
+        refresh_options = cast(Callable[[], Sequence[str]], kwargs["refresh_options"])
+        frames.append(tuple(refresh_options()))
+
+    mocker.patch.object(instance, "_menu", new=menu)
+
+    instance._download_queue_screen()
+
+    assert frames[0][0].lstrip().startswith("10% |")
+    assert frames[1][0].lstrip().startswith("75% |")
+    assert frames[0][0].index(" | ") == frames[1][0].index(" | ")
+
+
+def test_download_rows_align_columns_and_put_progress_first() -> None:
+    instance = bare_tui()
+    first = queued_job(DownloadState.DOWNLOADING, downloaded=50)
+    second = replace(
+        queued_job(DownloadState.RATE_LIMITED, downloaded=0, total=None),
+        title="Another game",
+        store_name="Minerva Archive",
+    )
+
+    labels = instance._download_job_labels((first, second), 70)
+    separators = [
+        tuple(index for index in range(len(label)) if label.startswith(" | ", index))
+        for label in labels
+    ]
+
+    assert labels[0].lstrip().startswith("50% |")
+    assert labels[1].lstrip().startswith("waiting |")
+    assert separators[0][:3] == separators[1][:3]
 
 
 def test_failed_torrent_job_can_choose_file_and_retry(mocker: MockerFixture) -> None:
@@ -998,9 +1102,9 @@ def test_store_and_root_choices_and_configuration(
     assert instance._choose_from_roots(roots, "ROOT") is None
 
     instance.preferences_path = tmp_path / "settings.json"
-    mocker.patch.object(instance, "_choose_store", new=lambda *_args: None)
+    mocker.patch.object(instance, "_menu", new=lambda *_args: None)
     assert instance._configure_store() is False
-    mocker.patch.object(instance, "_choose_store", new=lambda *_args: supported)
+    mocker.patch.object(instance, "_menu", new=lambda *_args: 1)
     mocker.patch.object(tui_module, "load_preferences", lambda _path: Preferences())
     mocker.patch.object(
         tui_module,
@@ -2245,6 +2349,28 @@ def test_keyboard_menu_and_drawing_primitives(mocker: MockerFixture) -> None:
     with pytest.raises(TerminalTooSmall):
         instance._require_size(20, 39)
     instance._require_size(15, 40)
+
+
+def test_long_selected_game_name_scrolls_without_moving_system_prefix(
+    mocker: MockerFixture,
+) -> None:
+    screen = RecordingScreen(size=(15, 40))
+    instance = bare_tui(screen)
+    mocker.patch.object(instance, "_get_input_until", side_effect=(None, 27))
+
+    assert (
+        instance._menu(
+            "RESULTS",
+            ("GBA | A very long game title that does not fit on the screen",),
+            "footer",
+        )
+        is None
+    )
+
+    frames = [text for y, x, text, _attribute in screen.writes if y == 3 and x == 2]
+    assert len(frames) == 2
+    assert frames[0] != frames[1]
+    assert all(frame.startswith("> GBA | ") for frame in frames)
 
 
 def test_keyboard_uses_fixed_handheld_grid_and_exposes_symbols_and_accents(

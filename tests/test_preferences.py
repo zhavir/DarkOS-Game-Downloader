@@ -23,6 +23,15 @@ def test_store_preference_round_trip(tmp_path: Path) -> None:
     assert not path.with_name(path.name + ".tmp").exists()
 
 
+def test_manual_store_preference_round_trip(tmp_path: Path) -> None:
+    path = preference_path(tmp_path / ".downloads")
+    preferences = Preferences(ask_store_each_time=True)
+
+    save_preferences(path, preferences)
+
+    assert load_preferences(path) == preferences
+
+
 def test_invalid_preferences_return_first_run_state(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     path.write_text("not json", encoding="utf-8")
@@ -66,6 +75,7 @@ def test_runtime_cache_and_logging_preferences_round_trip(tmp_path: Path) -> Non
             "minerva": {"playstation": "psx"},
         },
         bios_directory="firmware",
+        ask_store_each_time=True,
     )
 
     save_preferences(path, preferences)
@@ -148,6 +158,7 @@ def test_preferences_use_defaults_for_invalid_setting_types(tmp_path: Path) -> N
     assert preferences.network_timeout_seconds is None
     assert preferences.store_rom_mappings == {"vimm": {"game-boy-advance": "custom-gba"}}
     assert preferences.bios_directory == "bios"
+    assert preferences.ask_store_each_time is False
 
 
 def test_preferences_accept_integer_timeout(tmp_path: Path) -> None:
