@@ -37,12 +37,17 @@ from ph.store import CatalogProgress, GameStore, StoreError
 from ph.store_catalog import StoreCatalog
 from ph.translation_keys import TranslationKey
 from ph.tui import (
+    GAMEPAD_FILTER_KEY,
+    GAMEPAD_KEYS,
     GAMEPAD_SEARCH_KEY,
     SEARCH_FILTER_CHOICE,
     SEARCH_RESET_CHOICE,
     DownloaderTui,
     TerminalTooSmall,
+    _fit_column,
     _keyboard_rows,
+    _marquee_text,
+    _visible_menu_label,
 )
 from ph.updater import ReleaseUpdate, UpdateCancelled, UpdateError
 
@@ -590,6 +595,30 @@ def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) 
     assert "shortcuts" in shortcut_arguments[0]
 
 
+def test_console_filter_can_show_all_or_be_cancelled(mocker: MockerFixture) -> None:
+    platform = resolve_platform("ALL")
+    assert platform is not None
+    instance = bare_tui()
+    results = [SearchResult("Advance Wars", "gba", system="GBA")]
+    compatibility = [CompatibilityInfo("Perfect", True)]
+    choices = iter(
+        (
+            SEARCH_FILTER_CHOICE,
+            0,
+            SEARCH_FILTER_CHOICE,
+            None,
+            None,
+        )
+    )
+    mocker.patch.object(
+        instance,
+        "_menu",
+        new=lambda *_args, **_kwargs: next(choices),
+    )
+
+    instance._results_flow(results, platform, compatibility, FakeStore())
+
+
 def test_direct_download_flow_handles_store_platform_and_url_choices(
     mocker: MockerFixture,
 ) -> None:
@@ -728,14 +757,14 @@ def test_download_rows_align_columns_and_put_progress_first() -> None:
         store_name="Minerva Archive",
     )
 
-    labels = instance._download_job_labels((first, second), 70)
+    labels = instance._download_job_labels((first, second), 34)
     separators = [
         tuple(index for index in range(len(label)) if label.startswith(" | ", index))
         for label in labels
     ]
 
     assert labels[0].lstrip().startswith("50% |")
-    assert labels[1].lstrip().startswith("waiting |")
+    assert labels[1].lstrip().startswith("wait")
     assert separators[0][:3] == separators[1][:3]
 
 
@@ -2371,6 +2400,40 @@ def test_long_selected_game_name_scrolls_without_moving_system_prefix(
     assert len(frames) == 2
     assert frames[0] != frames[1]
     assert all(frame.startswith("> GBA | ") for frame in frames)
+
+
+def test_menu_label_helpers_cover_short_clipped_and_unstructured_values() -> None:
+    assert _fit_column("abc", 3) == "abc"
+    assert _fit_column("abc", 1) == "a"
+    assert _fit_column("abcdef", 4) == "abc…"
+    assert _marquee_text("abc", 0, 0) == ""
+    assert _marquee_text("abc", 4, 0) == "abc"
+    assert _marquee_text("abcdef", 4, 1) == "bcde"
+    assert _visible_menu_label("short", 10, 0) == "short"
+    assert _visible_menu_label("unstructured long title", 8, 1) == "nstructu"
+
+
+def test_menu_shortcut_and_live_input_deadline(mocker: MockerFixture) -> None:
+    instance = bare_tui()
+    mocker.patch.object(instance, "_get_input", return_value=GAMEPAD_FILTER_KEY)
+
+    assert (
+        instance._menu(
+            "RESULTS",
+            ("Game",),
+            "footer",
+            shortcuts={GAMEPAD_FILTER_KEY: SEARCH_FILTER_CHOICE},
+        )
+        == SEARCH_FILTER_CHOICE
+    )
+
+    poll = mocker.patch.object(instance, "_poll_input", return_value=10)
+    mocker.patch.object(time, "monotonic", side_effect=(0.0, 0.1))
+    assert instance._get_input_until(GAMEPAD_KEYS, 1.0) == 10
+    poll.assert_called_once_with(GAMEPAD_KEYS)
+
+    mocker.patch.object(time, "monotonic", side_effect=(0.0, 2.0))
+    assert instance._get_input_until(GAMEPAD_KEYS, 1.0) is None
 
 
 def test_keyboard_uses_fixed_handheld_grid_and_exposes_symbols_and_accents(
