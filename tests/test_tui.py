@@ -9,7 +9,6 @@ import pytest
 from pytest_mock import MockerFixture
 
 from ph.bittorrent import BitTorrentSettings
-from ph.compatibility import CompatibilityInfo
 from ph.config import Config
 from ph.downloader import DownloadCancelled
 from ph.gamepad import InputAction
@@ -156,13 +155,14 @@ def test_search_flow_uses_persisted_store_without_prompt(mocker: MockerFixture) 
     tui.selected_store = store
     tui.platforms = (platform,)
     choices = iter((0, None))
-    mocker.patch.object(tui, "_menu", new=lambda _title, _options, _footer: next(choices))
+    mocker.patch.object(
+        tui,
+        "_menu",
+        new=lambda _title, _options, _footer, **_kwargs: next(choices),
+    )
     queries = iter(("ADV", None))
     mocker.patch.object(tui, "_on_screen_keyboard", new=lambda *_args, **_kwargs: next(queries))
     mocker.patch.object(tui, "_draw_message", new=lambda *_args, **_kwargs: None)
-    tui.compatibility_client = SimpleNamespace(
-        lookup_many=lambda _results, _platform: [CompatibilityInfo("Perfect", True)]
-    )
     selected: list[object] = []
     mocker.patch.object(tui, "_results_flow", new=lambda *args: selected.extend(args))
 

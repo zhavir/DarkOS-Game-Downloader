@@ -79,7 +79,6 @@ choose_replacement: ELEGIR SUSTITUTO
 choose_store: ELEGIR UNA TIENDA
 choose_store_catalogue: ELEGIR CATÁLOGO DE TIENDA
 choose_store_footer: 'Elige una tienda de descarga; B/Escape: atrás'
-compatibility_badge: 'Compatibilidad: {value}'
 compatibility_detail: '{level} ({qualifier})'
 compatibility_field: 'Compatibilidad: {value}'
 compatibility_level_limited: Limitado
@@ -303,6 +302,7 @@ no_game_installed: No se instaló ningún juego.
 no_games: NO HAY JUEGOS
 no_games_on_card: NO HAY JUEGOS EN LA TARJETA
 no_incomplete_bios_installed: No se instaló ningún archivo BIOS incompleto.
+no_matching_platforms: 'Ninguna plataforma coincide con "{query}".'
 no_platform_games: No se encontraron juegos de {platform}.
 no_remote_match: SIN COINCIDENCIA EN LA TIENDA
 no_results: SIN RESULTADOS
@@ -324,6 +324,9 @@ optional: Opcional
 optional_short: P
 pause_download: Pausar descarga
 platform_field: 'Plataforma: {value}'
+platform_filter_footer: 'A/Enter: elegir   X: filtrar texto   Y: restablecer   B/Escape: atrás'
+platform_filter_hint: Escribe parte del nombre de una consola; vacío restablece el filtro
+platform_filter_title: FILTRAR PLATAFORMAS
 platform_has_no_rom_folder: Esta plataforma no tiene una carpeta de ROM en el sistema operativo seleccionado.
 platform_on_card: '{platform} EN {root}'
 preparing: PREPARANDO

@@ -79,7 +79,6 @@ choose_replacement: CHOOSE REPLACEMENT
 choose_store: CHOOSE A STORE
 choose_store_catalogue: CHOOSE STORE CATALOGUE
 choose_store_footer: Choose a download store; B/Escape returns
-compatibility_badge: 'Compatibility: {value}'
 compatibility_detail: '{level} ({qualifier})'
 compatibility_field: 'Compatibility: {value}'
 compatibility_level_limited: Limited
@@ -303,6 +302,7 @@ no_game_installed: No game was installed.
 no_games: NO GAMES
 no_games_on_card: NO GAMES ON CARD
 no_incomplete_bios_installed: No incomplete BIOS file was installed.
+no_matching_platforms: 'No platform matched "{query}".'
 no_platform_games: No {platform} games were found.
 no_remote_match: NO REMOTE MATCH
 no_results: NO RESULTS
@@ -324,6 +324,9 @@ optional: Optional
 optional_short: O
 pause_download: Pause download
 platform_field: 'Platform: {value}'
+platform_filter_footer: 'A/Enter: select   X: filter by text   Y: reset list   B/Escape: back'
+platform_filter_hint: Type part of a console name; empty text resets the filter
+platform_filter_title: FILTER PLATFORMS
 platform_has_no_rom_folder: This platform has no ROM folder on the selected operating system.
 platform_on_card: '{platform} ON {root}'
 preparing: PREPARING

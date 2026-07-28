@@ -267,6 +267,16 @@ def _visible_menu_label(value: str, width: int, offset: int) -> str:
     return _marquee_text(value, width, offset)
 
 
+def _platform_matches_filter(platform: Platform, query: str) -> bool:
+    """Match a platform by any user-visible name or stable identifier."""
+
+    normalized = query.strip().casefold()
+    return not normalized or any(
+        normalized in value.casefold()
+        for value in (platform.name, platform.alias, platform.code, platform.slug)
+    )
+
+
 class TerminalTooSmall(RuntimeError):
     """The active terminal cannot display the interface."""
 
@@ -427,14 +437,47 @@ class DownloaderTui:
         platforms = tuple(
             platform for platform in self.platforms if store.supports_platform(platform)
         )
-        labels = [f"{item.name}  [{item.alias}]" for item in platforms]
+        platform_filter = ""
         while True:
+            visible_platforms = tuple(
+                platform
+                for platform in platforms
+                if _platform_matches_filter(platform, platform_filter)
+            )
+            labels = [f"{item.name}  [{item.alias}]" for item in visible_platforms]
             choice = self._menu(
-                self._t(TranslationKey.CHOOSE_PLATFORM), labels, self._t(TranslationKey.BACK_FOOTER)
+                self._t(TranslationKey.CHOOSE_PLATFORM),
+                labels,
+                self._t(TranslationKey.PLATFORM_FILTER_FOOTER),
+                gamepad_keys=SEARCH_RESULTS_GAMEPAD_KEYS,
+                shortcuts=SEARCH_RESULTS_SHORTCUTS,
             )
             if choice is None:
                 return
-            self._search_platform_flow(store, platforms[choice])
+            if choice == SEARCH_FILTER_CHOICE:
+                query = self._on_screen_keyboard(
+                    self._t(TranslationKey.PLATFORM_FILTER_TITLE),
+                    allow_lowercase=True,
+                    empty_hint=self._t(TranslationKey.PLATFORM_FILTER_HINT),
+                )
+                if query is None:
+                    continue
+                if query and not any(
+                    _platform_matches_filter(platform, query) for platform in platforms
+                ):
+                    self._draw_message(
+                        self._t(TranslationKey.NO_RESULTS),
+                        self._t(TranslationKey.NO_MATCHING_PLATFORMS, query=query),
+                        3,
+                        wait=True,
+                    )
+                    continue
+                platform_filter = query
+                continue
+            if choice == SEARCH_RESET_CHOICE:
+                platform_filter = ""
+                continue
+            self._search_platform_flow(store, visible_platforms[choice])
 
     def _search_platform_flow(self, store: GameStore, platform: Platform) -> None:
         """Keep search navigation within one platform until the user goes back one level."""
@@ -473,24 +516,8 @@ class DownloaderTui:
                 )
                 self._draw_message(self._t(TranslationKey.NO_RESULTS), message, 3, wait=True)
                 continue
-            self._draw_message(
-                self._t(TranslationKey.CHECKING_COMPATIBILITY),
-                self._t(TranslationKey.MATCHING_COMPATIBILITY),
-                1,
-            )
-            compatibility = self.compatibility_client.lookup_many(results, platform)
-            supported_pairs = [
-                (result, info)
-                for result, info in zip(results, compatibility, strict=True)
-                if info.level != "Unsupported"
-            ]
-            self._results_flow(
-                [result for result, _info in supported_pairs],
-                platform,
-                [info for _result, info in supported_pairs],
-                store,
-            )
-            LOGGER.info("Search produced %d supported result(s)", len(supported_pairs))
+            self._results_flow(results, platform, store)
+            LOGGER.info("Search produced %d result(s)", len(results))
 
     def _catalog_progress(self, current: int, total: int) -> None:
         percent = int(current * 100 / total)
@@ -509,32 +536,26 @@ class DownloaderTui:
         self,
         results: Sequence[SearchResult],
         platform: Platform,
-        compatibility: Sequence[CompatibilityInfo],
         store: GameStore,
     ) -> None:
-        pairs = list(zip(results, compatibility, strict=True))
         system_filter: str | None = None
         while True:
-            visible_pairs = [
-                (result, info)
-                for result, info in pairs
+            visible_results = [
+                result
+                for result in results
                 if system_filter is None
                 or (result.system and result.system.casefold() == system_filter.casefold())
             ]
             labels = []
-            for result, info in visible_pairs:
+            for result in visible_results:
                 prefix = f"{result.system} | " if result.system else ""
                 detail = f" - {result.region}" if result.region else ""
-                badge = self._t(
-                    TranslationKey.COMPATIBILITY_BADGE,
-                    value=self._compatibility_label(info),
-                )
-                labels.append(f"{prefix}{result.title}{detail}  [{badge}]")
+                labels.append(f"{prefix}{result.title}{detail}")
             choice = self._menu(
                 self._t(
                     TranslationKey.RESULTS_TITLE,
                     store=store.display_name.upper(),
-                    count=len(visible_pairs),
+                    count=len(visible_results),
                 ),
                 labels,
                 self._t(TranslationKey.RESULTS_FOOTER),
@@ -545,7 +566,7 @@ class DownloaderTui:
                 return
             if choice == SEARCH_FILTER_CHOICE:
                 systems = sorted(
-                    {result.system for result, _info in pairs if result.system},
+                    {result.system for result in results if result.system},
                     key=str.casefold,
                 )
                 filter_choice = self._menu(
@@ -559,12 +580,18 @@ class DownloaderTui:
             if choice == SEARCH_RESET_CHOICE:
                 system_filter = None
                 continue
-            result, info = visible_pairs[choice]
+            result = visible_results[choice]
             effective_platform = platform
             if not platform.code and result.system:
                 resolved = resolve_platform(result.system, self.platforms)
                 if resolved is not None:
                     effective_platform = resolved
+            self._draw_message(
+                self._t(TranslationKey.CHECKING_COMPATIBILITY),
+                self._t(TranslationKey.MATCHING_COMPATIBILITY),
+                1,
+            )
+            info = self.compatibility_client.lookup_many((result,), effective_platform)[0]
             details = [
                 result.title,
                 self._t(

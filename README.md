@@ -85,11 +85,13 @@ On first launch, choose a default store or **Ask every time** to select a store 
 direct download, or game update. Then:
 
 1. Select **Search the library**.
-2. Choose a platform or **All platforms**.
+2. Choose a platform or **All platforms**. Press X to filter consoles by text and Y to reset the
+   platform list.
 3. Enter the beginning of a title. Matching is case-insensitive.
 4. Press X. An empty value lists the selected catalogue.
-5. Review the game details and compatibility information. In the results, press X to filter by
-   console and Y to reset the complete list.
+5. Open a game to calculate compatibility for that title and review its details. The catalogue is
+   not scored in bulk. In all-platform results, press X to filter by console and Y to reset the
+   complete list.
 6. Select **Download** and choose a memory card when both SD1 and SD2 are available.
 
 Downloads run in the background and are completed in a staging directory before being moved.
@@ -117,10 +119,11 @@ optional files, and install one manually. The RetroBIOS catalogue is downloaded 
 operation and cached under `.downloads/retrobios`. It is not refreshed automatically; use
 **Settings → Update RetroBIOS catalogue** when you want the latest upstream metadata.
 
-The game compatibility catalogue follows the same policy: it is fetched on first use, stored
-locally, and refreshed only through **Settings → Update compatibility catalogue**. Settings marks
-RetroBIOS and compatibility metadata stale after the configured catalogue lifetime, which defaults
-to seven days. Their saved copies remain usable until you choose to update them.
+The game compatibility catalogue follows the same policy: it is fetched when compatibility is first
+requested from a selected game's details, stored locally, and refreshed only through **Settings →
+Update compatibility catalogue**. Search results are not scored in bulk. Settings marks RetroBIOS
+and compatibility metadata stale after the configured catalogue lifetime, which defaults to seven
+days. Their saved copies remain usable until you choose to update them.
 
 ### Stores
 

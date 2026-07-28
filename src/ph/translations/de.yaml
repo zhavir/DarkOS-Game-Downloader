@@ -79,7 +79,6 @@ choose_replacement: ERSATZ AUSWÄHLEN
 choose_store: STORE AUSWÄHLEN
 choose_store_catalogue: STORE-KATALOG AUSWÄHLEN
 choose_store_footer: 'Download-Store auswählen; B/Escape: zurück'
-compatibility_badge: 'Kompatibilität: {value}'
 compatibility_detail: '{level} ({qualifier})'
 compatibility_field: 'Kompatibilität: {value}'
 compatibility_level_limited: Eingeschränkt
@@ -303,6 +302,7 @@ no_game_installed: Es wurde kein Spiel installiert.
 no_games: KEINE SPIELE
 no_games_on_card: KEINE SPIELE AUF DER KARTE
 no_incomplete_bios_installed: Es wurde keine unvollständige BIOS-Datei installiert.
+no_matching_platforms: 'Keine Plattform entspricht "{query}".'
 no_platform_games: Keine Spiele für {platform} gefunden.
 no_remote_match: KEIN TREFFER IM STORE
 no_results: KEINE ERGEBNISSE
@@ -324,6 +324,9 @@ optional: Optional
 optional_short: O
 pause_download: Download pausieren
 platform_field: 'Plattform: {value}'
+platform_filter_footer: 'A/Enter: wählen   X: Textfilter   Y: Liste zurücksetzen   B/Escape: zurück'
+platform_filter_hint: Teil eines Konsolennamens eingeben; leer setzt den Filter zurück
+platform_filter_title: PLATTFORMEN FILTERN
 platform_has_no_rom_folder: Diese Plattform hat auf dem gewählten Betriebssystem keinen ROM-Ordner.
 platform_on_card: '{platform} AUF {root}'
 preparing: VORBEREITUNG

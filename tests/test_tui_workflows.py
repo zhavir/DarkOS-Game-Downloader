@@ -453,7 +453,7 @@ def test_run_handles_missing_and_first_run_stores(mocker: MockerFixture) -> None
     mocker.patch.object(instance, "_configure_store", new=lambda **_kwargs: next(configuration))
     confirmations = iter((False, True))
     mocker.patch.object(instance, "_confirm_exit", new=lambda: next(confirmations))
-    mocker.patch.object(instance, "_menu", new=lambda *_args: None)
+    mocker.patch.object(instance, "_menu", new=lambda *_args, **_kwargs: None)
     instance.run()
 
 
@@ -464,7 +464,7 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
     assert platform is not None
     instance = bare_tui()
     instance.platforms = (platform,)
-    mocker.patch.object(instance, "_menu", new=lambda *_args: None)
+    mocker.patch.object(instance, "_menu", new=lambda *_args, **_kwargs: None)
     instance._search_flow()
     store = FakeStore()
     instance.selected_store = store
@@ -473,7 +473,7 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
     menu_choices = iter((0, None))
     menu_titles: list[str] = []
 
-    def layered_menu(title: str, *_args: object) -> int | None:
+    def layered_menu(title: str, *_args: object, **_kwargs: object) -> int | None:
         menu_titles.append(title)
         return next(menu_choices)
 
@@ -505,14 +505,67 @@ def test_search_flow_handles_cancel_errors_empty_and_supported_results(
     ]
     search.return_value = results
     instance.compatibility_client = mocker.Mock()
-    instance.compatibility_client.lookup_many.return_value = [
-        CompatibilityInfo("Perfect", True),
-    ]
     received: list[tuple[Any, ...]] = []
     mocker.patch.object(instance, "_results_flow", new=lambda *args: received.append(args))
     keyboard.side_effect = iter(("game", None))
     instance._search_platform_flow(store, platform)
     assert [item.title for item in received[0][0]] == ["Good"]
+    instance.compatibility_client.lookup_many.assert_not_called()
+
+
+def test_platform_picker_filters_by_text_and_resets(mocker: MockerFixture) -> None:
+    platforms = tuple(resolve_platform(alias) for alias in ("GBA", "PS1", "SNES"))
+    assert all(platform is not None for platform in platforms)
+    resolved_platforms = cast(tuple[Platform, ...], platforms)
+    instance = bare_tui()
+    store = FakeStore()
+    instance.selected_store = store
+    instance.preferences = Preferences("fake")
+    instance.platforms = resolved_platforms
+    choices = iter(
+        (
+            SEARCH_FILTER_CHOICE,
+            SEARCH_FILTER_CHOICE,
+            0,
+            SEARCH_RESET_CHOICE,
+            None,
+        )
+    )
+    shown_options: list[tuple[str, ...]] = []
+
+    def menu(
+        _title: str,
+        options: Sequence[str],
+        _footer: str,
+        **_kwargs: object,
+    ) -> int | None:
+        shown_options.append(tuple(options))
+        return next(choices)
+
+    mocker.patch.object(instance, "_menu", new=menu)
+    mocker.patch.object(
+        instance,
+        "_on_screen_keyboard",
+        side_effect=("missing", "station"),
+    )
+    selected: list[Platform] = []
+    mocker.patch.object(
+        instance,
+        "_search_platform_flow",
+        side_effect=lambda _store, platform: selected.append(platform),
+    )
+    messages: list[str] = []
+    mocker.patch.object(
+        instance,
+        "_draw_message",
+        side_effect=lambda _title, message, *_args, **_kwargs: messages.append(message),
+    )
+
+    instance._search_flow()
+
+    assert [len(options) for options in shown_options] == [3, 3, 1, 1, 3]
+    assert selected == [resolve_platform("PS1")]
+    assert any('"missing"' in message for message in messages)
 
 
 def test_catalog_progress_and_results_flow_resolve_all_platform(
@@ -551,10 +604,14 @@ def test_catalog_progress_and_results_flow_resolve_all_platform(
     )
     store = FakeStore()
 
-    instance._results_flow([result], all_platform, [info], store)
+    instance.compatibility_client = mocker.Mock()
+    instance.compatibility_client.lookup_many.return_value = [info]
+
+    instance._results_flow([result], all_platform, store)
 
     assert downloads[0][1] == gba
     assert downloads[0][-1] == {"title": "Advance Wars", "region": "USA"}
+    assert instance.compatibility_client.lookup_many.call_args_list[0].args == ((result,), gba)
 
 
 def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) -> None:
@@ -564,10 +621,6 @@ def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) 
     results = [
         SearchResult("Advance Wars", "gba", system="GBA"),
         SearchResult("Wipeout", "psx", system="PSX"),
-    ]
-    compatibility = [
-        CompatibilityInfo("Perfect", True),
-        CompatibilityInfo("Playable", True),
     ]
     choices = iter((SEARCH_FILTER_CHOICE, 2, SEARCH_RESET_CHOICE, None))
     shown_options: list[tuple[str, ...]] = []
@@ -585,7 +638,7 @@ def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) 
 
     mocker.patch.object(instance, "_menu", new=menu)
 
-    instance._results_flow(results, platform, compatibility, FakeStore())
+    instance._results_flow(results, platform, FakeStore())
 
     assert len(shown_options[0]) == 2
     assert shown_options[1] == ("All consoles", "GBA", "PSX")
@@ -595,12 +648,37 @@ def test_results_shortcuts_filter_console_and_reset_list(mocker: MockerFixture) 
     assert "shortcuts" in shortcut_arguments[0]
 
 
+def test_result_details_resolve_only_selected_game_compatibility(
+    mocker: MockerFixture,
+) -> None:
+    platform = resolve_platform("GBA")
+    assert platform is not None
+    instance = bare_tui()
+    results = [
+        SearchResult("Advance Wars", "first"),
+        SearchResult("Golden Sun", "second"),
+    ]
+    instance.compatibility_client = mocker.Mock()
+    instance.compatibility_client.lookup_many.return_value = [CompatibilityInfo("Perfect", True)]
+    mocker.patch.object(
+        instance,
+        "_menu",
+        side_effect=(1, None, None),
+    )
+
+    instance._results_flow(results, platform, FakeStore())
+
+    instance.compatibility_client.lookup_many.assert_called_once_with(
+        (results[1],),
+        platform,
+    )
+
+
 def test_console_filter_can_show_all_or_be_cancelled(mocker: MockerFixture) -> None:
     platform = resolve_platform("ALL")
     assert platform is not None
     instance = bare_tui()
     results = [SearchResult("Advance Wars", "gba", system="GBA")]
-    compatibility = [CompatibilityInfo("Perfect", True)]
     choices = iter(
         (
             SEARCH_FILTER_CHOICE,
@@ -616,7 +694,7 @@ def test_console_filter_can_show_all_or_be_cancelled(mocker: MockerFixture) -> N
         new=lambda *_args, **_kwargs: next(choices),
     )
 
-    instance._results_flow(results, platform, compatibility, FakeStore())
+    instance._results_flow(results, platform, FakeStore())
 
 
 def test_direct_download_flow_handles_store_platform_and_url_choices(

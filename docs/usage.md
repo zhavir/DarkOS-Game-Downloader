@@ -30,13 +30,15 @@ only while the keyboard is open; they do not accidentally submit or cancel the s
    time** to select the store for each search, direct download, or update. The choice is saved; use
    **Settings** from the main menu to change it later.
 2. Choose **Search the library**.
-3. Select a platform or **All platforms**. Minerva is limited to its RetroAchievements collection
-   and only shows platforms it provides.
+3. Select a platform or **All platforms**. Press **X** to enter a text filter for the console list;
+   matching checks the console name, alias, code, and slug. Press **Y** to reset the list. Minerva is
+   limited to its RetroAchievements collection and only shows platforms it provides.
 4. Enter a title prefix. Matching is case-insensitive and starts at the beginning of the title.
 5. Press **X** to search. Empty text is valid and lists the complete catalogue.
-6. Review the compatibility badge and match confidence in the results list, then the source detail
-   on the title screen. Press **X** to filter an all-platform result list by console and **Y** to
-   reset the complete list. Long selected titles scroll automatically.
+6. Select a result to calculate compatibility for that game only, then review its match confidence
+   and source details. The complete result list is never scored in bulk. Press **X** to filter an
+   all-platform result list by console and **Y** to reset the complete list. Long selected titles
+   scroll automatically.
 7. Select **Download**. Pocket Harbor uses the default ROM destination from **Settings**, or asks
    for SD1 or SD2 when **Ask every time** is selected. The transfer is added to the background
    queue, so you can immediately search for and queue another game.
@@ -113,9 +115,10 @@ metadata.
 
 ## Compatibility catalogue
 
-The first compatible-platform search downloads the frontend game index from the compatibility data
-source and stores it in `.downloads/.game-compatibility-cache.json`. Later searches use that local
-copy without a network request to the source. Open **Settings → Update compatibility catalogue** to
+Opening the details of the first compatible game downloads the frontend game index from the
+compatibility data source and stores it in `.downloads/.game-compatibility-cache.json`. Later detail
+views use that local copy without a network request to the source. Merely listing search results does
+not load or score the compatibility index. Open **Settings → Update compatibility catalogue** to
 fetch a new copy explicitly.
 
 Once it is older than the configured catalogue lifetime, Settings labels it **stale**, while
