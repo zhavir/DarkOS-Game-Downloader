@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v3.1.0 (2026-07-28)
+
+### Features
+
+- **tui**: Improve search and download panels
+  ([`9bf0730`](https://github.com/zhavir/PoketHarbor/commit/9bf07309aa408a261236c6d40c13a60bc622962b))
+
+### Testing
+
+- **tui**: Restore coverage for live panels
+  ([`e9244cf`](https://github.com/zhavir/PoketHarbor/commit/e9244cf1f0144a7294cde2a7974a284d80d7d633))
+
+
 ## v3.0.4 (2026-07-27)
 
 ### Bug Fixes
